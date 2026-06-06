@@ -1,0 +1,86 @@
+{
+  "uid": "music-platform-app-logs",
+  "title": "Music Platform App Logs",
+  "tags": [
+    "music-platform",
+    "app",
+    "loki"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "type": "query",
+        "label": "Service",
+        "hide": 0,
+        "datasource": {
+          "type": "loki",
+          "uid": "loki"
+        },
+        "refresh": 2,
+        "query": {
+          "query": "label_values({project=\"music-platform\", group=\"app\", service=~\".+\"}, service)",
+          "refId": "service"
+        },
+        "sort": 1,
+        "current": {
+          "text": "All",
+          "value": ".+"
+        },
+        "includeAll": true,
+        "allValue": ".+",
+        "multi": true
+      },
+      {
+        "name": "search",
+        "type": "textbox",
+        "label": "Contains (regex)",
+        "hide": 0,
+        "current": {
+          "text": ".*",
+          "value": ".*"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "logs",
+      "title": "Application logs",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 18
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "{project=\"music-platform\", group=\"app\", service=~\"${service:regex}\"} |~ \"${search:regex}\""
+        }
+      ],
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": true,
+        "showTime": true
+      }
+    }
+  ]
+}

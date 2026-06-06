@@ -1,0 +1,13 @@
+{
+  "name": "subscription-service",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "bun run src/server.ts",
+    "dev": "bun run --watch src/server.ts",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "postgres": "^3.4.5"
+  }
+}

@@ -1,0 +1,323 @@
+{
+    "uid": "ebap-logs",
+    "title": "EBAP Logs",
+    "tags": [
+        "music-platform",
+        "ebap",
+        "loki"
+    ],
+    "timezone": "browser",
+    "schemaVersion": 39,
+    "version": 1,
+    "refresh": "1m",
+    "time": {
+        "from": "now-30m",
+        "to": "now"
+    },
+    "templating": {
+        "list": [
+            {
+                "name": "service",
+                "type": "query",
+                "label": "Service",
+                "hide": 0,
+                "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                },
+                "refresh": 2,
+                "query": {
+                    "query": "label_values({job=\"docker\", service=~\".+\"}, service)",
+                    "refId": "service"
+                },
+                "sort": 1,
+                "current": {
+                    "text": "ebap-hls-adapter",
+                    "value": "ebap-hls-adapter"
+                },
+                "includeAll": true,
+                "allValue": ".+",
+                "multi": false
+            },
+            {
+                "name": "event",
+                "type": "query",
+                "label": "Event",
+                "hide": 0,
+                "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                },
+                "refresh": 2,
+                "query": {
+                    "query": "label_values({job=\"docker\", service=~\"${service:regex}\", event=~\".+\"}, event)",
+                    "refId": "event"
+                },
+                "sort": 1,
+                "current": {
+                    "text": "All",
+                    "value": ".+"
+                },
+                "includeAll": true,
+                "allValue": ".+",
+                "multi": true
+            },
+            {
+                "name": "level",
+                "type": "query",
+                "label": "Level",
+                "hide": 0,
+                "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                },
+                "refresh": 2,
+                "query": {
+                    "query": "label_values({job=\"docker\", service=~\"${service:regex}\", level=~\".+\"}, level)",
+                    "refId": "level"
+                },
+                "sort": 1,
+                "current": {
+                    "text": "All",
+                    "value": ".+"
+                },
+                "includeAll": true,
+                "allValue": ".+",
+                "multi": true
+            },
+            {
+                "name": "search",
+                "type": "textbox",
+                "label": "Contains",
+                "hide": 0,
+                "current": {
+                    "text": ".*",
+                    "value": ".*"
+                }
+            }
+        ]
+    },
+    "panels": [
+        {
+            "type": "stat",
+            "title": "track_key_unwrap_failed (5m)",
+            "gridPos": {
+                "x": 0,
+                "y": 0,
+                "w": 8,
+                "h": 4
+            },
+            "datasource": {
+                "type": "loki",
+                "uid": "loki"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "loki",
+                        "uid": "loki"
+                    },
+                    "expr": "sum(count_over_time({job=\"docker\", service=\"ebap-hls-adapter\", event=~\".*track_key_unwrap_failed.*\"}[5m]))"
+                }
+            ],
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                },
+                "orientation": "horizontal"
+            }
+        },
+        {
+            "type": "timeseries",
+            "title": "track_key_unwrap_failed rate",
+            "gridPos": {
+                "x": 8,
+                "y": 0,
+                "w": 16,
+                "h": 8
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "loki",
+                        "uid": "loki"
+                    },
+                    "expr": "sum(rate({job=\"docker\", service=\"ebap-hls-adapter\", event=~\".*track_key_unwrap_failed.*\"}[5m]))"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "ops"
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "showLegend": false
+                }
+            }
+        },
+        {
+            "type": "logs",
+            "title": "Unwrap failures (latest)",
+            "gridPos": {
+                "x": 0,
+                "y": 4,
+                "w": 8,
+                "h": 10
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "loki",
+                        "uid": "loki"
+                    },
+                    "expr": "{job=\"docker\", service=\"ebap-hls-adapter\", event=~\".*track_key_unwrap_failed.*\"} | json | __error__=\"\""
+                }
+            ],
+            "options": {
+                "dedupStrategy": "none",
+                "enableLogDetails": true,
+                "prettifyLogMessage": true,
+                "showTime": true
+            }
+        },
+        {
+            "type": "logs",
+            "title": "Chunk requests (raw)",
+            "gridPos": {
+                "x": 8,
+                "y": 8,
+                "w": 16,
+                "h": 10
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "loki",
+                        "uid": "loki"
+                    },
+                    "expr": "{job=\"docker\", service=\"ebap-hls-adapter\"} |= \"/api/ebap-hls/\""
+                }
+            ],
+            "options": {
+                "dedupStrategy": "none",
+                "enableLogDetails": true,
+                "prettifyLogMessage": true,
+                "showTime": true
+            }
+        },
+        {
+            "type": "logs",
+            "title": "Selected service logs",
+            "gridPos": {
+                "x": 0,
+                "y": 14,
+                "w": 24,
+                "h": 14
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "loki",
+                        "uid": "loki"
+                    },
+                    "expr": "{job=\"docker\", service=~\"${service:regex}\"} |~ \"${search}\" | json | __error__=\"\" | event=~\"${event:regex}\" | level=~\"${level:regex}\""
+                }
+            ],
+            "options": {
+                "dedupStrategy": "none",
+                "enableLogDetails": true,
+                "prettifyLogMessage": true,
+                "showTime": true
+            }
+        },
+        {
+            "type": "logs",
+            "title": "Master key fingerprints (streaming + worker)",
+            "gridPos": {
+                "x": 0,
+                "y": 28,
+                "w": 24,
+                "h": 10
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "loki",
+                        "uid": "loki"
+                    },
+                    "expr": "{job=\"docker\", service=~\"ebap-(streaming-service|encoder-worker)\"} | json | __error__=\"\" | event=~\"(ebap_streaming_started|ebap_worker_started|worker_started|ebap_encoder_worker_started)\""
+                }
+            ],
+            "options": {
+                "dedupStrategy": "none",
+                "enableLogDetails": true,
+                "prettifyLogMessage": true,
+                "showTime": true
+            }
+        },
+        {
+            "type": "logs",
+            "title": "All EBAP logs (raw)",
+            "gridPos": {
+                "x": 0,
+                "y": 38,
+                "w": 24,
+                "h": 12
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "loki",
+                        "uid": "loki"
+                    },
+                    "expr": "{job=\"docker\", service=~\"ebap-.*\"} | json | __error__=\"\""
+                }
+            ],
+            "options": {
+                "dedupStrategy": "none",
+                "enableLogDetails": true,
+                "prettifyLogMessage": true,
+                "showTime": true
+            }
+        },
+        {
+            "type": "logs",
+            "title": "Media errors (/media, nginx)",
+            "gridPos": {
+                "x": 0,
+                "y": 50,
+                "w": 24,
+                "h": 10
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "loki",
+                        "uid": "loki"
+                    },
+                    "expr": "{job=\"docker\", service=\"nginx\", event=\"media_non_2xx\"} | json | __error__=\"\""
+                }
+            ],
+            "options": {
+                "dedupStrategy": "none",
+                "enableLogDetails": true,
+                "prettifyLogMessage": true,
+                "showTime": true
+            }
+        }
+    ]
+}

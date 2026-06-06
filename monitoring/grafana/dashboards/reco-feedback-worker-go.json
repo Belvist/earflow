@@ -1,0 +1,100 @@
+{
+  "uid": "reco-feedback-worker-go",
+  "title": "Reco Feedback Worker (Go)",
+  "tags": ["music-platform", "reco", "feedback", "prometheus"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Events processed rate (events/s)",
+      "gridPos": {"x": 0, "y": 0, "w": 24, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(reco_feedback_events_processed_total[5m])) by (status)",
+          "legendFormat": "{{status}}"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []}
+    },
+    {
+      "type": "timeseries",
+      "title": "Batch size (p50/p95)",
+      "gridPos": {"x": 0, "y": 8, "w": 24, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.50, sum(rate(reco_feedback_batch_size_bucket[5m])) by (le))",
+          "legendFormat": "p50"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum(rate(reco_feedback_batch_size_bucket[5m])) by (le))",
+          "legendFormat": "p95"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "none"}, "overrides": []}
+    },
+    {
+      "type": "timeseries",
+      "title": "Batch processing duration (p50/p95, seconds)",
+      "gridPos": {"x": 0, "y": 16, "w": 24, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.50, sum(rate(reco_feedback_processing_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p50"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum(rate(reco_feedback_processing_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []}
+    },
+    {
+      "type": "timeseries",
+      "title": "Retries / DLQ rate (events/s)",
+      "gridPos": {"x": 0, "y": 24, "w": 24, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(reco_feedback_retries_total[5m])",
+          "legendFormat": "retries"
+        },
+        {
+          "refId": "B",
+          "expr": "rate(reco_feedback_dlq_total[5m])",
+          "legendFormat": "dlq"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []}
+    },
+    {
+      "type": "timeseries",
+      "title": "Recommendation hits rate (hits/s)",
+      "gridPos": {"x": 0, "y": 32, "w": 24, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(reco_recommendation_hits_total[5m])) by (action)",
+          "legendFormat": "{{action}}"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []}
+    }
+  ]
+}

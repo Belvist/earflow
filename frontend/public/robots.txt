@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+
+Disallow: /profile
+Disallow: /account/
+Disallow: /login
+Disallow: /admin
+Disallow: /metrics
+Disallow: /health
+
+Sitemap: https://earflow.ru/sitemap.xml

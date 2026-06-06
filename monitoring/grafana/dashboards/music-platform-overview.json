@@ -1,0 +1,157 @@
+{
+    "uid": "music-platform-overview",
+    "title": "Music Platform Overview",
+    "tags": [
+        "music-platform"
+    ],
+    "timezone": "browser",
+    "schemaVersion": 39,
+    "version": 1,
+    "refresh": "10s",
+    "time": {
+        "from": "now-15m",
+        "to": "now"
+    },
+    "panels": [
+        {
+            "type": "timeseries",
+            "title": "HTTP Probes (probe_success)",
+            "gridPos": {
+                "x": 0,
+                "y": 0,
+                "w": 24,
+                "h": 8
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "prometheus"
+                    },
+                    "expr": "probe_success{job=\"blackbox-http\"}",
+                    "legendFormat": "{{instance}}"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "min": 0,
+                    "max": 1,
+                    "unit": "none"
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "showLegend": true,
+                    "displayMode": "table",
+                    "placement": "right"
+                }
+            }
+        },
+        {
+            "type": "timeseries",
+            "title": "HTTP Probe Duration (s)",
+            "gridPos": {
+                "x": 0,
+                "y": 8,
+                "w": 24,
+                "h": 8
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "prometheus"
+                    },
+                    "expr": "probe_duration_seconds{job=\"blackbox-http\"}",
+                    "legendFormat": "{{instance}}"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "s"
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "showLegend": true,
+                    "displayMode": "table",
+                    "placement": "right"
+                }
+            }
+        },
+        {
+            "type": "timeseries",
+            "title": "Container CPU (cores) by compose service",
+            "gridPos": {
+                "x": 0,
+                "y": 16,
+                "w": 24,
+                "h": 9
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "prometheus"
+                    },
+                    "expr": "sum(rate(container_cpu_usage_seconds_total{image!=\"\"}[5m])) by (container_label_com_docker_compose_service)",
+                    "legendFormat": "{{container_label_com_docker_compose_service}}"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "cores",
+                    "min": 0
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "showLegend": true,
+                    "displayMode": "table",
+                    "placement": "right"
+                }
+            }
+        },
+        {
+            "type": "timeseries",
+            "title": "Container Memory Working Set (bytes) by compose service",
+            "gridPos": {
+                "x": 0,
+                "y": 25,
+                "w": 24,
+                "h": 9
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "prometheus"
+                    },
+                    "expr": "sum(container_memory_working_set_bytes{image!=\"\"}) by (container_label_com_docker_compose_service)",
+                    "legendFormat": "{{container_label_com_docker_compose_service}}"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "bytes",
+                    "min": 0
+                },
+                "overrides": []
+            },
+            "options": {
+                "legend": {
+                    "showLegend": true,
+                    "displayMode": "table",
+                    "placement": "right"
+                }
+            }
+        }
+    ]
+}

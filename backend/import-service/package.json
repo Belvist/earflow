@@ -1,0 +1,12 @@
+{
+  "name": "import-service",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "pg": "^8.13.0"
+  }
+}

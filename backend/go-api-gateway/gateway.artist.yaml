@@ -1,0 +1,157 @@
+routes:
+  - id: artists_public
+    methods:
+      - GET
+    match:
+      type: prefix
+      value: /api/artists
+    upstream: artist
+    policies:
+      class: public
+      require_user: true
+      rate_limit: artist_search
+      timeout: 6s
+
+  - id: artists_popular
+    methods:
+      - GET
+    match:
+      type: exact
+      value: /api/artists/popular
+    upstream: artist
+    policies:
+      class: public
+      require_user: true
+      rate_limit: artist_search
+      timeout: 6s
+
+  - id: artist_claims
+    methods:
+      - GET
+      - POST
+    match:
+      type: prefix
+      value: /api/artists/claims
+    upstream: artist
+    policies:
+      class: unsafe
+      require_user: true
+      rate_limit: artist_claims
+      timeout: 12s
+
+  - id: artist_admin
+    methods:
+      - GET
+      - POST
+    match:
+      type: prefix
+      value: /api/artists/admin
+    upstream: artist
+    policies:
+      class: unsafe
+      require_user: true
+      rate_limit: artist_claims
+      timeout: 12s
+
+  # Security operations handled by security-service (Go, hot-path optimized).
+  # Must be declared BEFORE auth_2fa so that `/api/auth/2fa/recovery` wins over
+  # the broader auth_2fa prefix via the longer-prefix rule.
+  - id: auth_2fa_recovery
+    match:
+      type: prefix
+      value: /api/auth/2fa/recovery
+    upstream: security
+    policies:
+      class: unsafe
+      require_user: true
+      timeout: 10s
+
+  - id: auth_2fa
+    match:
+      type: prefix
+      value: /api/auth/2fa
+    upstream: auth
+    rewrite: auth_alias
+    policies:
+      class: unsafe
+      require_user: true
+      timeout: 10s
+
+  - id: auth_security
+    match:
+      type: prefix
+      value: /api/auth/security
+    upstream: security
+    policies:
+      class: unsafe
+      require_user: true
+      timeout: 10s
+
+  - id: auth_password
+    match:
+      type: prefix
+      value: /api/auth/password
+    upstream: security
+    policies:
+      class: unsafe
+      require_user: true
+      timeout: 10s
+
+  - id: auth_telegram_unlink
+    methods:
+      - POST
+    match:
+      type: exact
+      value: /api/auth/telegram/unlink
+    upstream: security
+    policies:
+      class: unsafe
+      require_user: true
+      timeout: 10s
+
+  - id: auth_sessions
+    match:
+      type: prefix
+      value: /api/auth/sessions
+    upstream: security
+    policies:
+      class: unsafe
+      require_user: true
+      timeout: 10s
+
+  - id: auth_passthrough
+    match:
+      type: prefix
+      values:
+        - /api/verify
+        - /api/profile
+        - /api/auth/profile
+        - /api/auth/verify
+    upstream: auth
+    rewrite: auth_alias
+    policies:
+      class: auth_only
+      timeout: 10s
+
+  - id: artist_portal_tracks_upload
+    methods:
+      - POST
+    match:
+      type: exact
+      value: /api/artist-portal/tracks
+    upstream: artist_portal
+    policies:
+      class: unsafe
+      require_user: true
+      rate_limit: upload
+      timeout: 180s
+
+  - id: artist_portal
+    match:
+      type: prefix
+      value: /api/artist-portal
+    upstream: artist_portal
+    policies:
+      class: unsafe
+      require_user: true
+      timeout: 15s

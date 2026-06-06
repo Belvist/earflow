@@ -1,0 +1,2379 @@
+# Music Platform - Complete System
+# Backend + Frontend + Recommendations + Database
+
+services:
+  # PostgreSQL Database with pgvector (v15 for data compatibility)
+  postgres:
+    image: pgvector/pgvector:pg15
+    container_name: music-postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./backend/00-create-tables.sql:/docker-entrypoint-initdb.d/00-create-tables.sql
+      - ./backend/init-library-user.sql:/docker-entrypoint-initdb.d/01-init-user.sql
+      - ./backend/02-recommendations-schema.sql:/docker-entrypoint-initdb.d/02-recommendations-schema.sql
+      - ./backend/03-subscription-schema.sql:/docker-entrypoint-initdb.d/03-subscription-schema.sql
+      - ./backend/04-mood-schema.sql:/docker-entrypoint-initdb.d/04-mood-schema.sql
+    networks:
+      - music-network
+    # SECURITY: Do NOT expose PostgreSQL to public network!
+    # Use only internal Docker network for service communication
+    # ports:
+    #   - "127.0.0.1:5432:5432"  # Uncomment ONLY for local debugging
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -h localhost -U $$POSTGRES_USER -d $$POSTGRES_DB" ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  audio-features-worker:
+    build:
+      context: ./backend/audio-features-worker
+      dockerfile: Dockerfile
+    container_name: music-audio-features-worker
+    environment:
+      DB_SERVICE_URL: http://database-service:3003
+      SERVICE_KEY_AUDIO_FEATURES_WORKER: ${SERVICE_KEY_AUDIO_FEATURES_WORKER}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_PORT: ${MINIO_PORT}
+      MINIO_USE_SSL: ${MINIO_USE_SSL}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET_AUDIO: ${MINIO_BUCKET_AUDIO}
+      HEALTH_PORT: 3051
+      POLL_INTERVAL_SECONDS: 30
+      BATCH_LIMIT: 25
+      REQUEST_TIMEOUT_SECONDS: 20
+    expose:
+      - "3051"
+    depends_on:
+      database-service:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - music-network
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:3051/health', timeout=3).read()" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+
+  # Redis for caching - Pinned secure version
+  redis:
+    image: redis:7.4.2-alpine3.21
+    container_name: music-redis
+    # SECURITY: Redis with optional password authentication
+    # Set REDIS_PASSWORD in .env for production security
+    command: [ "sh", "-c", "if [ -n \"$$REDIS_PASSWORD\" ]; then redis-server --appendonly yes --appendfsync everysec --maxmemory 256mb --maxmemory-policy allkeys-lru --tcp-keepalive 300 --timeout 0 --requirepass $$REDIS_PASSWORD; else redis-server --appendonly yes --appendfsync everysec --maxmemory 256mb --maxmemory-policy allkeys-lru --tcp-keepalive 300 --timeout 0; fi" ]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    # SECURITY: Do NOT expose Redis to public network!
+    # Redis has no authentication by default - extremely dangerous!
+    # ports:
+    #   - "127.0.0.1:6379:6379"  # Uncomment ONLY for local debugging
+    volumes:
+      - redis-data:/data
+    networks:
+      - music-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64M
+    healthcheck:
+      test: [ "CMD-SHELL", "if [ -n \"$$REDIS_PASSWORD\" ]; then redis-cli -a $$REDIS_PASSWORD ping; else redis-cli ping; fi" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Dedicated Redis for auth/session (no eviction allowed)
+  redis-auth:
+    image: redis:7.4.2-alpine3.21
+    container_name: music-redis-auth
+    command: [ "sh", "-c", "if [ -n \"$$REDIS_PASSWORD\" ]; then redis-server --appendonly yes --appendfsync everysec --maxmemory 512mb --maxmemory-policy noeviction --tcp-keepalive 300 --timeout 0 --requirepass $$REDIS_PASSWORD; else redis-server --appendonly yes --appendfsync everysec --maxmemory 512mb --maxmemory-policy noeviction --tcp-keepalive 300 --timeout 0; fi" ]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    volumes:
+      - redis-auth-data:/data
+    networks:
+      - music-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64M
+    healthcheck:
+      test: [ "CMD-SHELL", "if [ -n \"$$REDIS_PASSWORD\" ]; then redis-cli -a $$REDIS_PASSWORD ping; else redis-cli ping; fi" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MinIO Object Storage for audio files and covers
+  # ВАЖНО: Single-node режим требует стабильного I/O на диске
+  minio:
+    image: minio/minio:RELEASE.2025-01-20T14-49-07Z
+    container_name: music-minio
+    command: server /data --console-address ":9001"
+    # SECURITY: MinIO console should only be accessible via VPN or internal network
+    # S3 API accessible via nginx reverse proxy with authentication
+    ports:
+      - "127.0.0.1:9000:9000" # S3 API - localhost only
+      - "127.0.0.1:9001:9001" # Console UI - localhost only
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      # Оптимизация для single-node с ограниченными ресурсами:
+      # Отключаем фоновые задачи которые нагружают диск
+      MINIO_SCANNER_SPEED: "slowest"
+      MINIO_API_REQUESTS_MAX: "100"
+      MINIO_API_REQUESTS_DEADLINE: "30s"
+      # Увеличиваем толерантность к задержкам диска
+      MINIO_DRIVE_SYNC: "off"
+      # Отключаем версионирование для экономии I/O
+      MINIO_API_ROOT_ACCESS: "on"
+    volumes:
+      - minio-data:/data
+    networks:
+      - music-network
+    restart: unless-stopped
+    # Увеличиваем таймауты для нестабильного I/O
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 60s
+    # Лимитируем ресурсы чтобы не блокировать другие сервисы
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # MinIO bucket initialization
+  minio-init:
+    image: minio/mc:RELEASE.2025-01-17T23-25-50Z
+    container_name: music-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET_AUDIO: ${MINIO_BUCKET_AUDIO}
+      MINIO_BUCKET_COVERS: ${MINIO_BUCKET_COVERS}
+      EBAP_MINIO_BUCKET: ${EBAP_MINIO_BUCKET:-ebap-cache}
+      EBAP_HLS_MINIO_BUCKET: ${EBAP_HLS_MINIO_BUCKET:-ebap-hls}
+    entrypoint: >
+      /bin/sh -c " mc alias set myminio http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD}; mc mb --ignore-existing myminio/$${MINIO_BUCKET_AUDIO}; mc mb --ignore-existing myminio/$${MINIO_BUCKET_COVERS}; mc mb --ignore-existing myminio/$${EBAP_MINIO_BUCKET}; mc mb --ignore-existing myminio/$${EBAP_HLS_MINIO_BUCKET}; mc anonymous set download myminio/$${MINIO_BUCKET_COVERS}; mc anonymous set none myminio/$${MINIO_BUCKET_AUDIO}; mc anonymous set none myminio/$${EBAP_MINIO_BUCKET}; mc anonymous set none myminio/$${EBAP_HLS_MINIO_BUCKET}; echo 'MinIO buckets initialized successfully'; exit 0; "
+    networks:
+      - music-network
+
+  upload-service-tests:
+    build:
+      context: ./backend/upload-service
+      dockerfile: Dockerfile
+      target: builder
+    profiles: [ "tools" ]
+    working_dir: /app
+    volumes:
+      - ./backend/upload-service/test:/app/test:ro
+    environment:
+      UPLOAD_SERVICE_BASE_URL: http://upload-service:3002
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_USE_SSL: ${MINIO_USE_SSL}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET_AUDIO: ${MINIO_BUCKET_AUDIO}
+      MINIO_BUCKET_COVERS: ${MINIO_BUCKET_COVERS}
+      MEDIA_URL_SECRET: ${MEDIA_URL_SECRET}
+      MEDIA_URL_TTL_SECONDS: ${MEDIA_URL_TTL_SECONDS:-3600}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      upload-service:
+        condition: service_healthy
+    networks:
+      - music-network
+    command: [ "node", "--test", "test/integration/all.test.js" ]
+
+  integration-tests:
+    build:
+      context: ./backend/integration-tests
+      dockerfile: Dockerfile
+    profiles: [ "tools" ]
+    environment:
+      IT_GATEWAY_BASE_URL: http://api-gateway:3000
+      IT_DIRECT_STREAM_BASE_URL: http://direct-stream-service:3096
+      IT_ADAPTER_BASE_URL: http://ebap-hls-adapter:3095
+      IT_PARTY_BASE_URL: http://party-state-service:3130
+      IT_PARTY_GATEWAY_URL: http://party-gateway-service:3131
+      IT_ORIGIN: ${IT_ORIGIN:-https://earflow.ru}
+      IT_TRACK_READY_ID: ${IT_TRACK_READY_ID:-}
+      IT_TRACK_NOT_READY_ID: ${IT_TRACK_NOT_READY_ID:-}
+      IT_TEST_USER_ID: ${IT_TEST_USER_ID:-1}
+      IT_HLS_SIGNED_URLS: ${IT_HLS_SIGNED_URLS:-}
+      IT_HLS_URLTOKEN_TTL_SECONDS: ${IT_HLS_URLTOKEN_TTL_SECONDS:-${EBAP_HLS_URLTOKEN_TTL_SECONDS:-120}}
+      IT_HLS_ASSET_TOKEN_ONLY: ${IT_HLS_ASSET_TOKEN_ONLY:-${EBAP_HLS_SIGNED_URLS_ASSET_TOKEN_ONLY:-}}
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+      ebap-hls-adapter:
+        condition: service_healthy
+      party-state-service:
+        condition: service_healthy
+      party-gateway-service:
+        condition: service_healthy
+    networks:
+      - music-network
+    command: [ "bun", "test" ]
+
+  # Database Service (INTERNAL ONLY - access via api-gateway)
+  database-service:
+    build:
+      context: ./backend/database-service
+      dockerfile: Dockerfile
+    container_name: music-database-service
+    # Security: Internal service, no public ports
+    expose:
+      - "3003"
+    environment:
+      PORT: 3003
+      NODE_ENV: ${NODE_ENV}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_MAX_CONNECTIONS: ${DATABASE_DB_MAX_CONNECTIONS:-50}
+      DB_MIN_CONNECTIONS: ${DATABASE_DB_MIN_CONNECTIONS:-5}
+      DB_IDLE_TIMEOUT_MS: ${DATABASE_DB_IDLE_TIMEOUT_MS:-30000}
+      DB_CONNECTION_TIMEOUT_MS: ${DATABASE_DB_CONNECTION_TIMEOUT_MS:-5000}
+      DB_STATEMENT_TIMEOUT_MS: ${DATABASE_DB_STATEMENT_TIMEOUT_MS:-30000}
+      LOAD_TEST_MODE: ${LOAD_TEST_MODE:-false}
+      DATABASE_SERVICE_RATE_LIMIT_MULTIPLIER: ${DATABASE_SERVICE_RATE_LIMIT_MULTIPLIER:-}
+      LOAD_TEST_RATE_LIMIT_MULTIPLIER: ${LOAD_TEST_RATE_LIMIT_MULTIPLIER:-}
+      SERVICE_JWT_PRIVATE_KEY_B64: ${SERVICE_JWT_PRIVATE_KEY_B64}
+      SERVICE_JWT_PUBLIC_KEY_B64: ${SERVICE_JWT_PUBLIC_KEY_B64}
+      SERVICE_JWT_ISSUER: ${SERVICE_JWT_ISSUER:-database-service}
+      SERVICE_JWT_AUDIENCE: ${SERVICE_JWT_AUDIENCE:-database-service}
+      SERVICE_KEY_API_GATEWAY: ${SERVICE_KEY_API_GATEWAY}
+      SERVICE_KEY_ARTIST_API_GATEWAY: ${SERVICE_KEY_ARTIST_API_GATEWAY}
+      SERVICE_KEY_AUTH_SERVICE: ${SERVICE_KEY_AUTH_SERVICE}
+      SERVICE_KEY_UPLOAD_SERVICE: ${SERVICE_KEY_UPLOAD_SERVICE}
+      SERVICE_KEY_TRACK_PROCESSOR: ${SERVICE_KEY_TRACK_PROCESSOR}
+      SERVICE_KEY_AUDIO_FEATURES_WORKER: ${SERVICE_KEY_AUDIO_FEATURES_WORKER}
+      SERVICE_KEY_EBAP_HLS_ADAPTER: ${SERVICE_KEY_EBAP_HLS_ADAPTER}
+      JWT_EXPIRES_IN: 24h
+      ALLOWED_SERVICES: ${ALLOWED_SERVICES:-auth-service,upload-service,api-gateway,artist-api-gateway,track-processor,recommendations-service,audio-features-worker,ebap-hls-adapter}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - music-network
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "node", "-e", "require('http').get('http://localhost:3003/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})" ]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+
+  search-service:
+    build:
+      context: ./backend/search-service
+      dockerfile: Dockerfile
+    container_name: music-search-service
+    expose:
+      - "3062"
+    environment:
+      PORT: 3062
+      NODE_ENV: ${NODE_ENV}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_SSLMODE: disable
+      MEILI_URL: http://meilisearch:7700
+      MEILI_API_KEY: ${MEILI_MASTER_KEY?MEILI_MASTER_KEY is required (>=16 chars)}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DB_MAX_CONNECTIONS: ${SEARCH_DB_MAX_CONNECTIONS:-10}
+      DB_PREPARE: ${SEARCH_DB_PREPARE:-true}
+      SEARCH_REQUEST_TIMEOUT_MS: ${SEARCH_REQUEST_TIMEOUT_MS:-2500}
+      SEARCH_PUBLIC_MAX_LIMIT: ${SEARCH_PUBLIC_MAX_LIMIT:-20}
+      SEARCH_AUTHED_MAX_LIMIT: ${SEARCH_AUTHED_MAX_LIMIT:-50}
+      SEARCH_INDEXER_ENABLED: ${SEARCH_INDEXER_ENABLED:-true}
+      SEARCH_SETUP_INDEXES: ${SEARCH_SETUP_INDEXES:-true}
+      SEARCH_BACKFILL_ON_START: ${SEARCH_BACKFILL_ON_START:-true}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      meilisearch:
+        condition: service_started
+    networks:
+      - music-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64M
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fsS http://localhost:3062/health >/dev/null 2>&1 || wget -qO- http://localhost:3062/health >/dev/null 2>&1" ]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.7.6
+    container_name: music-meilisearch
+    expose:
+      - "7700"
+    environment:
+      MEILI_ENV: ${NODE_ENV:-production}
+      MEILI_NO_ANALYTICS: "true"
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY?MEILI_MASTER_KEY is required (>=16 chars)}
+    volumes:
+      - meilisearch-data:/meili_data
+    networks:
+      - music-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64M
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fsS http://localhost:7700/health >/dev/null 2>&1 || wget -qO- http://localhost:7700/health >/dev/null 2>&1" ]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+
+  # ==========================================================================
+  # EBAP HLS Adapter (INTERNAL ONLY - access via api-gateway)
+  # ==========================================================================
+  ebap-hls-adapter:
+    build:
+      context: ./backend/ebap-hls-adapter
+      dockerfile: Dockerfile
+    container_name: music-ebap-hls-adapter
+    expose:
+      - "3095"
+    ports:
+      - "127.0.0.1:3095:3095"
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    environment:
+      PORT: 3095
+      NODE_ENV: ${NODE_ENV}
+      LYRICS_SERVICE_URL: http://lyrics-service:3010
+      SERVICE_TOKEN_ENDPOINT: http://database-service:3003/auth/service-token
+      SERVICE_TOKEN_SERVICE_NAME: ebap-hls-adapter
+      SERVICE_TOKEN_SERVICE_KEY: ${SERVICE_KEY_EBAP_HLS_ADAPTER:-}
+      SYSTEM_ROOT_SECRET: ${SYSTEM_ROOT_SECRET}
+      EBAP_TRACK_KEY_MASTER_SECRET: ${EBAP_TRACK_KEY_MASTER_SECRET:-}
+      EBAP_TRACK_KEY_MASTER_SECRETS: ${EBAP_TRACK_KEY_MASTER_SECRETS:-}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-.earflow.ru}
+      COOKIE_SAMESITE: ${COOKIE_SAMESITE:-none}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      EBAP_HLS_COOKIE_SECRET: ${EBAP_HLS_COOKIE_SECRET}
+      EBAP_HLS_COOKIE_SECRETS: ${EBAP_HLS_COOKIE_SECRETS:-}
+      EBAP_HLS_COOKIE_TTL_SECONDS: ${EBAP_HLS_COOKIE_TTL_SECONDS:-900}
+      EBAP_HLS_SIGNED_URLS: ${EBAP_HLS_SIGNED_URLS:-}
+      EBAP_HLS_URLTOKEN_SECRET: ${EBAP_HLS_URLTOKEN_SECRET:-}
+      EBAP_HLS_URLTOKEN_SECRETS: ${EBAP_HLS_URLTOKEN_SECRETS:-}
+      EBAP_HLS_URLTOKEN_TTL_SECONDS: ${EBAP_HLS_URLTOKEN_TTL_SECONDS:-120}
+      EBAP_HLS_SIGNED_URLS_ASSET_TOKEN_ONLY: ${EBAP_HLS_SIGNED_URLS_ASSET_TOKEN_ONLY:-}
+      EBAP_HLS_SIGNED_URLS_PLAYLIST_TOKEN_ONLY: ${EBAP_HLS_SIGNED_URLS_PLAYLIST_TOKEN_ONLY:-}
+      EBAP_HLS_SIGNED_URLS_PLAYLIST_REQUIRE_COOKIE: ${EBAP_HLS_SIGNED_URLS_PLAYLIST_REQUIRE_COOKIE:-}
+      EBAP_HLS_SESSION_RL_PER_WINDOW: ${EBAP_HLS_SESSION_RL_PER_WINDOW:-30}
+      EBAP_HLS_SESSION_RL_WINDOW_SECONDS: ${EBAP_HLS_SESSION_RL_WINDOW_SECONDS:-60}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_PORT: ${MINIO_PORT}
+      MINIO_USE_SSL: ${MINIO_USE_SSL}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      EBAP_MINIO_BUCKET: ${EBAP_MINIO_BUCKET:-ebap-cache}
+      EBAP_MANIFEST_PREFIX: ${EBAP_MANIFEST_PREFIX:-manifests/}
+      EBAP_HLS_MINIO_BUCKET: ${EBAP_HLS_MINIO_BUCKET:-ebap-hls}
+      EBAP_HLS_PREFIX: ${EBAP_HLS_PREFIX:-hls/v1/}
+      EBAP_S3_TIMEOUT_MS: ${EBAP_S3_TIMEOUT_MS:-5000}
+      EBAP_MAX_MANIFEST_BYTES: ${EBAP_MAX_MANIFEST_BYTES:-262144}
+      EBAP_MAX_CHUNK_BYTES: ${EBAP_MAX_CHUNK_BYTES:-1048576}
+      EBAP_MAX_INFLIGHT_BYTES: ${EBAP_MAX_INFLIGHT_BYTES:-8388608}
+      EBAP_HLS_MAX_TRANSCODE_JOBS: ${EBAP_HLS_MAX_TRANSCODE_JOBS:-1}
+      EBAP_HLS_LOCK_TTL_MS: ${EBAP_HLS_LOCK_TTL_MS:-600000}
+      EBAP_HLS_WAIT_READY_MS: ${EBAP_HLS_WAIT_READY_MS:-30000}
+      EBAP_HLS_SEGMENT_SECONDS: ${EBAP_HLS_SEGMENT_SECONDS:-4}
+      FFMPEG_BIN: ${FFMPEG_BIN:-ffmpeg}
+      FFMPEG_THREADS: ${FFMPEG_THREADS:-2}
+      EBAP_HLS_AAC_BITRATE_K: ${EBAP_HLS_AAC_BITRATE_K:-128}
+    depends_on:
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    networks:
+      - music-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=2048M
+    healthcheck:
+      test: [ "CMD", "bun", "-e", "fetch('http://localhost:3095/health').then(r => process.exit(r.status === 200 ? 0 : 1)).catch(() => process.exit(1))" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ==========================================================================
+  # Direct Stream Service (Progressive, signed URL, Range)
+  # ==========================================================================
+  direct-stream-service:
+    build:
+      context: ./backend/direct-stream-service
+      dockerfile: Dockerfile
+    container_name: music-direct-stream-service
+    expose:
+      - "3096"
+    environment:
+      PORT: 3096
+      NODE_ENV: ${NODE_ENV:-production}
+      SYSTEM_ROOT_SECRET: ${SYSTEM_ROOT_SECRET}
+      DIRECT_STREAM_URLTOKEN_SECRET: ${DIRECT_STREAM_URLTOKEN_SECRET:-}
+      DIRECT_STREAM_URLTOKEN_SECRETS: ${DIRECT_STREAM_URLTOKEN_SECRETS:-}
+      DIRECT_STREAM_URLTOKEN_TTL_SECONDS: ${DIRECT_STREAM_URLTOKEN_TTL_SECONDS:-900}
+      DIRECT_STREAM_PUBLIC_ORIGIN: ${DIRECT_STREAM_PUBLIC_ORIGIN:-https://strmhaha.earflow.ru}
+      DIRECT_STREAM_COOKIE_NAME: ${DIRECT_STREAM_COOKIE_NAME:-mp_stream}
+      DIRECT_STREAM_COOKIE_TTL_SECONDS: ${DIRECT_STREAM_COOKIE_TTL_SECONDS:-1800}
+      DIRECT_STREAM_COOKIE_DOMAIN: ${DIRECT_STREAM_COOKIE_DOMAIN:-.earflow.ru}
+      LIBRARY_USER_ID: ${LIBRARY_USER_ID:-1}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_MAX_CONNECTIONS: ${DIRECT_STREAM_DB_MAX_CONNECTIONS:-10}
+      DB_IDLE_TIMEOUT_SECONDS: ${DIRECT_STREAM_DB_IDLE_TIMEOUT_SECONDS:-30}
+      DB_CONNECTION_TIMEOUT_SECONDS: ${DIRECT_STREAM_DB_CONNECTION_TIMEOUT_SECONDS:-5}
+      DB_PREPARE: ${DIRECT_STREAM_DB_PREPARE:-true}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_PORT: ${MINIO_PORT}
+      MINIO_USE_SSL: ${MINIO_USE_SSL}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET_AUDIO: ${MINIO_BUCKET_AUDIO}
+      EBAP_MINIO_BUCKET: ${EBAP_MINIO_BUCKET:-ebap-cache}
+      EBAP_MANIFEST_PREFIX: ${EBAP_MANIFEST_PREFIX:-manifests/}
+      EBAP_HLS_MINIO_BUCKET: ${EBAP_HLS_MINIO_BUCKET:-ebap-hls}
+      EBAP_HLS_PREFIX: ${EBAP_HLS_PREFIX:-hls/v1/}
+      EBAP_S3_TIMEOUT_MS: ${EBAP_S3_TIMEOUT_MS:-5000}
+      EBAP_MAX_MANIFEST_BYTES: ${EBAP_MAX_MANIFEST_BYTES:-262144}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      DIRECT_STREAM_SESSION_CACHE_TTL_SECONDS: ${DIRECT_STREAM_SESSION_CACHE_TTL_SECONDS:-300}
+      DIRECT_STREAM_PLAYBACK_TOKEN_TTL_SECONDS: ${DIRECT_STREAM_PLAYBACK_TOKEN_TTL_SECONDS:-90}
+      DIRECT_STREAM_PLAYBACK_SESSION_TTL_SECONDS: ${DIRECT_STREAM_PLAYBACK_SESSION_TTL_SECONDS:-900}
+      DIRECT_STREAM_PLAYBACK_MAX_ACTIVE_SESSIONS_PER_USER: ${DIRECT_STREAM_PLAYBACK_MAX_ACTIVE_SESSIONS_PER_USER:-4}
+      DIRECT_STREAM_PLAYBACK_MEDIA_RL_WINDOW_SECONDS: ${DIRECT_STREAM_PLAYBACK_MEDIA_RL_WINDOW_SECONDS:-60}
+      DIRECT_STREAM_PLAYBACK_MEDIA_RL_MAX_REQUESTS: ${DIRECT_STREAM_PLAYBACK_MEDIA_RL_MAX_REQUESTS:-900}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - music-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64M
+    healthcheck:
+      test: [ "CMD", "bun", "-e", "fetch('http://localhost:3096/health').then(r => process.exit(r.status === 200 ? 0 : 1)).catch(() => process.exit(1))" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # Auth Service (INTERNAL ONLY - access via api-gateway)
+  auth-service:
+    build:
+      context: ./backend/auth-service
+      dockerfile: Dockerfile
+    container_name: music-auth-service
+    # Security: Internal service, no public ports
+    expose:
+      - "3001"
+    environment:
+      PORT: 3001
+      NODE_ENV: ${NODE_ENV}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ISSUER: ${JWT_ISSUER:-earflow-auth}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-earflow-api}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-365d}
+      ACCESS_JWT_EXPIRES_IN: ${ACCESS_JWT_EXPIRES_IN:-15m}
+      REFRESH_JWT_EXPIRES_IN: ${REFRESH_JWT_EXPIRES_IN:-365d}
+      DB_SERVICE_URL: http://database-service:3003
+      SERVICE_KEY_AUTH_SERVICE: ${SERVICE_KEY_AUTH_SERVICE}
+      REDIS_HOST: redis-auth
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      PROFILE_CACHE_TTL_SECONDS: ${PROFILE_CACHE_TTL_SECONDS:-600}
+    depends_on:
+      database-service:
+        condition: service_healthy
+    networks:
+      - music-network
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})" ]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # Upload Service (INTERNAL ONLY - access via api-gateway)
+  upload-service:
+    build:
+      context: ./backend/upload-service
+      dockerfile: Dockerfile
+    container_name: music-upload-service
+    # Security: Internal service, no public ports
+    expose:
+      - "3002"
+    environment:
+      PORT: 3002
+      NODE_ENV: ${NODE_ENV}
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-https://earflow.ru}
+      AUTH_SERVICE_URL: http://auth-service:3001
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_MAX_CONNECTIONS: ${UPLOAD_DB_MAX_CONNECTIONS:-30}
+      DB_MIN_CONNECTIONS: ${UPLOAD_DB_MIN_CONNECTIONS:-5}
+      DB_IDLE_TIMEOUT_MS: ${UPLOAD_DB_IDLE_TIMEOUT_MS:-30000}
+      DB_CONNECTION_TIMEOUT_MS: ${UPLOAD_DB_CONNECTION_TIMEOUT_MS:-5000}
+      DB_STATEMENT_TIMEOUT_MS: ${UPLOAD_DB_STATEMENT_TIMEOUT_MS:-30000}
+      SERVICE_JWT_PUBLIC_KEY_B64: ${SERVICE_JWT_PUBLIC_KEY_B64}
+      SERVICE_JWT_ISSUER: ${SERVICE_JWT_ISSUER:-database-service}
+      SERVICE_JWT_AUDIENCE_UPLOAD: ${SERVICE_JWT_AUDIENCE_UPLOAD:-upload-service}
+      JWT_SECRET: ${JWT_SECRET}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      MEDIA_URL_SECRET: ${MEDIA_URL_SECRET}
+      MEDIA_URL_TTL_SECONDS: ${MEDIA_URL_TTL_SECONDS:-3600}
+      MEDIA_AUTH_DEBUG: ${MEDIA_AUTH_DEBUG:-}
+      LOAD_TEST_MODE: ${LOAD_TEST_MODE:-false}
+      UPLOAD_RATE_LIMIT_MULTIPLIER: ${UPLOAD_RATE_LIMIT_MULTIPLIER:-}
+      LOAD_TEST_RATE_LIMIT_MULTIPLIER: ${LOAD_TEST_RATE_LIMIT_MULTIPLIER:-}
+      # MinIO Configuration
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_PORT: ${MINIO_PORT}
+      MINIO_USE_SSL: ${MINIO_USE_SSL}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET_AUDIO: ${MINIO_BUCKET_AUDIO}
+      MINIO_BUCKET_COVERS: ${MINIO_BUCKET_COVERS}
+      STORAGE_MODE: ${STORAGE_MODE:-minio}
+    volumes:
+      - upload-files:/app/uploads
+      # Mount music library read-only to avoid duplication
+      - "${MUSIC_SOURCE_DIR:-./data/music}:/app/uploads/library:ro"
+    depends_on:
+      database-service:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - music-network
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "node", "-e", "require('http').get('http://localhost:3002/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})" ]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  artist-service:
+    build:
+      context: ./backend/artist-service
+      dockerfile: Dockerfile
+    container_name: music-artist-service
+    expose:
+      - "3040"
+    environment:
+      PORT: 3040
+      NODE_ENV: ${NODE_ENV}
+      AUTH_SERVICE_URL: http://auth-service:3001
+      JWT_SECRET: ${JWT_SECRET}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_MAX_CONNECTIONS: ${ARTIST_DB_MAX_CONNECTIONS:-20}
+      DB_MIN_CONNECTIONS: ${ARTIST_DB_MIN_CONNECTIONS:-3}
+      DB_IDLE_TIMEOUT_MS: ${ARTIST_DB_IDLE_TIMEOUT_MS:-30000}
+      DB_CONNECTION_TIMEOUT_MS: ${ARTIST_DB_CONNECTION_TIMEOUT_MS:-5000}
+      DB_STATEMENT_TIMEOUT_MS: ${ARTIST_DB_STATEMENT_TIMEOUT_MS:-30000}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS},https://artists.earflow.ru
+      ARTIST_CLAIM_AUTO_REVIEW_ENABLED: ${ARTIST_CLAIM_AUTO_REVIEW_ENABLED:-true}
+      ARTIST_CLAIM_AUTO_APPROVE_ENABLED: ${ARTIST_CLAIM_AUTO_APPROVE_ENABLED:-true}
+      ARTIST_CLAIM_MIN_NOTE_LENGTH: ${ARTIST_CLAIM_MIN_NOTE_LENGTH:-20}
+      ARTIST_CLAIM_AUTO_APPROVE_MIN_TRUSTED_LINKS: ${ARTIST_CLAIM_AUTO_APPROVE_MIN_TRUSTED_LINKS:-2}
+      ARTIST_CLAIM_MANUAL_REVIEW_MIN_TRACKS: ${ARTIST_CLAIM_MANUAL_REVIEW_MIN_TRACKS:-5}
+      ARTIST_CLAIM_MANUAL_REVIEW_MIN_PLAYS: ${ARTIST_CLAIM_MANUAL_REVIEW_MIN_PLAYS:-10000}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN?INTERNAL_SERVICE_TOKEN is required and must be at least 32 chars}
+    depends_on:
+      database-service:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    networks:
+      - music-network
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "node", "-e", "require('http').get('http://localhost:3040/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})" ]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  artist-portal-service:
+    build:
+      context: ./backend/artist-portal-service
+      dockerfile: Dockerfile
+    container_name: music-artist-portal-service
+    expose:
+      - "3085"
+    environment:
+      PORT: 3085
+      NODE_ENV: ${NODE_ENV}
+      JWT_SECRET: ${JWT_SECRET}
+      ARTIST_SERVICE_URL: http://artist-service:3040
+      AUTH_SERVICE_URL: http://auth-service:3001
+      UPLOAD_SERVICE_URL: http://upload-service:3002
+      ALLOWED_ORIGINS: https://artists.earflow.ru
+      ARTIST_PORTAL_DISABLE_TRACK_UPLOAD_STEP_UP: ${ARTIST_PORTAL_DISABLE_TRACK_UPLOAD_STEP_UP:-false}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN?INTERNAL_SERVICE_TOKEN is required and must be at least 32 chars}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_DB: 0
+    depends_on:
+      artist-service:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - music-network
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "node", "-e", "require('http').get('http://localhost:3085/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})" ]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # ==========================================================================
+  # Security Service (Go) — account security hot-path endpoints.
+  # Handles: /security/overview, /password/change, /password/strength,
+  # /telegram/unlink, /sessions, /sessions/revoke-others, /2fa/recovery/regenerate.
+  # Reads/writes directly to Postgres (users) and Redis (sessions, step-up, rate-limit)
+  # so the same state shared with auth-service is single-writer per domain op.
+  # ==========================================================================
+  security-service:
+    build:
+      context: ./backend/security-service
+      dockerfile: Dockerfile
+    container_name: music-security-service
+    expose:
+      - "3074"
+    environment:
+      PORT: 3074
+      NODE_ENV: ${NODE_ENV}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ISSUER: ${JWT_ISSUER:-earflow-auth}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-earflow-api}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_SSLMODE: disable
+      DB_MAX_CONNECTIONS: ${SECURITY_DB_MAX_CONNECTIONS:-20}
+      DB_MIN_CONNECTIONS: ${SECURITY_DB_MIN_CONNECTIONS:-2}
+      DB_PREPARE: ${SECURITY_DB_PREPARE:-true}
+      REDIS_HOST: redis-auth
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_DB: 0
+      HTTP_HANDLER_TIMEOUT_MS: ${SECURITY_HANDLER_TIMEOUT_MS:-10000}
+      SECURITY_STEP_UP_TTL_SECONDS: ${SECURITY_STEP_UP_TTL_SECONDS:-300}
+      SECURITY_PASSWORD_WINDOW_SECONDS: ${SECURITY_PASSWORD_WINDOW_SECONDS:-60}
+      SECURITY_PASSWORD_MAX_ATTEMPTS: ${SECURITY_PASSWORD_MAX_ATTEMPTS:-5}
+      SECURITY_STRENGTH_WINDOW_SECONDS: ${SECURITY_STRENGTH_WINDOW_SECONDS:-60}
+      SECURITY_STRENGTH_MAX: ${SECURITY_STRENGTH_MAX:-60}
+      SECURITY_MAX_SESSIONS: ${SECURITY_MAX_SESSIONS:-40}
+      SECURITY_PASSWORD_MIN_LENGTH: ${SECURITY_PASSWORD_MIN_LENGTH:-8}
+      SERVICE_KEY_API_GATEWAY: ${SERVICE_KEY_API_GATEWAY}
+      AUTH_PG_SOT_MODE: ${AUTH_PG_SOT_MODE:-off}
+      SECURITY_PASSWORD_MAX_LENGTH: ${SECURITY_PASSWORD_MAX_LENGTH:-256}
+      SECURITY_PBKDF_ITERATIONS: ${SECURITY_PBKDF_ITERATIONS:-600000}
+      SECURITY_PBKDF_ITERATIONS_LEGACY: ${SECURITY_PBKDF_ITERATIONS_LEGACY:-100000}
+      SECURITY_PBKDF_KEY_LENGTH: ${SECURITY_PBKDF_KEY_LENGTH:-64}
+      SECURITY_ENC_PBKDF_ITERATIONS: ${SECURITY_ENC_PBKDF_ITERATIONS:-600000}
+      SECURITY_ENC_KEY_LENGTH: ${SECURITY_ENC_KEY_LENGTH:-32}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis-auth:
+        condition: service_healthy
+    networks:
+      - music-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=32M
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://127.0.0.1:3074/health" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  artist-api-gateway:
+    build:
+      context: ./backend/go-api-gateway
+      dockerfile: Dockerfile
+      args:
+        APP_VERSION: ${APP_VERSION:-local}
+        GIT_SHA: ${GIT_SHA:-local}
+    container_name: music-artist-api-gateway
+    expose:
+      - "3000"
+    environment:
+      PORT: 3000
+      NODE_ENV: ${NODE_ENV}
+      APP_VERSION: ${APP_VERSION:-local}
+      GIT_SHA: ${GIT_SHA:-local}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ISSUER: ${JWT_ISSUER:-earflow-auth}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-earflow-api}
+      DEBUG_AUTH: ${DEBUG_AUTH:-0}
+      TRUST_PROXY: "1"
+
+      CLIENT_ERROR_LOG_ENABLED: ${CLIENT_ERROR_LOG_ENABLED:-false}
+
+      COOKIE_DOMAIN: ".artists.earflow.ru"
+      COOKIE_SAMESITE: "none"
+      COOKIE_SECURE: "true"
+      COOKIE_AUTH_NAME: "mp_auth_artists"
+      COOKIE_REFRESH_NAME: "mp_refresh_artists"
+      COOKIE_SID_NAME: "mp_sid_artists"
+      COOKIE_CSRF_NAME: "mp_csrf_artists"
+      SESSION_KEY_PREFIX: "mp:artist:sess:"
+      SESSION_ENCRYPTION_KEY: ${SESSION_ENCRYPTION_KEY:-}
+
+      GATEWAY_SERVICE_NAME: "artist-api-gateway"
+      SERVICE_KEY_API_GATEWAY: ${SERVICE_KEY_ARTIST_API_GATEWAY}
+      GATEWAY_CONFIG_PATH: /app/gateway.artist.yaml
+
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_TRACES_SAMPLER: ${OTEL_TRACES_SAMPLER:-parentbased_traceidratio}
+      OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-0.2}
+
+      AUTH_SERVICE_URL: http://auth-service:3001
+      DATABASE_SERVICE_URL: http://database-service:3003
+      ARTIST_PORTAL_SERVICE_URL: http://artist-portal-service:3085
+      SECURITY_SERVICE_URL: http://security-service:3074
+      ALLOWED_ORIGINS: https://artists.earflow.ru
+
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_AUTH_HOST: redis-auth
+      REDIS_AUTH_PORT: 6379
+      REDIS_AUTH_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_RL_HOST: redis
+      REDIS_RL_PORT: 6379
+      REDIS_RL_PASSWORD: ${REDIS_PASSWORD:-}
+      SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-31536000}
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      database-service:
+        condition: service_healthy
+      artist-portal-service:
+        condition: service_healthy
+      security-service:
+        condition: service_healthy
+    networks:
+      - music-network
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:3000/health >/dev/null 2>&1" ]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # ==========================================================================
+  # Recommendations Service (INTERNAL ONLY - access via api-gateway)
+  # ==========================================================================
+  recommendations-service:
+    build:
+      context: ./backend/recommendations-service
+      dockerfile: Dockerfile
+    container_name: music-recommendations-service
+    # Security: Internal service, no public ports
+    expose:
+      - "3006"
+    environment:
+      # Server
+      PORT: 3006
+      NODE_ENV: ${NODE_ENV}
+      TRUST_PROXY: "true"
+
+      # PostgreSQL
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_MAX_CONNECTIONS: ${RECO_DB_MAX_CONNECTIONS:-30}
+      DB_IDLE_TIMEOUT_MS: ${RECO_DB_IDLE_TIMEOUT_MS:-20000}
+      DB_CONNECTION_TIMEOUT_MS: ${RECO_DB_CONNECTION_TIMEOUT_MS:-3000}
+      RECO_DB_STATEMENT_TIMEOUT_MS: ${RECO_DB_STATEMENT_TIMEOUT_MS:-15000}
+      RECO_DB_CB_FAILURE_THRESHOLD: ${RECO_DB_CB_FAILURE_THRESHOLD:-3}
+      RECO_DB_CB_COOLDOWN_MS: ${RECO_DB_CB_COOLDOWN_MS:-15000}
+
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_DB: ${REDIS_DB:-0}
+      REDIS_RETRY_DELAY_MS: ${REDIS_RETRY_DELAY_MS:-500}
+      REDIS_MAX_RETRIES: ${REDIS_MAX_RETRIES:-5}
+      REDIS_CONNECT_TIMEOUT_MS: ${REDIS_CONNECT_TIMEOUT_MS:-3000}
+      RECO_REDIS_KEY_PREFIX: ${RECO_REDIS_KEY_PREFIX:-reco:}
+
+      # Cache & Performance
+      RECO_CACHE_TRACKS_TTL_MS: ${RECO_CACHE_TRACKS_TTL_MS:-300000}
+      RECO_CACHE_TRACKS_MAX_SIZE: ${RECO_CACHE_TRACKS_MAX_SIZE:-20000}
+      RECO_CACHE_REDIS_TTL_SECONDS: ${RECO_CACHE_REDIS_TTL_SECONDS:-300}
+      RECO_CACHE_WARMUP_COUNT: ${RECO_CACHE_WARMUP_COUNT:-100}
+      RECO_COMPRESSION_ENABLED: ${RECO_COMPRESSION_ENABLED:-true}
+      RECO_KEEP_ALIVE_TIMEOUT_MS: ${RECO_KEEP_ALIVE_TIMEOUT_MS:-65000}
+
+      # Recommendations
+      RECO_DIAGNOSTICS_ENABLED: ${RECO_DIAGNOSTICS_ENABLED:-false}
+      RECO_DEFAULT_BATCH_SIZE: ${RECO_DEFAULT_BATCH_SIZE:-10}
+      RECO_MAX_BATCH_SIZE: ${RECO_MAX_BATCH_SIZE:-100}
+      RECO_MAX_EXCLUDE_IDS: ${RECO_MAX_EXCLUDE_IDS:-2000}
+      RECO_MAX_REQUEST_EXCLUDE_IDS: ${RECO_MAX_REQUEST_EXCLUDE_IDS:-2000}
+      RECO_SESSION_TTL_SECONDS: ${RECO_SESSION_TTL_SECONDS:-3600}
+      RECO_SESSION_MAX_TRACK_IDS: ${RECO_SESSION_MAX_TRACK_IDS:-5000}
+      RECO_SESSION_BOOTSTRAP_TARGET: ${RECO_SESSION_BOOTSTRAP_TARGET:-1000}
+
+      RECO_ENGINE: ${RECO_ENGINE:-v2}
+      RECO_RANKING_SERVICE_URL: ${RECO_RANKING_SERVICE_URL:-http://ranking-service:8080}
+      RECO_RANKING_TIMEOUT_MS: ${RECO_RANKING_TIMEOUT_MS:-150}
+      RECO_V2_SESSION_TTL_SECONDS: ${RECO_V2_SESSION_TTL_SECONDS:-3600}
+      RECO_V2_MAX_CANDIDATES: ${RECO_V2_MAX_CANDIDATES:-800}
+      RECO_V2_EXACT_TASTE_RATIO: ${RECO_V2_EXACT_TASTE_RATIO:-0.55}
+      RECO_V2_NEAR_TASTE_RATIO: ${RECO_V2_NEAR_TASTE_RATIO:-0.25}
+      RECO_V2_DISCOVERY_RATIO: ${RECO_V2_DISCOVERY_RATIO:-0.20}
+      RECO_V2_VECTOR_RECENT_TRACKS: ${RECO_V2_VECTOR_RECENT_TRACKS:-3}
+      RECO_V2_VECTOR_LIMIT: ${RECO_V2_VECTOR_LIMIT:-120}
+      RECO_V2_ONLINE_INTENT_ENABLED: ${RECO_V2_ONLINE_INTENT_ENABLED:-true}
+      RECO_V2_ONLINE_INTENT_LIMIT: ${RECO_V2_ONLINE_INTENT_LIMIT:-240}
+      RECO_V2_ONLINE_INTENT_MAX_ANCHORS: ${RECO_V2_ONLINE_INTENT_MAX_ANCHORS:-36}
+      RECO_V2_ONLINE_INTENT_NEGATIVE_PENALTY: ${RECO_V2_ONLINE_INTENT_NEGATIVE_PENALTY:-1.45}
+      RECO_V2_ONLINE_INTENT_LIKE_WEIGHT: ${RECO_V2_ONLINE_INTENT_LIKE_WEIGHT:-4}
+      RECO_V2_ONLINE_INTENT_COMPLETE_WEIGHT: ${RECO_V2_ONLINE_INTENT_COMPLETE_WEIGHT:-3.25}
+      RECO_V2_ONLINE_INTENT_LONG_PLAY_WEIGHT: ${RECO_V2_ONLINE_INTENT_LONG_PLAY_WEIGHT:-1.5}
+      RECO_V2_ONLINE_INTENT_DISLIKE_WEIGHT: ${RECO_V2_ONLINE_INTENT_DISLIKE_WEIGHT:-6}
+      RECO_V2_ONLINE_INTENT_SHORT_SKIP_WEIGHT: ${RECO_V2_ONLINE_INTENT_SHORT_SKIP_WEIGHT:-3.5}
+      RECO_V2_ONLINE_INTENT_LATE_SKIP_WEIGHT: ${RECO_V2_ONLINE_INTENT_LATE_SKIP_WEIGHT:-0.75}
+      RECO_V2_ONLINE_INTENT_POSITIVE_PLAY_MIN_SECONDS: ${RECO_V2_ONLINE_INTENT_POSITIVE_PLAY_MIN_SECONDS:-35}
+      RECO_V2_ONLINE_INTENT_POSITIVE_PLAY_MIN_PROGRESS: ${RECO_V2_ONLINE_INTENT_POSITIVE_PLAY_MIN_PROGRESS:-0.55}
+      RECO_V2_ONLINE_INTENT_LATE_SKIP_MIN_PROGRESS: ${RECO_V2_ONLINE_INTENT_LATE_SKIP_MIN_PROGRESS:-0.65}
+      RECO_V2_MOMENTUM_ENABLED: ${RECO_V2_MOMENTUM_ENABLED:-true}
+      RECO_V2_MOMENTUM_LIMIT: ${RECO_V2_MOMENTUM_LIMIT:-80}
+      RECO_V2_SIDESTEP_ENABLED: ${RECO_V2_SIDESTEP_ENABLED:-true}
+      RECO_V2_SIDESTEP_LIMIT: ${RECO_V2_SIDESTEP_LIMIT:-60}
+      RECO_V2_SIDESTEP_MIN_COS: ${RECO_V2_SIDESTEP_MIN_COS:-0.50}
+      RECO_V2_SIDESTEP_MAX_COS: ${RECO_V2_SIDESTEP_MAX_COS:-0.62}
+      RECO_V2_SIDESTEP_TARGET_COS: ${RECO_V2_SIDESTEP_TARGET_COS:-0.56}
+      RECO_V2_REPULSION_ENABLED: ${RECO_V2_REPULSION_ENABLED:-true}
+      RECO_V2_REPULSION_LIMIT: ${RECO_V2_REPULSION_LIMIT:-80}
+      RECO_V2_REPULSION_HISTORY_TRACKS: ${RECO_V2_REPULSION_HISTORY_TRACKS:-8}
+      RECO_V2_REPULSION_PENALTY: ${RECO_V2_REPULSION_PENALTY:-1.5}
+      RECO_V2_COLLAB_NEIGHBOR_LIMIT: ${RECO_V2_COLLAB_NEIGHBOR_LIMIT:-60}
+      RECO_V2_COLLAB_LIMIT: ${RECO_V2_COLLAB_LIMIT:-120}
+      RECO_V2_CONTEXT_LIMIT: ${RECO_V2_CONTEXT_LIMIT:-80}
+      RECO_V2_CONTEXT_MAX_ENERGY: ${RECO_V2_CONTEXT_MAX_ENERGY:-0.35}
+      RECO_V2_EXPLORATION_LIMIT: ${RECO_V2_EXPLORATION_LIMIT:-320}
+      RECO_V2_RECENT_EXCLUDE_DAYS: ${RECO_V2_RECENT_EXCLUDE_DAYS:-14}
+      RECO_V2_GENRE_AFFINITY_ENABLED: ${RECO_V2_GENRE_AFFINITY_ENABLED:-true}
+      RECO_V2_GENRE_AFFINITY_LIMIT: ${RECO_V2_GENRE_AFFINITY_LIMIT:-200}
+      RECO_V2_GENRE_AFFINITY_TOP_GENRES: ${RECO_V2_GENRE_AFFINITY_TOP_GENRES:-5}
+      RECO_V2_GENRE_AFFINITY_HISTORY_DAYS: ${RECO_V2_GENRE_AFFINITY_HISTORY_DAYS:-90}
+      RECO_V2_ARTIST_AFFINITY_ENABLED: ${RECO_V2_ARTIST_AFFINITY_ENABLED:-true}
+      RECO_V2_ARTIST_AFFINITY_LIMIT: ${RECO_V2_ARTIST_AFFINITY_LIMIT:-120}
+      RECO_V2_ARTIST_AFFINITY_TOP_ARTISTS: ${RECO_V2_ARTIST_AFFINITY_TOP_ARTISTS:-8}
+      RECO_V2_SIMILAR_ARTIST_ENABLED: ${RECO_V2_SIMILAR_ARTIST_ENABLED:-true}
+      RECO_V2_SIMILAR_ARTIST_LIMIT: ${RECO_V2_SIMILAR_ARTIST_LIMIT:-80}
+      RECO_V2_SIMILAR_ARTIST_TOP_ARTISTS: ${RECO_V2_SIMILAR_ARTIST_TOP_ARTISTS:-6}
+      RECO_V2_SKIP_BURST_THRESHOLD: ${RECO_V2_SKIP_BURST_THRESHOLD:-3}
+      RECO_V2_SKIP_BURST_WINDOW_SECONDS: ${RECO_V2_SKIP_BURST_WINDOW_SECONDS:-300}
+      RECO_V2_SEEN_TTL_SECONDS: ${RECO_V2_SEEN_TTL_SECONDS:-172800}
+      RECO_V2_BLOOM_BITS: ${RECO_V2_BLOOM_BITS:-4194304}
+      RECO_V2_BLOOM_HASHES: ${RECO_V2_BLOOM_HASHES:-7}
+      RECO_V2_TIMEZONE_OFFSET_MINUTES: ${RECO_V2_TIMEZONE_OFFSET_MINUTES:-0}
+
+      # Rate Limiting
+      RECO_RATE_LIMIT_WINDOW_MS: ${RECO_RATE_LIMIT_WINDOW_MS:-60000}
+      RECO_RATE_LIMIT_MAX: ${RECO_RATE_LIMIT_MAX:-200}
+      RECO_RATE_LIMIT_FEEDBACK_PER_USER: ${RECO_RATE_LIMIT_FEEDBACK_PER_USER:-100}
+      RECO_RATE_LIMIT_API_PER_USER: ${RECO_RATE_LIMIT_API_PER_USER:-100}
+      RECO_RATE_LIMIT_SESSIONS_PER_HOUR: ${RECO_RATE_LIMIT_SESSIONS_PER_HOUR:-20}
+      LOAD_TEST_MODE: ${LOAD_TEST_MODE:-false}
+      RECO_RATE_LIMIT_MULTIPLIER: ${RECO_RATE_LIMIT_MULTIPLIER:-}
+      LOAD_TEST_RATE_LIMIT_MULTIPLIER: ${LOAD_TEST_RATE_LIMIT_MULTIPLIER:-}
+      RECO_RATE_LIMIT_USE_REDIS: "true"
+
+      # Auth Service
+      AUTH_SERVICE_URL: http://auth-service:3001
+      RECO_AUTH_TIMEOUT_MS: ${RECO_AUTH_TIMEOUT_MS:-2000}
+
+      # Session Security (HMAC)
+      RECO_SESSION_SECRET: ${RECO_SESSION_SECRET}
+
+      # CORS
+      RECO_ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_PRETTY_PRINT: "false"
+
+      # Metrics
+      RECO_METRICS_ENABLED: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      ranking-service:
+        condition: service_healthy
+    networks:
+      - music-network
+    restart: unless-stopped
+    command: [ "sh", "-c", "node scripts/runMigrations.js && node server.js" ]
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+    healthcheck:
+      test: [ "CMD", "node", "-e", "require('http').get('http://localhost:3006/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})" ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  ranking-service:
+    build:
+      context: ./backend/ranking-service
+      dockerfile: Dockerfile
+    container_name: music-ranking-service
+    expose:
+      - "8080"
+    environment:
+      PORT: 8080
+      MAX_BODY_BYTES: 2097152
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      RANKING_DB_MAX_CONNECTIONS: ${RANKING_DB_MAX_CONNECTIONS:-8}
+      RANKING_DB_CONNECT_TIMEOUT_MS: ${RANKING_DB_CONNECT_TIMEOUT_MS:-1500}
+      DB_PREPARE: ${RANKING_DB_PREPARE:-true}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_DB: ${REDIS_DB:-0}
+      RECO_REDIS_KEY_PREFIX: ${RECO_REDIS_KEY_PREFIX:-reco:}
+      LIBRARY_USER_ID: ${LIBRARY_USER_ID:-1}
+      RECO_HOME_CACHE_TTL_SECONDS: ${RECO_HOME_CACHE_TTL_SECONDS:-60}
+      RECO_HOME_CANDIDATE_LIMIT: ${RECO_HOME_CANDIDATE_LIMIT:-2000}
+      RECO_HOME_MAX_RAILS: ${RECO_HOME_MAX_RAILS:-6}
+      RECO_HOME_MAX_PLAYLISTS: ${RECO_HOME_MAX_PLAYLISTS:-60}
+      RECO_HOME_PLAYLISTS_PER_RAIL: ${RECO_HOME_PLAYLISTS_PER_RAIL:-10}
+      RECO_HOME_TRACK_LIMIT: ${RECO_HOME_TRACK_LIMIT:-12}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - music-network
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "/ranking-service", "--healthcheck" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ==========================================================================
+  # Feedback Worker (Redis Stream Consumer)
+  # ==========================================================================
+  # ==========================================================================
+  # Feedback Worker (Go - Redis Stream Consumer)
+  # ==========================================================================
+  reco-feedback-worker-go:
+    build:
+      context: ./backend/reco-feedback-worker
+      dockerfile: Dockerfile
+    container_name: music-reco-feedback-worker-go
+    environment:
+      # PostgreSQL
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_MAX_CONNECTIONS: ${RECO_WORKER_DB_MAX_CONNECTIONS:-10}
+      DB_PREPARE: ${RECO_WORKER_DB_PREPARE:-true}
+
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_DB: ${REDIS_DB:-0}
+      RECO_REDIS_KEY_PREFIX: ${RECO_REDIS_KEY_PREFIX:-reco:}
+      RECO_REALTIME_RECENT_TTL_SECONDS: ${RECO_REALTIME_RECENT_TTL_SECONDS:-172800}
+      RECO_REALTIME_SKIP_TTL_SECONDS: ${RECO_REALTIME_SKIP_TTL_SECONDS:-172800}
+      RECO_REALTIME_DISLIKE_TTL_SECONDS: ${RECO_REALTIME_DISLIKE_TTL_SECONDS:-2592000}
+      RECO_DAILY_SEEN_TTL_SECONDS: ${RECO_DAILY_SEEN_TTL_SECONDS:-172800}
+
+      # Feedback Worker Config
+      RECO_FEEDBACK_BATCH_SIZE: ${RECO_FEEDBACK_BATCH_SIZE:-200}
+      RECO_FEEDBACK_BLOCK_TIMEOUT_MS: ${RECO_FEEDBACK_BLOCK_TIMEOUT_MS:-5000}
+      RECO_FEEDBACK_MAX_RETRIES: ${RECO_FEEDBACK_MAX_RETRIES:-5}
+      RECO_FEEDBACK_RETRY_DELAY_MS: ${RECO_FEEDBACK_RETRY_DELAY_MS:-1000}
+      RECO_FEEDBACK_SHUTDOWN_TIMEOUT_MS: ${RECO_FEEDBACK_SHUTDOWN_TIMEOUT_MS:-30000}
+      RECO_FEEDBACK_USE_DELIVERY_RETRIES: ${RECO_FEEDBACK_USE_DELIVERY_RETRIES:-false}
+      RECO_FEEDBACK_CONSUMER_NAME: ${RECO_FEEDBACK_CONSUMER_NAME:-}
+      FEEDBACK_WORKER_HEALTH_PORT: 3016
+
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - music-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:3016/health" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  reco-feedback-loadgen:
+    build:
+      context: ./backend/reco-feedback-worker
+      dockerfile: Dockerfile
+    container_name: music-reco-feedback-loadgen
+    profiles: [ "tools" ]
+    entrypoint: [ "/app/reco-feedback-loadgen" ]
+    environment:
+      # PostgreSQL
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_DB: ${REDIS_DB:-0}
+      RECO_REDIS_KEY_PREFIX: ${RECO_REDIS_KEY_PREFIX:-reco:}
+
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      reco-feedback-worker-go:
+        condition: service_healthy
+    networks:
+      - music-network
+    restart: "no"
+    command: [ "-total", "1000000", "-per-message", "200", "-pub", "4", "-pipe", "200", "-track-pool", "5000", "-user-pool", "50" ]
+
+  # ==========================================================================
+  # Offline Recommendations Worker (Node.js - SQL-based)
+  # ==========================================================================
+  reco-offline-worker:
+    build:
+      context: ./backend/recommendations-service
+      dockerfile: Dockerfile
+    container_name: music-reco-offline-worker
+    environment:
+      NODE_ENV: ${NODE_ENV}
+
+      # Session Security (HMAC)
+      RECO_SESSION_SECRET: ${RECO_SESSION_SECRET}
+
+      # PostgreSQL
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_MAX_CONNECTIONS: ${RECO_WORKER_DB_MAX_CONNECTIONS:-10}
+      DB_PREPARE: ${RECO_WORKER_DB_PREPARE:-true}
+      RECO_DB_STATEMENT_TIMEOUT_MS: ${RECO_OFFLINE_DB_STATEMENT_TIMEOUT_MS:-120000}
+
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_DB: ${REDIS_DB:-0}
+      RECO_REDIS_KEY_PREFIX: ${RECO_REDIS_KEY_PREFIX:-reco:}
+
+      # Offline Worker Config
+      RECO_OFFLINE_RUN_INTERVAL_MS: ${RECO_OFFLINE_RUN_INTERVAL_MS:-900000}
+      RECO_OFFLINE_TOP_N: ${RECO_OFFLINE_TOP_N:-1000}
+      RECO_OFFLINE_MIN_USER_HISTORY: ${RECO_OFFLINE_MIN_USER_HISTORY:-1}
+      RECO_OFFLINE_REDIS_TTL_SECONDS: ${RECO_OFFLINE_REDIS_TTL_SECONDS:-7200}
+      RECO_OFFLINE_LOCK_TTL_SECONDS: ${RECO_OFFLINE_LOCK_TTL_SECONDS:-600}
+      RECO_OFFLINE_USER_BATCH_SIZE: ${RECO_OFFLINE_USER_BATCH_SIZE:-100}
+      RECO_OFFLINE_LOG_PROGRESS_EVERY: ${RECO_OFFLINE_LOG_PROGRESS_EVERY:-500}
+      RECO_OFFLINE_HISTORY_LIMIT_MONTHS: ${RECO_OFFLINE_HISTORY_LIMIT_MONTHS:-12}
+      RECO_OFFLINE_USE_CACHED_GLOBAL_TOP: ${RECO_OFFLINE_USE_CACHED_GLOBAL_TOP:-false}
+      RECO_OFFLINE_GLOBAL_TOP_MAX_PER_ARTIST: ${RECO_OFFLINE_GLOBAL_TOP_MAX_PER_ARTIST:-0}
+      OFFLINE_WORKER_HEALTH_PORT: 3017
+
+      # Configurable Weights (A/B Testing)
+      RECO_WEIGHT_POPULARITY: ${RECO_WEIGHT_POPULARITY:-0.35}
+      RECO_WEIGHT_PLAY_COUNT: ${RECO_WEIGHT_PLAY_COUNT:-0.25}
+      RECO_WEIGHT_USER_PLAY_COUNT: ${RECO_WEIGHT_USER_PLAY_COUNT:-0.25}
+      RECO_WEIGHT_USER_LIKE_COUNT: ${RECO_WEIGHT_USER_LIKE_COUNT:-0.20}
+      RECO_WEIGHT_USER_SKIP_COUNT: ${RECO_WEIGHT_USER_SKIP_COUNT:--0.15}
+      RECO_WEIGHT_ARTIST_PREF: ${RECO_WEIGHT_ARTIST_PREF:-0.5}
+      RECO_WEIGHT_GENRE_PREF: ${RECO_WEIGHT_GENRE_PREF:-0.3}
+
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - music-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+    command: [ "sh", "-c", "node scripts/runMigrations.js && node workers/offlineWorker.js" ]
+    healthcheck:
+      test: [ "CMD", "node", "-e", "require('http').get('http://localhost:3017/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))" ]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ==========================================================================
+  # Playlist Service (INTERNAL ONLY - access via api-gateway)
+  # ==========================================================================
+  playlist-service:
+    build:
+      context: ./backend/playlist-service
+      dockerfile: Dockerfile
+    container_name: music-playlist-service
+    # Security: Internal service, no public ports
+    expose:
+      - "3020"
+    environment:
+      PORT: 3020
+      NODE_ENV: ${NODE_ENV}
+      DATABASE_URL: ${DATABASE_URL}
+      DB_MAX_CONNECTIONS: ${PLAYLIST_DB_MAX_CONNECTIONS:-20}
+      DB_MIN_CONNECTIONS: ${PLAYLIST_DB_MIN_CONNECTIONS:-0}
+      DB_IDLE_TIMEOUT_MS: ${PLAYLIST_DB_IDLE_TIMEOUT_MS:-30000}
+      DB_CONNECTION_TIMEOUT_MS: ${PLAYLIST_DB_CONNECTION_TIMEOUT_MS:-10000}
+      JWT_SECRET: ${JWT_SECRET}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      SERVICE_JWT_PUBLIC_KEY_B64: ${SERVICE_JWT_PUBLIC_KEY_B64}
+      SERVICE_JWT_ISSUER: ${SERVICE_JWT_ISSUER:-database-service}
+      SERVICE_JWT_AUDIENCE: ${SERVICE_JWT_AUDIENCE_PLAYLIST:-playlist-service}
+      CORS_ORIGIN: ${ALLOWED_ORIGINS}
+
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_DB: ${REDIS_DB:-0}
+
+      LIBRARY_USER_ID: ${LIBRARY_USER_ID:-1}
+      RECO_RANKING_SERVICE_URL: ${RECO_RANKING_SERVICE_URL:-http://ranking-service:8080}
+      PLAYLIST_HOME_COMPOSER_TIMEOUT_MS: ${PLAYLIST_HOME_COMPOSER_TIMEOUT_MS:-800}
+      DISCOVER_SEED_BUCKET_HOURS: ${DISCOVER_SEED_BUCKET_HOURS:-6}
+      DISCOVER_CACHE_TTL_SECONDS: ${DISCOVER_CACHE_TTL_SECONDS:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ranking-service:
+        condition: service_healthy
+    networks:
+      - music-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+    healthcheck:
+      test: [ "CMD", "node", "-e", "require('http').get('http://localhost:3020/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ==========================================================================
+  # Subscription Service (INTERNAL ONLY - access via api-gateway)
+  # ==========================================================================
+  subscription-service:
+    build:
+      context: ./backend/subscription-service
+      dockerfile: Dockerfile
+    container_name: music-subscription-service
+    expose:
+      - "3010"
+    environment:
+      PORT: 3010
+      NODE_ENV: ${NODE_ENV}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_MAX_CONNECTIONS: ${SUBSCRIPTION_DB_MAX_CONNECTIONS:-5}
+      DB_IDLE_TIMEOUT_SECONDS: ${SUBSCRIPTION_DB_IDLE_TIMEOUT_SECONDS:-30}
+      DB_CONNECTION_TIMEOUT_SECONDS: ${SUBSCRIPTION_DB_CONNECTION_TIMEOUT_SECONDS:-5}
+      DB_PREPARE: ${SUBSCRIPTION_DB_PREPARE:-true}
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - music-network
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "bun -e \"fetch('http://127.0.0.1:3010/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    security_opt:
+      - no-new-privileges:true
+
+  # ==========================================================================
+  # Lyrics Service (INTERNAL ONLY - access via api-gateway)
+  # ==========================================================================
+  lyrics-service:
+    build:
+      context: ./backend/lyrics-service
+      dockerfile: Dockerfile
+    container_name: music-lyrics-service
+    # Security: Internal service, no public ports
+    expose:
+      - "3010"
+    environment:
+      PORT: 3010
+      NODE_ENV: ${NODE_ENV}
+      LYRICS_VISIBILITY: ${LYRICS_VISIBILITY:-library}
+      LYRICS_LIBRARY_USER_ID: ${LYRICS_LIBRARY_USER_ID:-1}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_MAX_CONNECTIONS: ${LYRICS_DB_MAX_CONNECTIONS:-20}
+      DB_MIN_CONNECTIONS: ${LYRICS_DB_MIN_CONNECTIONS:-0}
+      DB_IDLE_TIMEOUT_MS: ${LYRICS_DB_IDLE_TIMEOUT_MS:-30000}
+      DB_CONNECTION_TIMEOUT_MS: ${LYRICS_DB_CONNECTION_TIMEOUT_MS:-5000}
+      JWT_SECRET: ${JWT_SECRET}
+      SERVICE_JWT_PUBLIC_KEY_B64: ${SERVICE_JWT_PUBLIC_KEY_B64}
+      SERVICE_JWT_ISSUER: ${SERVICE_JWT_ISSUER:-database-service}
+      SERVICE_JWT_AUDIENCE: ${SERVICE_JWT_AUDIENCE:-database-service}
+      INTERNAL_ALLOWED_SERVICES: ${INTERNAL_ALLOWED_SERVICES:-api-gateway,artist-api-gateway,ebap-hls-adapter}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      CORS_ORIGIN: ${ALLOWED_ORIGINS}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - music-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+    healthcheck:
+      test: [ "CMD", "node", "-e", "require('http').get('http://localhost:3010/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # Track Processor (Auto-import with cover compression)
+  track-processor:
+    build:
+      context: ./backend/track-processor
+      dockerfile: Dockerfile
+    container_name: music-track-processor
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      DB_SERVICE_URL: http://database-service:3003
+      SERVICE_KEY_TRACK_PROCESSOR: ${SERVICE_KEY_TRACK_PROCESSOR}
+      # Scan the mounted library directly
+      SOURCE_FOLDER: /app/uploads/library
+      # MinIO Configuration
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_PORT: ${MINIO_PORT}
+      MINIO_USE_SSL: ${MINIO_USE_SSL}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET_AUDIO: ${MINIO_BUCKET_AUDIO}
+      MINIO_BUCKET_COVERS: ${MINIO_BUCKET_COVERS}
+      STORAGE_MODE: ${STORAGE_MODE:-minio}
+    volumes:
+      # Shared upload directory with upload-service
+      - upload-files:/app/uploads
+      # Mount favorites folder directly to library
+      - "${MUSIC_SOURCE_DIR:-./data/music}:/app/uploads/library:ro"
+    depends_on:
+      database-service:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - music-network
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Device Sync Service (Spotify Connect-like). INTERNAL ONLY — go-api-gateway
+  # proxies /api/devices/* and /ws/devices to this container.
+  #
+  # Rollback plan:
+  #   1) flip DEVICE_SYNC_ENABLED=false in .env and `docker compose up -d
+  #      device-sync-service api-gateway`. The service stays up but answers
+  #      503 FEATURE_DISABLED on HTTP and closes WS upgrades with 503.
+  #      The frontend's REACT_APP_DEVICE_SYNC_ENABLED also defaults to false,
+  #      so a stale build won't poll a dead endpoint.
+  #   2) If the container itself is wedged: `docker compose stop
+  #      device-sync-service`. go-api-gateway will then 502 /api/devices/*
+  #      for anyone with REACT_APP_DEVICE_SYNC_ENABLED=true; users with the
+  #      default build see nothing.
+  # ==========================================================================
+  device-sync-service:
+    build:
+      context: ./backend/device-sync-service
+      dockerfile: Dockerfile
+    container_name: music-device-sync-service
+    expose:
+      - "3050"
+    environment:
+      PORT: 3050
+      NODE_ENV: ${NODE_ENV}
+      INSTANCE_ID: ${HOSTNAME:-device-sync}
+      DEVICE_SYNC_ENABLED: ${DEVICE_SYNC_ENABLED:-false}
+      JWT_SECRET: ${JWT_SECRET}
+      DEVICE_SYNC_WS_TICKET_SECRET: ${DEVICE_SYNC_WS_TICKET_SECRET:-}
+      WS_TICKET_TTL: 60s
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_DB: 3
+      REDIS_POOL_SIZE: ${DEVICE_SYNC_REDIS_POOL_SIZE:-50}
+      REDIS_MIN_IDLE: ${DEVICE_SYNC_REDIS_MIN_IDLE:-10}
+      MAX_DEVICES_PER_USER: ${DEVICE_SYNC_MAX_PER_USER:-30}
+      DEVICE_TTL_SECONDS: ${DEVICE_SYNC_DEVICE_TTL_SECONDS:-900}
+      HEARTBEAT_GRACE_SECONDS: ${DEVICE_SYNC_HEARTBEAT_GRACE_SECONDS:-60}
+      NOW_PLAYING_TTL_SECONDS: ${DEVICE_SYNC_NOW_PLAYING_TTL_SECONDS:-3600}
+      WS_RATE_LIMIT_MESSAGES_PER_SECOND: ${DEVICE_SYNC_WS_RATE_LIMIT_PER_SECOND:-8}
+      WS_READ_LIMIT_BYTES: 4096
+      WS_READ_TIMEOUT: 60s
+      WS_WRITE_TIMEOUT: 10s
+      WS_PING_INTERVAL: 25s
+      WS_WRITE_BUFFER: 64
+      MAX_COMMAND_PAYLOAD_BYTES: 2048
+      RATE_LIMIT_WINDOW: 60s
+      RATE_LIMIT_MAX_REQUESTS: ${DEVICE_SYNC_RATE_LIMIT_MAX:-120}
+      HTTP_READ_HEADER_TIMEOUT: 10s
+      HTTP_WRITE_TIMEOUT: 15s
+      HTTP_IDLE_TIMEOUT: 120s
+      SHUTDOWN_TIMEOUT: 30s
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      AUTH_SERVICE_URL: http://auth-service:3001
+    depends_on:
+      redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    networks:
+      - music-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+          cpus: '1.0'
+        reservations:
+          memory: 48M
+          cpus: '0.25'
+    healthcheck:
+      # Distroless has no shell: the service binary itself implements the
+      # probe via --healthcheck → GET /health → exit 0/1.
+      test: [ "CMD", "/app/device-sync-service", "--healthcheck" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  device-sync-stress:
+    build:
+      context: ./backend/device-sync-service
+      dockerfile: Dockerfile
+    container_name: music-device-sync-stress
+    profiles:
+      - device-sync-test
+    entrypoint: [ "/app/device-sync-smoke" ]
+    command:
+      - "-base-url"
+      - "http://device-sync-service:3050"
+      - "-user-id"
+      - "${DEVICE_SYNC_TEST_USER_ID:-device-sync-stress}"
+      - "-accounts"
+      - "${DEVICE_SYNC_TEST_ACCOUNTS:-10}"
+      - "-devices"
+      - "${DEVICE_SYNC_TEST_DEVICES:-5}"
+      - "-transfers"
+      - "${DEVICE_SYNC_TEST_TRANSFERS:-10}"
+      - "-concurrency"
+      - "${DEVICE_SYNC_TEST_CONCURRENCY:-5}"
+      - "-timeout"
+      - "${DEVICE_SYNC_TEST_TIMEOUT:-2m}"
+      - "-step-timeout"
+      - "${DEVICE_SYNC_TEST_STEP_TIMEOUT:-5s}"
+    depends_on:
+      device-sync-service:
+        condition: service_healthy
+    networks:
+      - music-network
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    cap_drop:
+      - ALL
+
+  # ==========================================================================
+  # NATS (JetStream) - Party v2 event bus (INTERNAL ONLY)
+  # ==========================================================================
+  nats:
+    image: nats:2.10.26-alpine
+    container_name: music-nats
+    command:
+      - "-js"
+      - "-m"
+      - "8222"
+      - "--port"
+      - "4222"
+    expose:
+      - "4222"
+      - "8222"
+    networks:
+      - music-network
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8222/healthz > /dev/null || exit 1" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ==========================================================================
+  # Party (Go) - State: REST + NATS + Redis. INTERNAL ONLY (via api-gateway).
+  # ==========================================================================
+  party-state-service:
+    build:
+      context: ./backend/party-go
+      dockerfile: Dockerfile.state
+    container_name: music-party-state-service
+    expose:
+      - "3130"
+    environment:
+      PORT: 3130
+      JWT_SECRET: ${JWT_SECRET}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_DB: 2
+      NATS_URL: nats://nats:4222
+      PARTY_V2_WS_TOKEN_SECRET: ${PARTY_V2_WS_TOKEN_SECRET:-}
+      # Go stateserver reads PARTY_V2_* only; alias legacy PARTY_SESSION_* / PARTY_INVITE_* from .env
+      PARTY_V2_SESSION_TTL_SECONDS: ${PARTY_V2_SESSION_TTL_SECONDS:-${PARTY_SESSION_TTL_SECONDS:-7200}}
+      PARTY_V2_INVITE_TTL_SECONDS: ${PARTY_V2_INVITE_TTL_SECONDS:-${PARTY_INVITE_TTL_SECONDS:-3600}}
+      PARTY_V2_SHARD_COUNT: ${PARTY_V2_SHARD_COUNT:-64}
+      PARTY_MAX_PER_USER: ${PARTY_MAX_PER_USER:-3}
+      PARTY_MAX_PARTICIPANTS: ${PARTY_MAX_PARTICIPANTS:-50}
+    depends_on:
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    networks:
+      - music-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64M
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.25'
+    healthcheck:
+      test: [ "CMD", "/party-state", "--healthcheck" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ==========================================================================
+  # Party (Go) - WebSocket gateway. INTERNAL ONLY (api-gateway /ws/v2 -> here).
+  # ==========================================================================
+  party-gateway-service:
+    build:
+      context: ./backend/party-go
+      dockerfile: Dockerfile.gateway
+    container_name: music-party-gateway-service
+    expose:
+      - "3131"
+    environment:
+      PORT: 3131
+      NATS_URL: nats://nats:4222
+      JWT_SECRET: ${JWT_SECRET}
+      PARTY_V2_WS_TOKEN_SECRET: ${PARTY_V2_WS_TOKEN_SECRET:-}
+      PARTY_V2_SHARDS: ${PARTY_V2_SHARDS:-}
+      PARTY_V2_SHARD_COUNT: ${PARTY_V2_SHARD_COUNT:-64}
+    depends_on:
+      nats:
+        condition: service_healthy
+    networks:
+      - music-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64M
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.25'
+    healthcheck:
+      test: [ "CMD", "/party-gateway", "--healthcheck" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ==========================================================================
+  # EBAP Encoder Worker (CPU-bound, isolated from streaming)
+  # ==========================================================================
+  ebap-encoder-worker:
+    build:
+      context: ./backend/ebap-encoder-worker
+      dockerfile: Dockerfile
+    container_name: music-ebap-encoder-worker
+    expose:
+      - "3091"
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      HEALTH_PORT: ${EBAP_WORKER_HEALTH_PORT:-3091}
+      SYSTEM_ROOT_SECRET: ${SYSTEM_ROOT_SECRET}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_MAX_CONNECTIONS: ${EBAP_WORKER_DB_MAX_CONNECTIONS:-6}
+      DB_MIN_CONNECTIONS: ${EBAP_WORKER_DB_MIN_CONNECTIONS:-1}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_PORT: ${MINIO_PORT}
+      MINIO_USE_SSL: ${MINIO_USE_SSL}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET_AUDIO: ${MINIO_BUCKET_AUDIO}
+      EBAP_MINIO_BUCKET: ${EBAP_MINIO_BUCKET:-ebap-cache}
+      EBAP_MANIFEST_PREFIX: ${EBAP_MANIFEST_PREFIX:-manifests/}
+      EBAP_TRACK_KEY_MASTER_SECRET: ${EBAP_TRACK_KEY_MASTER_SECRET:-}
+      EBAP_TRACK_KEY_MASTER_SECRETS: ${EBAP_TRACK_KEY_MASTER_SECRETS:-}
+      EBAP_MAX_CHUNK_BYTES: ${EBAP_MAX_CHUNK_BYTES:-131072}
+      EBAP_TARGET_CHUNK_SECONDS: ${EBAP_TARGET_CHUNK_SECONDS:-8}
+      EBAP_S3_TIMEOUT_MS: ${EBAP_S3_TIMEOUT_MS:-5000}
+      EBAP_MAX_INFLIGHT_UPLOADS: ${EBAP_MAX_INFLIGHT_UPLOADS:-8}
+      WORKER_POLL_INTERVAL_MS: ${EBAP_WORKER_POLL_INTERVAL_MS:-750}
+      WORKER_IDLE_SLEEP_MS: ${EBAP_WORKER_IDLE_SLEEP_MS:-5000}
+      FFMPEG_THREADS: ${EBAP_WORKER_FFMPEG_THREADS:-2}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    networks:
+      - music-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=2048M
+    healthcheck:
+      test: [ "CMD", "bun", "-e", "fetch('http://127.0.0.1:' + (Bun.env.HEALTH_PORT ?? '3091') + '/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 3072M
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+
+  # ==========================================================================
+  # Transcode Worker (multi-quality AAC encoding for adaptive streaming)
+  # ==========================================================================
+  transcode-worker:
+    build:
+      context: ./backend/transcode-worker
+      dockerfile: Dockerfile
+    container_name: music-transcode-worker
+    expose:
+      - "3098"
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      DB_MAX_CONNECTIONS: ${TRANSCODE_DB_MAX_CONNECTIONS:-2}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_PORT: ${MINIO_PORT}
+      MINIO_USE_SSL: ${MINIO_USE_SSL}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET_AUDIO: ${MINIO_BUCKET_AUDIO}
+      TRANSCODE_CONCURRENCY: 2
+      WAVEFORM_CONCURRENCY: 1
+      TRANSCODE_POLL_MS: 5000
+      TRANSCODE_WORK_DIR: /tmp/transcode-work
+      TRANSCODE_ENABLE_OPUS: "true"
+      TRANSCODE_ENABLE_FLAC: "true"
+      TRANSCODE_ENABLE_LOUDNORM: "true"
+      TRANSCODE_SHUTDOWN_TIMEOUT_MS: 120000
+      TRANSCODE_FAILED_MAX_RETRIES: 5
+      TRANSCODE_FAILED_RETRY_INTERVAL_MS: 3600000
+      TRANSCODE_FAILED_RETRY_BATCH: 20
+      HEALTH_PORT: ${TRANSCODE_WORKER_HEALTH_PORT:-3098}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    networks:
+      - music-network
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "node", "-e", "const p=process.env.HEALTH_PORT||'3098'; require('http').get('http://127.0.0.1:'+p+'/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=4096M
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2048M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # ==========================================================================
+  # Metadata Parser Service (ID3/tag extraction on upload)
+  # ==========================================================================
+  metadata-parser-service:
+    build:
+      context: ./backend/metadata-parser-service
+      dockerfile: Dockerfile
+    container_name: music-metadata-parser
+    expose:
+      - "3072"
+    environment:
+      NODE_ENV: production
+      PORT: "3072"
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      DB_MAX_CONNECTIONS: ${METADATA_DB_MAX_CONNECTIONS:-5}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_PORT: ${MINIO_PORT}
+      MINIO_USE_SSL: ${MINIO_USE_SSL}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET_AUDIO: ${MINIO_BUCKET_AUDIO}
+      MINIO_BUCKET_COVERS: ${MINIO_BUCKET_COVERS:-music-covers}
+      METADATA_CONCURRENCY: "2"
+      METADATA_POLL_MS: "5000"
+      METADATA_MAX_FILE_BYTES: "524288"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    networks:
+      - music-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=256M
+    healthcheck:
+      test: [ "CMD", "node", "-e", "require('http').get('http://localhost:3072/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))" ]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  # ==========================================================================
+  # Import Service (MusicBrainz + Spotify metadata enrichment)
+  # ==========================================================================
+  import-service:
+    build:
+      context: ./backend/import-service
+      dockerfile: Dockerfile
+    container_name: music-import-service
+    expose:
+      - "3073"
+    environment:
+      NODE_ENV: production
+      PORT: "3073"
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      DB_MAX_CONNECTIONS: ${IMPORT_DB_MAX_CONNECTIONS:-3}
+      MUSICBRAINZ_USER_AGENT: ${MUSICBRAINZ_USER_AGENT:-EarflowMusicPlatform/1.0 (contact@earflow.ru)}
+      SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:-}
+      SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - music-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64M
+    healthcheck:
+      test: [ "CMD", "node", "-e", "require('http').get('http://localhost:3073/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))" ]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
+
+  # ==========================================================================
+  # EBAP HLS Packager Worker (CPU-bound, background HLS VOD generation)
+  # ==========================================================================
+  ebap-hls-packager-worker:
+    build:
+      context: ./backend/ebap-hls-packager-worker
+      dockerfile: Dockerfile
+    container_name: music-ebap-hls-packager-worker
+    expose:
+      - "3092"
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      HEALTH_PORT: ${EBAP_HLS_PACKAGER_HEALTH_PORT:-3092}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_MAX_CONNECTIONS: ${EBAP_HLS_PACKAGER_DB_MAX_CONNECTIONS:-10}
+      DB_MIN_CONNECTIONS: ${EBAP_HLS_PACKAGER_DB_MIN_CONNECTIONS:-0}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_PORT: ${MINIO_PORT}
+      MINIO_USE_SSL: ${MINIO_USE_SSL}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET_AUDIO: ${MINIO_BUCKET_AUDIO}
+      EBAP_MINIO_BUCKET: ${EBAP_MINIO_BUCKET:-ebap-cache}
+      EBAP_MANIFEST_PREFIX: ${EBAP_MANIFEST_PREFIX:-manifests/}
+      EBAP_HLS_MINIO_BUCKET: ${EBAP_HLS_MINIO_BUCKET:-ebap-hls}
+      EBAP_HLS_PREFIX: ${EBAP_HLS_PREFIX:-hls/v1/}
+      EBAP_S3_TIMEOUT_MS: ${EBAP_S3_TIMEOUT_MS:-5000}
+      WORKER_POLL_INTERVAL_MS: ${EBAP_WORKER_POLL_INTERVAL_MS:-750}
+      WORKER_IDLE_SLEEP_MS: ${EBAP_WORKER_IDLE_SLEEP_MS:-5000}
+      FFMPEG_THREADS: ${EBAP_HLS_PACKAGER_FFMPEG_THREADS:-2}
+      HLS_SEGMENT_SECONDS: ${HLS_SEGMENT_SECONDS:-2}
+      HLS_AAC_BITRATE_1_K: ${HLS_AAC_BITRATE_1_K:-256}
+      HLS_AAC_BITRATE_2_K: ${HLS_AAC_BITRATE_2_K:-128}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    networks:
+      - music-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=2048M
+    healthcheck:
+      test: [ "CMD", "bun", "-e", "fetch('http://127.0.0.1:' + (Bun.env.HEALTH_PORT ?? '3092') + '/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4096M
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+
+  # ==========================================================================
+  # Nginx Load Balancer - Entry Point (Hardened Build with HTTPS)
+  # ==========================================================================
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    image: music-nginx-lb:hardened
+    container_name: music-nginx-lb
+    command: [ "sh", "-c", "mkdir -p /var/cache/nginx/client_temp /var/cache/nginx/proxy_temp /var/cache/nginx/ebap_cache /var/cache/nginx/audio_cache /var/cache/nginx/fastcgi_temp /var/cache/nginx/uwsgi_temp /var/cache/nginx/scgi_temp && chown -R nginx:nginx /var/cache/nginx && exec nginx -g 'daemon off;'" ]
+    ulimits:
+      nofile:
+        soft: 200000
+        hard: 200000
+    ports:
+      - "80:80" # HTTP (redirect to HTTPS + ACME challenge)
+      - "443:443" # HTTPS
+      - "127.0.0.1:8443:443" # Internal-only HTTPS for SSH tunnel (admin/metrics)
+      - "127.0.0.1:8085:8085" # Internal-only HTTP for SSH tunnel (admin/metrics)
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      # include + статика: иначе при bind mounts и старом образе nginx не стартует
+      - ./nginx/include-maintenance.conf:/etc/nginx/include-maintenance.conf:ro
+      - ./nginx/html/maintenance.html:/usr/share/nginx/html/maintenance.html:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - certbot-webroot:/var/www/certbot:ro
+      - nginx_cache:/var/cache/nginx
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+      artist-api-gateway:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    networks:
+      - music-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+    healthcheck:
+      test: [ "CMD", "wget", "-q", "--spider", "http://localhost/nginx-health" ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: music-certbot
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt
+      - certbot-webroot:/var/www/certbot
+    entrypoint: [ "sh", "-c", "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --non-interactive --quiet; sleep 12h; done" ]
+    depends_on:
+      nginx:
+        condition: service_healthy
+    restart: unless-stopped
+
+  nginx-cert-reloader:
+    image: alpine:3.21
+    container_name: music-nginx-cert-reloader
+    pid: "service:nginx"
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    command: [ "sh", "-c", "apk add --no-cache inotify-tools >/dev/null 2>&1 && while inotifywait -e close_write,create,delete,move -r /etc/letsencrypt/live >/dev/null 2>&1; do kill -HUP 1; done" ]
+    depends_on:
+      nginx:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ==========================================================================
+  # API Gateway (Scalable - multiple instances behind nginx)
+  # ==========================================================================
+  api-gateway:
+    build:
+      context: ./backend/go-api-gateway
+      dockerfile: Dockerfile
+      args:
+        APP_VERSION: ${APP_VERSION:-local}
+        GIT_SHA: ${GIT_SHA:-local}
+    # НЕ указываем container_name - позволяет масштабирование
+    deploy:
+      replicas: ${API_GATEWAY_REPLICAS:-2} # По умолчанию 2 инстанса
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    # Порт НЕ экспортируем наружу - только через nginx
+    expose:
+      - "3000"
+    environment:
+      PORT: 3000
+      NODE_ENV: ${NODE_ENV}
+      APP_VERSION: ${APP_VERSION:-local}
+      GIT_SHA: ${GIT_SHA:-local}
+      JWT_SECRET: ${JWT_SECRET}
+      PARTY_V2_WS_TOKEN_SECRET: ${PARTY_V2_WS_TOKEN_SECRET:-}
+      JWT_ISSUER: ${JWT_ISSUER:-earflow-auth}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-earflow-api}
+      DEBUG_AUTH: ${DEBUG_AUTH:-0}
+      TRUST_PROXY: "1"
+      LOAD_TEST_MODE: ${LOAD_TEST_MODE:-false}
+      GATEWAY_RATE_LIMIT_MULTIPLIER: ${GATEWAY_RATE_LIMIT_MULTIPLIER:-}
+      LOAD_TEST_RATE_LIMIT_MULTIPLIER: ${LOAD_TEST_RATE_LIMIT_MULTIPLIER:-}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-.earflow.ru}
+      COOKIE_SAMESITE: ${COOKIE_SAMESITE:-none}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      SESSION_ENCRYPTION_KEY: ${SESSION_ENCRYPTION_KEY:-}
+      SERVICE_KEY_API_GATEWAY: ${SERVICE_KEY_API_GATEWAY}
+      AUTH_PG_SOT_MODE: ${AUTH_PG_SOT_MODE:-off}
+
+      CLIENT_ERROR_LOG_ENABLED: ${CLIENT_ERROR_LOG_ENABLED:-false}
+
+      GATEWAY_ADMIN_USER: ${GATEWAY_ADMIN_USER:-}
+      GATEWAY_ADMIN_PASSWORD: ${GATEWAY_ADMIN_PASSWORD:-}
+
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_TRACES_SAMPLER: ${OTEL_TRACES_SAMPLER:-parentbased_traceidratio}
+      OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-0.2}
+
+      AUTH_SERVICE_URL: http://auth-service:3001
+      UPLOAD_SERVICE_URL: http://upload-service:3002
+      DATABASE_SERVICE_URL: http://database-service:3003
+      RECOMMENDATIONS_SERVICE_URL: http://recommendations-service:3006
+      PLAYLIST_SERVICE_URL: http://playlist-service:3020
+      SUBSCRIPTION_SERVICE_URL: http://subscription-service:3010
+      LYRICS_SERVICE_URL: http://lyrics-service:3010
+      PARTY_SERVICE_URL: http://party-state-service:3130
+      PARTY_V2_STATE_URL: http://party-state-service:3130
+      PARTY_V2_GATEWAY_URL: http://party-gateway-service:3131
+      DEVICE_SYNC_SERVICE_URL: http://device-sync-service:3050
+      EBAP_HLS_ADAPTER_URL: http://ebap-hls-adapter:3095
+      DIRECT_STREAM_SERVICE_URL: http://direct-stream-service:3096
+      ARTIST_SERVICE_URL: http://artist-service:3040
+      SEARCH_SERVICE_URL: http://search-service:3062
+      METADATA_PARSER_SERVICE_URL: http://metadata-parser-service:3072
+      IMPORT_SERVICE_URL: http://import-service:3073
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      ALLOW_TUNNEL_ORIGINS: ${ALLOW_TUNNEL_ORIGINS:-false}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_AUTH_HOST: redis-auth
+      REDIS_AUTH_PORT: 6379
+      REDIS_AUTH_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_RL_HOST: redis
+      REDIS_RL_PORT: 6379
+      REDIS_RL_PASSWORD: ${REDIS_PASSWORD:-}
+      SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-31536000}
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      upload-service:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      recommendations-service:
+        condition: service_healthy
+      playlist-service:
+        condition: service_healthy
+      subscription-service:
+        condition: service_healthy
+      lyrics-service:
+        condition: service_healthy
+      party-state-service:
+        condition: service_healthy
+      ebap-hls-adapter:
+        condition: service_healthy
+      artist-service:
+        condition: service_healthy
+      metadata-parser-service:
+        condition: service_healthy
+      import-service:
+        condition: service_healthy
+    networks:
+      - music-network
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:3000/health > /dev/null || exit 1" ]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # Frontend - Production Build with Nginx
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: production
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-}
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        NO_PROXY: ${NO_PROXY:-}
+    container_name: music-frontend
+    expose:
+      - "3004"
+    environment:
+      NODE_ENV: production
+      EARFLOW_TELEGRAM_BOT_USERNAME: ${EARFLOW_TELEGRAM_BOT_USERNAME:-}
+      REACT_APP_TELEGRAM_BOT_USERNAME: ${REACT_APP_TELEGRAM_BOT_USERNAME:-}
+      EARFLOW_API_BASE_URL: ${EARFLOW_API_BASE_URL:-}
+      EARFLOW_STREAMING_BASE_URL: ${EARFLOW_STREAMING_BASE_URL:-https://api.earflow.ru}
+      EARFLOW_ENABLE_DIRECT_STREAM: ${EARFLOW_ENABLE_DIRECT_STREAM:-true}
+      # Device Sync (Connect-like) runtime flag. Default OFF so existing
+      # builds stay inert until you flip it here and restart the frontend.
+      EARFLOW_DEVICE_SYNC_ENABLED: ${EARFLOW_DEVICE_SYNC_ENABLED:-false}
+    volumes:
+      - ./frontend/public/content:/usr/share/nginx/html/content:ro
+    networks:
+      - music-network
+    restart: unless-stopped
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -sf http://localhost:3004/ > /dev/null || wget -qO- http://localhost:3004/ > /dev/null || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:size=64M,uid=1001,gid=1001
+      - /var/run:size=8M,uid=1001,gid=1001
+      - /var/log/nginx:size=32M,uid=1001,gid=1001
+      - /tmp:size=16M,uid=1001,gid=1001
+
+  # Artist Frontend - Production Build with Nginx
+  artist-frontend:
+    build:
+      context: ./artist-frontend
+      dockerfile: Dockerfile
+      target: production
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-}
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        NO_PROXY: ${NO_PROXY:-}
+    container_name: music-artist-frontend
+    expose:
+      - "3005"
+    environment:
+      NODE_ENV: production
+      EARFLOW_TELEGRAM_BOT_USERNAME: ${EARFLOW_TELEGRAM_BOT_USERNAME:-}
+      REACT_APP_TELEGRAM_BOT_USERNAME: ${REACT_APP_TELEGRAM_BOT_USERNAME:-}
+      EARFLOW_ARTIST_CSRF_COOKIE_NAME: "mp_csrf_artists"
+    networks:
+      - music-network
+    restart: unless-stopped
+    depends_on:
+      artist-api-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -sf http://localhost:3005/ > /dev/null || wget -qO- http://localhost:3005/ > /dev/null || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:size=64M,uid=1001,gid=1001
+      - /var/run:size=8M,uid=1001,gid=1001
+      - /var/log/nginx:size=32M,uid=1001,gid=1001
+      - /tmp:size=16M,uid=1001,gid=1001
+
+  # ==========================================================================
+  # Portainer - Docker Management UI (SECURE - localhost only!)
+  # ==========================================================================
+  # ⚠️ БЕЗОПАСНОСТЬ: Порт открыт ТОЛЬКО на 127.0.0.1
+  # Доступ ТОЛЬКО через SSH туннель - никто извне не подключится!
+  # ==========================================================================
+  portainer:
+    image: portainer/portainer-ce:2.33.5
+    container_name: music-portainer
+    restart: unless-stopped
+    # КРИТИЧНО: Только localhost! Не 0.0.0.0!
+    # ВАЖНО: Порт 9000 занят MinIO, используем 9002
+    ports:
+      - "127.0.0.1:9002:9000" # HTTP UI (внутри контейнера 9000)
+      - "127.0.0.1:9443:9443" # HTTPS UI
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - portainer_data:/data
+    networks:
+      - music-network
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      # Отключить телеметрию
+      - PORTAINER_HIDE_TELEMETRY=true
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+    healthcheck:
+      test: [ "CMD", "/portainer", "--version" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # ==========================================================================
+  # pgAdmin - PostgreSQL Management (МАКСИМАЛЬНАЯ БЕЗОПАСНОСТЬ)
+  # ==========================================================================
+  # ⚠️ БЕЗОПАСНОСТЬ:
+  # 1. Порт ТОЛЬКО на 127.0.0.1 - недоступен извне
+  # 2. Доступ ТОЛЬКО через SSH туннель: ssh -L 5050:127.0.0.1:5050 root@сервер
+  pgadmin:
+    image: dpage/pgadmin4:8
+    container_name: music-pgadmin
+    profiles: [ "tools" ]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+      # Отключаем телеметрию и лишние функции
+      PGADMIN_DISABLE_POSTFIX: "true"
+      GUNICORN_WORKERS: "1"
+      GUNICORN_THREADS: "2"
+      PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION: "True"
+      PGADMIN_CONFIG_LOGIN_BANNER: "'⚠️ PRIVATE ACCESS ONLY'"
+      PGADMIN_CONFIG_CONSOLE_LOG_LEVEL: "40" # ERROR only
+      # Автоматическое подключение к нашему PostgreSQL
+      PGADMIN_CONFIG_SERVER_MODE: "True"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      # Файл с настройками серверов (создастся автоматически)
+      - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
+    networks:
+      - music-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.3'
+
+networks:
+  music-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+    driver: local
+  upload-files:
+    driver: local
+  redis-data:
+    driver: local
+  redis-auth-data:
+    driver: local
+  minio-data:
+    driver: local
+  meilisearch-data:
+    driver: local
+  nginx_cache:
+    driver: local
+  portainer_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+  certbot-webroot:
+    driver: local

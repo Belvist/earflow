@@ -1,0 +1,89 @@
+﻿
+Running 3 tests using 1 worker
+
+  тЬШ  1 [mobile-chromium] тА║ e2e\modal-surfaces.spec.js:60:3 тА║ Real player modal surfaces (real touch) тА║ queue panel: open, expand, collapse, close via real-touch gestures (22.1s)
+  тЬУ  2 [mobile-chromium] тА║ e2e\modal-surfaces.spec.js:98:3 тА║ Real player modal surfaces (real touch) тА║ lyrics: lyrics-mode flips album touch-action and gates dismiss (13.9s)
+  тЬШ  3 [mobile-chromium] тА║ e2e\modal-surfaces.spec.js:131:3 тА║ Real player modal surfaces (real touch) тА║ device bottom-sheet: open and dismiss via handle drag (15.2s)
+
+
+  1) [mobile-chromium] тА║ e2e\modal-surfaces.spec.js:60:3 тА║ Real player modal surfaces (real touch) тА║ queue panel: open, expand, collapse, close via real-touch gestures 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBeLessThan[2m([22m[32mexpected[39m[2m)[22m
+
+    Expected: < [32m319[39m
+    Received:   [31m531[39m
+
+    Call Log:
+    - Timeout 3000ms exceeded while waiting on the predicate
+
+      88 |         intervals: [150, 300, 500],
+      89 |       })
+    > 90 |       .toBeLessThan(collapsedHeight + 40);
+         |        ^
+      91 |
+      92 |     // 3) ╨Х╤Й╤С ╤Б╨▓╨░╨╣╨┐ ╨▓╨╜╨╕╨╖ ╨┐╨╛ ╤Е╤Н╨╜╨┤╨╗╤Г ╨▓ collapsed ╨╖╨░╨║╤А╤Л╨▓╨░╨╡╤В ╨┐╨░╨╜╨╡╨╗╤М.
+      93 |     await swipeOn(page, handle, 0, 320, 240);
+        at C:\Users\Heave\Downloads\music-platform\frontend\e2e\modal-surfaces.spec.js:90:8
+
+    attachment #1: screenshot (image/png) тФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФА
+    test-results\modal-surfaces-Real-player-e3212-ose-via-real-touch-gestures-mobile-chromium\test-failed-1.png
+    тФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФА
+
+    attachment #2: video (video/webm) тФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФА
+    test-results\modal-surfaces-Real-player-e3212-ose-via-real-touch-gestures-mobile-chromium\video.webm
+    тФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФА
+
+    Error Context: test-results\modal-surfaces-Real-player-e3212-ose-via-real-touch-gestures-mobile-chromium\error-context.md
+
+    attachment #4: trace (application/zip) тФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФА
+    test-results\modal-surfaces-Real-player-e3212-ose-via-real-touch-gestures-mobile-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\modal-surfaces-Real-player-e3212-ose-via-real-touch-gestures-mobile-chromium\trace.zip
+
+    тФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФА
+
+  2) [mobile-chromium] тА║ e2e\modal-surfaces.spec.js:131:3 тА║ Real player modal surfaces (real touch) тА║ device bottom-sheet: open and dismiss via handle drag 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: locator('[data-testid="home-player-root"]')
+    Expected: visible
+    Timeout: 12000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 12000ms[22m
+    [2m  - waiting for locator('[data-testid="home-player-root"]')[22m
+
+
+       at helpers\realHomepage.js:172
+
+      170 |   await page.goto('/');
+      171 |   await acceptCookiesIfVisible(page);
+    > 172 |   await expect(page.locator(SELECTORS.HOME_ROOT)).toBeVisible({ timeout: 12_000 });
+          |                                                   ^
+      173 |   await expect(page.locator(SELECTORS.HOME_COVER)).toBeVisible({ timeout: 12_000 });
+      174 |   await expect.poll(async () => (await page.locator(SELECTORS.HOME_TITLE).textContent())?.trim() || '', {
+      175 |     timeout: 8_000,
+        at openRealHomepage (C:\Users\Heave\Downloads\music-platform\frontend\e2e\helpers\realHomepage.js:172:51)
+        at C:\Users\Heave\Downloads\music-platform\frontend\e2e\modal-surfaces.spec.js:132:5
+
+    attachment #1: screenshot (image/png) тФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФА
+    test-results\modal-surfaces-Real-player-1433b-and-dismiss-via-handle-drag-mobile-chromium\test-failed-1.png
+    тФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФА
+
+    Error Context: test-results\modal-surfaces-Real-player-1433b-and-dismiss-via-handle-drag-mobile-chromium\error-context.md
+
+    attachment #3: trace (application/zip) тФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФА
+    test-results\modal-surfaces-Real-player-1433b-and-dismiss-via-handle-drag-mobile-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\modal-surfaces-Real-player-1433b-and-dismiss-via-handle-drag-mobile-chromium\trace.zip
+
+    тФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФА
+
+  2 failed
+    [mobile-chromium] тА║ e2e\modal-surfaces.spec.js:60:3 тА║ Real player modal surfaces (real touch) тА║ queue panel: open, expand, collapse, close via real-touch gestures 
+    [mobile-chromium] тА║ e2e\modal-surfaces.spec.js:131:3 тА║ Real player modal surfaces (real touch) тА║ device bottom-sheet: open and dismiss via handle drag 
+  1 passed (1.0m)

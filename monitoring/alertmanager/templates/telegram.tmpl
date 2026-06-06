@@ -1,0 +1,14 @@
+{{ define "telegram.earflow.message" -}}
+Earflow: {{ if eq .Status "firing" }}алерт сработал{{ else if eq .Status "resolved" }}алерт восстановился{{ else }}статус алерта: {{ .Status }}{{ end }}
+Количество алертов: {{ len .Alerts }}
+{{ range .Alerts }}
+---
+{{ if .Labels.severity }}Важность: {{ if eq .Labels.severity "critical" }}критично{{ else if eq .Labels.severity "warning" }}предупреждение{{ else }}{{ .Labels.severity }}{{ end }}
+{{ end }}Алерт: {{ if .Annotations.summary }}{{ .Annotations.summary }}{{ else }}{{ .Labels.alertname }}{{ end }}
+ID: {{ .Labels.alertname }}
+{{ if .Labels.job }}Job: {{ .Labels.job }}
+{{ end }}{{ if .Labels.service }}Сервис: {{ .Labels.service }}
+{{ end }}{{ if .Labels.instance }}Instance: {{ .Labels.instance }}
+{{ end }}{{ if .Annotations.description }}Описание: {{ .Annotations.description }}
+{{ end }}{{ end }}
+{{- end }}

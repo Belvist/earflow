@@ -1,0 +1,163 @@
+{
+    "uid": "ebap-hls-adapter",
+    "title": "EBAP HLS Adapter",
+    "tags": [
+        "music-platform",
+        "ebap",
+        "hls",
+        "prometheus"
+    ],
+    "timezone": "browser",
+    "schemaVersion": 39,
+    "version": 1,
+    "refresh": "10s",
+    "time": {
+        "from": "now-30m",
+        "to": "now"
+    },
+    "panels": [
+        {
+            "type": "timeseries",
+            "title": "HLS HTTP status rate",
+            "gridPos": {
+                "x": 0,
+                "y": 0,
+                "w": 24,
+                "h": 8
+            },
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "expr": "sum(rate(ebap_hls_http_503_total[5m]))",
+                    "legendFormat": "503"
+                },
+                {
+                    "refId": "B",
+                    "expr": "sum(rate(ebap_hls_http_500_total[5m]))",
+                    "legendFormat": "500"
+                },
+                {
+                    "refId": "C",
+                    "expr": "sum(rate(ebap_hls_http_404_total[5m]))",
+                    "legendFormat": "404"
+                },
+                {
+                    "refId": "D",
+                    "expr": "sum(rate(ebap_hls_http_400_total[5m]))",
+                    "legendFormat": "400"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "reqps"
+                },
+                "overrides": []
+            }
+        },
+        {
+            "type": "timeseries",
+            "title": "HLS 503 reasons rate",
+            "gridPos": {
+                "x": 0,
+                "y": 8,
+                "w": 24,
+                "h": 8
+            },
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "expr": "sum(rate(ebap_hls_error_hls_busy_total[5m]))",
+                    "legendFormat": "busy"
+                },
+                {
+                    "refId": "B",
+                    "expr": "sum(rate(ebap_hls_error_hls_not_ready_total[5m]))",
+                    "legendFormat": "not_ready"
+                },
+                {
+                    "refId": "C",
+                    "expr": "sum(rate(ebap_hls_error_hls_failed_recently_total[5m]))",
+                    "legendFormat": "failed_recently"
+                },
+                {
+                    "refId": "D",
+                    "expr": "sum(rate(ebap_hls_error_hls_build_failed_total[5m]))",
+                    "legendFormat": "build_failed"
+                },
+                {
+                    "refId": "E",
+                    "expr": "sum(rate(ebap_hls_error_ebap_trackkey_unwrap_failed_total[5m]))",
+                    "legendFormat": "trackkey_unwrap_failed"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "reqps"
+                },
+                "overrides": []
+            }
+        },
+        {
+            "type": "timeseries",
+            "title": "HLS transcode latency (avg ms)",
+            "gridPos": {
+                "x": 0,
+                "y": 16,
+                "w": 24,
+                "h": 8
+            },
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "expr": "(sum(rate(ebap_hls_transcode_ms_sum[5m])) / sum(rate(ebap_hls_transcode_ms_count[5m])))",
+                    "legendFormat": "avg"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "ms"
+                },
+                "overrides": []
+            }
+        },
+        {
+            "type": "timeseries",
+            "title": "HLS inflight (gauge)",
+            "gridPos": {
+                "x": 0,
+                "y": 24,
+                "w": 24,
+                "h": 8
+            },
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "expr": "ebap_hls_inflight_gauge",
+                    "legendFormat": "inflight"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none"
+                },
+                "overrides": []
+            }
+        }
+    ]
+}

@@ -1,0 +1,27 @@
+{
+  "scripts": {
+    "validate:ai": "node scripts/validate-ai-discipline.js",
+    "validate:ai:strict": "node scripts/validate-ai-discipline.js --strict",
+    "test:frontend": "node scripts/run-frontend-tests.js",
+    "test:frontend:full": "node scripts/run-frontend-tests.js --full",
+    "test:frontend:docker": "node scripts/run-frontend-tests.js --with-docker",
+    "test:frontend:setup": "node scripts/run-frontend-tests.js --install",
+    "test:e2e:install": "npm --prefix frontend run test:e2e:install",
+    "test:e2e:gestures": "npm --prefix frontend run test:e2e:gestures",
+    "test:e2e:homepage": "npm --prefix frontend run test:e2e:homepage",
+    "test:e2e:player": "npm --prefix frontend run test:e2e:player",
+    "test:e2e:ci-player": "npm --prefix frontend run test:e2e:ci-player",
+    "test:e2e:live:login": "npm --prefix frontend run test:e2e:live:login",
+    "test:e2e:live": "npm --prefix frontend run test:e2e:live",
+    "test:e2e:all": "npm --prefix frontend run test:e2e:all",
+    "test:e2e:headed": "npm --prefix frontend run test:e2e:headed",
+    "test:e2e:stress": "npm --prefix frontend run test:e2e:stress",
+    "test:e2e:stress:headed": "npm --prefix frontend run test:e2e:stress:headed",
+    "test:e2e:stress:visual": "npm --prefix frontend run test:e2e:stress:visual",
+    "test:e2e:ui": "npm --prefix frontend run test:e2e:ui",
+    "test:e2e:report": "npm --prefix frontend run test:e2e:report",
+    "verify:player-mobile": "node scripts/verify-player-mobile.js",
+    "verify:cors-pop": "bash scripts/verify-cors-pop-preflight.sh",
+    "verify:prod-auth-gate": "bash scripts/verify-prod-auth-gate.sh"
+  }
+}
