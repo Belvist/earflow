@@ -1,0 +1,31 @@
+# Optional: auto-deploy to VPS on push to main.
+# Enable after prod auth green. Requires GitHub repo secrets:
+#   VPS_HOST      — e.g. ru-vmv2-mini IP or hostname
+#   VPS_SSH_KEY   — private key (passwordless) for root@VPS
+#   VPS_SSH_USER  — optional, default root
+#
+# Disable while stabilizing: delete this file or set workflow to manual dispatch only.
+
+name: VPS deploy
+
+on:
+  workflow_dispatch:
+  # push:
+  #   branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_SSH_USER || 'root' }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd /opt/music-platform
+            export GIT_SSH_COMMAND='ssh -i /root/.ssh/earflow_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new'
+            bash scripts/vps-deploy-from-git.sh
