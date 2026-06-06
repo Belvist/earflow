@@ -1,0 +1,280 @@
+{
+  "config": {
+    "configFile": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\playwright.config.js",
+    "rootDir": "C:/Users/Heave/Downloads/music-platform/frontend/e2e",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "C:/Users/Heave/Downloads/music-platform/frontend/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "mobile-chromium",
+        "name": "mobile-chromium",
+        "testDir": "C:/Users/Heave/Downloads/music-platform/frontend/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.60.0",
+    "workers": 1,
+    "webServer": {
+      "command": "cmd /c \"set BROWSER=none && npm start\"",
+      "url": "http://localhost:3000",
+      "reuseExistingServer": true,
+      "timeout": 180000,
+      "stdout": "pipe",
+      "stderr": "pipe"
+    }
+  },
+  "suites": [
+    {
+      "title": "modal-surfaces.spec.js",
+      "file": "modal-surfaces.spec.js",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Real player modal surfaces (real touch)",
+          "file": "modal-surfaces.spec.js",
+          "line": 59,
+          "column": 6,
+          "specs": [
+            {
+              "title": "queue panel: open, expand, collapse, close via real-touch gestures",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mobile-chromium",
+                  "projectName": "mobile-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 10134,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeGreaterThan\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: > \u001b[32m359\u001b[39m\nReceived:   \u001b[31m279\u001b[39m\n\nCall Log:\n- Timeout 3000ms exceeded while waiting on the predicate",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeGreaterThan\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: > \u001b[32m359\u001b[39m\nReceived:   \u001b[31m279\u001b[39m\n\nCall Log:\n- Timeout 3000ms exceeded while waiting on the predicate\n    at C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\modal-surfaces.spec.js:81:8",
+                        "location": {
+                          "file": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\modal-surfaces.spec.js",
+                          "column": 8,
+                          "line": 81
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 79 |\u001b[39m         intervals\u001b[33m:\u001b[39m [\u001b[35m150\u001b[39m\u001b[33m,\u001b[39m \u001b[35m300\u001b[39m\u001b[33m,\u001b[39m \u001b[35m500\u001b[39m]\u001b[33m,\u001b[39m\n \u001b[90m 80 |\u001b[39m       })\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 81 |\u001b[39m       \u001b[33m.\u001b[39mtoBeGreaterThan(collapsedHeight \u001b[33m+\u001b[39m \u001b[35m80\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m        \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 82 |\u001b[39m\n \u001b[90m 83 |\u001b[39m     \u001b[90m// 2) Свайп вниз по хэндлу сворачивает обратно к collapsed.\u001b[39m\n \u001b[90m 84 |\u001b[39m     \u001b[36mawait\u001b[39m swipeOn(page\u001b[33m,\u001b[39m handle\u001b[33m,\u001b[39m \u001b[35m0\u001b[39m\u001b[33m,\u001b[39m \u001b[35m300\u001b[39m\u001b[33m,\u001b[39m \u001b[35m240\u001b[39m)\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\modal-surfaces.spec.js",
+                            "column": 8,
+                            "line": 81
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeGreaterThan\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: > \u001b[32m359\u001b[39m\nReceived:   \u001b[31m279\u001b[39m\n\nCall Log:\n- Timeout 3000ms exceeded while waiting on the predicate\n\n  79 |         intervals: [150, 300, 500],\n  80 |       })\n> 81 |       .toBeGreaterThan(collapsedHeight + 80);\n     |        ^\n  82 |\n  83 |     // 2) Свайп вниз по хэндлу сворачивает обратно к collapsed.\n  84 |     await swipeOn(page, handle, 0, 300, 240);\n    at C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\modal-surfaces.spec.js:81:8"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-05-28T22:03:57.595Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\test-results\\modal-surfaces-Real-player-e3212-ose-via-real-touch-gestures-mobile-chromium\\test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\test-results\\modal-surfaces-Real-player-e3212-ose-via-real-touch-gestures-mobile-chromium\\video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\test-results\\modal-surfaces-Real-player-e3212-ose-via-real-touch-gestures-mobile-chromium\\error-context.md"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\test-results\\modal-surfaces-Real-player-e3212-ose-via-real-touch-gestures-mobile-chromium\\trace.zip"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\modal-surfaces.spec.js",
+                        "column": 8,
+                        "line": 81
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "b5a548dd76ff50eae935-6d053513ced8d5f16972",
+              "file": "modal-surfaces.spec.js",
+              "line": 60,
+              "column": 3
+            },
+            {
+              "title": "lyrics: lyrics-mode flips album touch-action and gates dismiss",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mobile-chromium",
+                  "projectName": "mobile-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 9437,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-05-28T22:04:10.690Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "b5a548dd76ff50eae935-65306037bf1b07269d45",
+              "file": "modal-surfaces.spec.js",
+              "line": 98,
+              "column": 3
+            },
+            {
+              "title": "device bottom-sheet: open and dismiss via handle drag",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "mobile-chromium",
+                  "projectName": "mobile-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 9805,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeHidden\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator:  locator('[data-gesture-surface=\"bottom-sheet\"]')\nExpected: hidden\nReceived: visible\nTimeout:  2000ms\n\nCall log:\n\u001b[2m  - Expect \"toBeHidden\" with timeout 2000ms\u001b[22m\n\u001b[2m  - waiting for locator('[data-gesture-surface=\"bottom-sheet\"]')\u001b[22m\n\u001b[2m    20 × locator resolved to <div class=\"sc-ezERCi kvGPQm\" data-gesture-surface=\"bottom-sheet\">…</div>\u001b[22m\n\u001b[2m       - unexpected value \"visible\"\u001b[22m\n",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeHidden\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator:  locator('[data-gesture-surface=\"bottom-sheet\"]')\nExpected: hidden\nReceived: visible\nTimeout:  2000ms\n\nCall log:\n\u001b[2m  - Expect \"toBeHidden\" with timeout 2000ms\u001b[22m\n\u001b[2m  - waiting for locator('[data-gesture-surface=\"bottom-sheet\"]')\u001b[22m\n\u001b[2m    20 × locator resolved to <div class=\"sc-ezERCi kvGPQm\" data-gesture-surface=\"bottom-sheet\">…</div>\u001b[22m\n\u001b[2m       - unexpected value \"visible\"\u001b[22m\n\n    at C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\modal-surfaces.spec.js:144:39",
+                        "location": {
+                          "file": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\modal-surfaces.spec.js",
+                          "column": 39,
+                          "line": 144
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 142 |\u001b[39m\n \u001b[90m 143 |\u001b[39m     \u001b[36mawait\u001b[39m swipeOn(page\u001b[33m,\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[33mSHEET_HANDLE\u001b[39m)\u001b[33m,\u001b[39m \u001b[35m0\u001b[39m\u001b[33m,\u001b[39m \u001b[35m420\u001b[39m\u001b[33m,\u001b[39m \u001b[35m280\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 144 |\u001b[39m     \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[33mSHEET\u001b[39m))\u001b[33m.\u001b[39mtoBeHidden({ timeout\u001b[33m:\u001b[39m \u001b[35m2\u001b[39m_000 })\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                                       \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 145 |\u001b[39m     \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mlocator(\u001b[33mMODAL\u001b[39m))\u001b[33m.\u001b[39mtoBeVisible()\u001b[33m;\u001b[39m\n \u001b[90m 146 |\u001b[39m   })\u001b[33m;\u001b[39m\n \u001b[90m 147 |\u001b[39m })\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\modal-surfaces.spec.js",
+                            "column": 39,
+                            "line": 144
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeHidden\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator:  locator('[data-gesture-surface=\"bottom-sheet\"]')\nExpected: hidden\nReceived: visible\nTimeout:  2000ms\n\nCall log:\n\u001b[2m  - Expect \"toBeHidden\" with timeout 2000ms\u001b[22m\n\u001b[2m  - waiting for locator('[data-gesture-surface=\"bottom-sheet\"]')\u001b[22m\n\u001b[2m    20 × locator resolved to <div class=\"sc-ezERCi kvGPQm\" data-gesture-surface=\"bottom-sheet\">…</div>\u001b[22m\n\u001b[2m       - unexpected value \"visible\"\u001b[22m\n\n\n  142 |\n  143 |     await swipeOn(page, page.locator(SHEET_HANDLE), 0, 420, 280);\n> 144 |     await expect(page.locator(SHEET)).toBeHidden({ timeout: 2_000 });\n      |                                       ^\n  145 |     await expect(page.locator(MODAL)).toBeVisible();\n  146 |   });\n  147 | });\n    at C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\modal-surfaces.spec.js:144:39"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-05-28T22:04:21.708Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\test-results\\modal-surfaces-Real-player-1433b-and-dismiss-via-handle-drag-mobile-chromium\\test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\test-results\\modal-surfaces-Real-player-1433b-and-dismiss-via-handle-drag-mobile-chromium\\video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\test-results\\modal-surfaces-Real-player-1433b-and-dismiss-via-handle-drag-mobile-chromium\\error-context.md"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\test-results\\modal-surfaces-Real-player-1433b-and-dismiss-via-handle-drag-mobile-chromium\\trace.zip"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\modal-surfaces.spec.js",
+                        "column": 39,
+                        "line": 144
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "b5a548dd76ff50eae935-eae867ddf9164610f315",
+              "file": "modal-surfaces.spec.js",
+              "line": 131,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-05-28T22:03:42.363Z",
+    "duration": 49788.288,
+    "expected": 1,
+    "skipped": 0,
+    "unexpected": 2,
+    "flaky": 0
+  }
+}

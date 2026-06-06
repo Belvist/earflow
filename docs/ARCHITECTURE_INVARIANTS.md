@@ -1,0 +1,327 @@
+# Архитектурные инварианты — Earflow
+
+**Назначение:** жёсткие правила, нарушение которых = архитектурный регресс. AI-агент **обязан** прочитать этот файл перед любым изменением, затрагивающим listed-области. Если предложение нарушает инвариант — стоп, обсудить с человеком.
+
+**Формат:** `[ID] Правило — Почему — Красный флаг (что нарушает)`.
+
+---
+
+## Cross-cutting (все роли, все сервисы)
+
+### INV-ARCH-001 — Один механизм на одну ответственность (no stacked escape hatches)
+
+Для одного и того же поведения или состояния — **один** канал управления. Исправление бага не оправдывает добавление второго параллельного пути без удаления или слияния старого.
+
+- **Почему:** слои расходятся (prod vs local, React vs DOM vs CSS); отладка превращается в «какой слой сработал»; баги множатся (урок mini play style 2026-06).
+- **Правило для AI:** `.cursor/rules/earflow-ui-client-prefs.mdc` (секция INV-ARCH-001), `INV-FE-008`.
+- **Красный флаг:** React state + imperative `apply*ToDom` + `public/*-overrides.css` + `!important` в `App.js` для **одного** UI pref; второй polling «если WS упал» при уже принятом always-on WS; дублирование ownership на frontend и backend.
+- **Исключение:** временный escape hatch только с `docs/PENDING.md` + `docs/DECISIONS.md` + **раскрытием пользователю в том же ответе**.
+
+---
+
+## DeviceSync / Playback authority
+
+### INV-DS-001 — Backend единственный источник правды для playback state
+
+Все изменения `nowPlaying`, `activeDeviceId`, `lease`, `timeline` инициируются на backend (`device-sync-service`). Frontend — receiver.
+
+- **Красный флаг:** frontend code вида `transferTo(self)`, `optimisticActiveDevice = self.id`, `localOutputState = 'ACTIVE'` без серверного frame.
+- **Источник:** Spotify Connect модель. Race conditions от dual authority — наша история до 2026-05.
+
+### INV-DS-002 — `cmd:play` = intent, не объявление
+
+Когда любой девайс отправляет `cmd:play` и **не является active** (или active отсутствует), backend сам делает `StartTransfer`. Frontend никогда не делает self-transfer перед `play`.
+
+- **Файл:** `backend/device-sync-service/internal/devices/registry.go` → `Registry.SendCommand`.
+- **Тесты:** `transfer_fsm_test.go::TestSendCommandTransferOnPlay*`.
+- **Красный флаг:** в `deviceSyncControls.js` появляется `transferTo` перед `sendCommand({cmd:'play'})`.
+
+### INV-DS-003 — Никаких periodic publish от frontend
+
+Frontend публикует `nowPlaying` snapshot **только** на реальные события: смена трека, play↔pause, drift позиции > `POSITION_DRIFT_PUSH_SEC`. Никаких `setInterval(publishNowPlayingIfDue, X)`.
+
+- **Файл:** `frontend/src/components/DeviceSync/nowPlayingPublishPolicy.js`.
+- **Красный флаг:** появление новых `setInterval`/`setTimeout` для publish в `DeviceSyncProvider.js`.
+
+### INV-DS-004 — Server frame ordering trusted
+
+Frontend применяет любой WS frame от `device-sync-service` без stale-фильтрации. Backend через Redis Pub/Sub гарантирует ordering per-user.
+
+- **Красный флаг:** появление функций вида `isStaleX`, `if (incomingRev < currentRev) break;` в `useDeviceSync.js`.
+
+### INV-DS-005 — Никакого локального rebuild `devices[]` или `nowPlaying.deviceId`
+
+При `devices:active` frame frontend сохраняет только `activeRevision`. Все остальные поля приходят через свои собственные frames (`np:update`, `lease:update`, `devices:update`).
+
+- **Красный флаг:** код вида `devices.map(d => ({ ...d, isActive: d.id === activeId }))` в `useDeviceSync.js`.
+
+### INV-DS-006 — WebSocket — always-on после `register`
+
+Никакой "standby REST polling если <2 устройств". WS открывается всегда после регистрации device. REST `listDevices` — только одноразовый best-effort bootstrap перед первым `init` frame.
+
+- **Красный флаг:** появление `setInterval(listDevices, ...)`, `connectionState: 'standby'`, `if (devices.length < 2) return;` в connect path.
+
+---
+
+## Security
+
+### INV-SEC-001 — JWT в httpOnly cookies, не в localStorage
+
+Frontend не имеет права читать/писать JWT. Auth-state через `useAuth` хук, который полагается на gateway-set cookies.
+
+- **Красный флаг:** `localStorage.setItem('token', ...)`, `Authorization: Bearer ${localToken}` в frontend.
+
+### INV-SEC-002 — Параметризованные SQL во всех Node-сервисах
+
+Никакой конкатенации user input в SQL. Используем pg-параметры (`$1`, `$2`).
+
+- **Красный флаг:** `\`SELECT ... WHERE user_id = '${userId}'\`` в backend.
+
+### INV-SEC-003 — Service-to-service через `X-Service-Token` + JWT audience/issuer
+
+Сервисы не доверяют сырым headers (`X-User-Id` приходит только из gateway session middleware).
+
+- **Файл:** `backend/go-api-gateway/internal/auth/`.
+- **Красный флаг:** Node-сервис читает `X-User-Id` напрямую без validation через service token.
+
+### INV-SEC-010 — Browser API: cookie + device proof (PoP), не cookie-only
+
+Для listener/artist gateway authenticated browser API недостаточно `mp_sid` (+ `mp_csrf` на unsafe). Требуется ECDSA P-256 proof (`X-Auth-Device-*`) от `authDeviceId`, привязанного к sid в Redis.
+
+- **Реализация:** `DeviceProofMiddleware`, `POST /api/auth/device/register`, `RevokeSessionFull`.
+- **Allowlist (без proof):** login/register/telegram, `GET /api/auth/csrf`, `POST /api/auth/device/register`, `public-config`, health/metrics.
+- **WebSocket:** `/ws/*` не аутентифицируется cookie-only; ticket через authenticated POST (например `/api/devices/ws-ticket` с proof).
+- **Prod fallback запрещён:** `ALLOW_COOKIE_AUTH_WITHOUT_PROOF=1` только local/test; в production env игнорируется.
+- **Красный флаг:** `if (!proof) next()` на authenticated routes; второй путь «только cookies» в prod.
+
+### INV-SEC-011 — PoP e2e harness routes never in production gateway
+
+`/e2e/*` (seed-session, fixture) только в `cmd/pop-e2e-harness` с `//go:build pop_e2e_harness`. Prod `cmd/gateway` binary не содержит harness strings.
+
+- **Красный флаг:** `/e2e/seed-session` в `server.go` или `http_routes.go`; harness без build tag.
+
+### INV-SEC-012 — CI blocks PoP bypass in production deploy configs
+
+`scripts/validate-auth-prod-guard.js` (also `validate:ai`, CI) fails if prod artifacts set `ALLOW_COOKIE_AUTH_WITHOUT_PROOF=1`, `REACT_APP_ALLOW_COOKIE_AUTH_WITHOUT_PROOF=1`, or `REACT_APP_DEVICE_PROOF_REQUIRED=0`.
+
+- **Allowlist:** playwright configs, e2e specs, docs — not docker-compose prod / frontend Dockerfile.
+
+### INV-SEC-013 — Route audit: protected `/api/*` requires PoP when session present
+
+CI tests (`route_pop_audit_test.go`) assert gateway `require_user` routes and auth handler paths require `DeviceProofMiddleware` when authenticated sid exists; cookie-only sample paths return `401 DEVICE_PROOF_REQUIRED`.
+
+- **Красный флаг:** new `require_user` gateway route without PoP coverage; protected path in `DeviceProofBypassPaths`.
+
+### INV-SEC-014 — Spoofed internal headers never authenticate
+
+`InternalHeaderSanitizer` strips client `X-User-Id`, `X-Artist-Id`, `X-Service-User`, service tokens before auth. Contract tests: spoofed headers + session cookie without proof → `401`; spoofed headers without session → `401 NO_SESSION`.
+
+- **Красный флаг:** upstream reads client-controlled `X-User-Id`; sanitizer removed from `server.go` chain.
+
+### INV-SEC-015 — Postgres auth SoT: no SELECT on every API request
+
+Postgres tables `auth_sessions`, `auth_devices`, `refresh_tokens`, `security_events` are SoT; Redis remains session cache and PoP nonce path until Proof Access Token (PEND-SEC-013). Gateway hot handlers (`GET /api/profile`, catalog, stream) **must not** query Postgres per request.
+
+- **Разрешённые PG reads:** security UI session list, admin/audit, backfill jobs — behind `AUTH_PG_SOT_MODE=pg_read`+.
+- **Revoke:** `RevokeSessionFull` writes Postgres **before** Redis when `AUTH_PG_SOT_MODE` enables writes (`security-service` `AuthSoT`).
+- **Красный флаг:** `pgx` query in gateway middleware per authenticated GET; Proof Access Token before epoch revoke (PEND-SEC-012).
+
+---
+
+## Frontend
+
+### INV-FE-001 — `PlayerContext` не делает прямой fetch ownership state
+
+Player читает ownership state через `DeviceSyncContext`. Не дублирует `currentTrack/isPlaying` локальной мутацией поверх remote state.
+
+- **Красный флаг:** `setCurrentTrack` внутри `PlayerContext` без проверки `isActiveOnServer`.
+
+### INV-FE-002 — Стили — styled-components рядом с компонентом
+
+`<Component>.styles.js` рядом с `<Component>.js`. Не один глобальный CSS файл на весь модуль.
+
+### INV-FE-003 — Pointer-жесты только через arbiter + gesture machine
+
+Swipe/drag surfaces во frontend должны проходить через `GestureArbiterProvider` и `usePointerGestureMachine` либо через arbiter-aware hooks (`usePointerDragScroll`, `usePointerSeek`, `useSheetDragArbitration`). Mini-player, player sheet dismiss, cover stack, playlist rail, seek и bottom sheet не имеют права распознавать один `pointerId` как независимые локальные gestures.
+
+- **Документация:** `docs/GESTURE_ARCHITECTURE.md`, `.cursor/rules/earflow-gesture-architecture.mdc`
+- **Красный флаг:** новый `onTouchStart`/`onTouchMove`, Framer `drag` + `onDragEnd` для swipe, `window.addEventListener('scroll', ...)` для сброса gesture, или локальный pointer state machine без `arbiter.tryClaim/release`.
+
+### INV-FE-004 — Directional drag surface обязан задавать `touch-action`
+
+Поверхность, которая владеет directional pointer-drag (dismiss-down, sheet drag, seek, cover swipe), обязана задать `touch-action`, отключающий конкурирующую нативную ось скролла (`none`, либо `pan-x`/`pan-y` для перпендикулярной оси). Иначе на РЕАЛЬНОМ touch браузер сам начинает нативный скролл и шлёт `pointercancel` — жест умирает, хотя `setPointerCapture` вызван. Pointer capture НЕ отменяет нативный скролл; это делает только `touch-action`.
+
+- **Красный флаг:** surface с `usePointerGestureMachine`/claim на скроллящейся странице, у которого `touch-action: auto` (по умолчанию) на элементе под пальцем или его предке; ставить `touch-action: none` на контейнер, который содержит scrollable descendants (ломает их нативный скролл — ставь на сам drag-элемент).
+
+### INV-FE-005 — Mobile gesture e2e гоняются РЕАЛЬНЫМ touch, не мышью
+
+E2E мобильных жестов обязаны диспатчить настоящий touch (`Input.dispatchTouchEvent` через CDP / `page.touchscreen`), дающий `touchstart`/`touchmove` и `pointerType:"touch"`. `page.mouse`/`locator.click()` в "мобильном" жестовом тесте — false-green: он проверяет mouse-путь и НЕ ловит баги `touch-action` / конкуренции с нативным скроллом. Helpers: `frontend/e2e/helpers/touch.js`.
+
+- **Красный флаг:** `page.mouse.*` или `locator.click()` как имитация пальца в mobile gesture spec; комментарий "имитирует палец" над mouse-кодом.
+
+### INV-FE-006 — Client UI prefs: unified store + server sync
+
+Косметика слушателя (mini bar, play style, будущие поля) — **один** модуль `frontend/src/preferences/listenerUiPrefs.js`:
+
+- local cache `earflow_listener_ui_v1` + `useSyncExternalStore` (через `useMiniBarVariant` / `useMiniPlayStyle`);
+- **server:** `user_settings.listener_ui` JSONB (GET/PUT `/api/user/settings`) для авторизованных — sync между устройствами;
+- `ListenerUiPrefsSync` гидратирует после login; `updatedAt` — conflict resolution (newer wins);
+- DOM: `dataset` + CSS vars `--ef-mini-bar-variant`, `--ef-mini-play-style`.
+
+- **DECISIONS:** 2026-06-01 listener UI prefs server sync.
+- **Красный флаг:** новый отдельный `localStorage` key на каждый pref; picker-only `useState`; дублирующий store без `listener_ui` на backend.
+
+### INV-FE-007 — Запрет imperative DOM paint для UI prefs
+
+Функции вида `apply*ToDom` (inline `style.setProperty(..., 'important')`, ручное `display` на слотах) для client UI prefs **запрещены**. Исторический долг `applyMiniPlayStyleToDom` снят 2026-06-01 (DECISIONS).
+
+- **Эталон:** `miniPlayStyle.js` / `miniBarVariant.js` + `useSyncExternalStore` + условный React-рендер; ранний FOUC — только `:root[data-mini-play-style]` в `mini-player-overrides.css`.
+- **Красный флаг:** новый `apply*ToDom` / `querySelectorAll` + `!important` inline styles для UI pref; dual DOM slots «на всякий случай» вместо одного условного компонента.
+
+### INV-FE-008 — AI обязан раскрывать trade-offs UI prefs пользователю
+
+При добавлении или расширении client UI pref (второй play-слот в DOM, override CSS в `public/`, SW cache bust, `!important` в `App.js`) агент **в том же ответе** сообщает пользователю: (1) что принято как норма (external store), (2) что является техдолгом, (3) что нужно для проверки на prod (деплой, build hint). Не откладывать архитектурную оценку «на потом» или только в код-ревью.
+
+- **Правило:** `.cursor/rules/earflow-ui-client-prefs.mdc`.
+- **Красный флаг:** diff с `apply*ToDom` / `mini-player-overrides.css` / dual DOM slots, а в ответе пользователю только «готово, обновите страницу».
+
+### INV-FE-009 — Playback progress: один источник времени для seek/progress UI
+
+Позиция воспроизведения для seek bars, waveform и time labels — **один** канал: `currentTimeRef` + `PlayerStore.currentTime`, синхронизируемые через `PlayerContext.patchStorePlaybackTime` на preview/commit seek. UI surfaces используют `useSeekableProgress` (или его контракт), не отдельный local `useState` для progress percent.
+
+- **Почему:** dual read (ref vs store) давал snap-back к 0 после scrub (2026-06-03).
+- **Красный флаг:** progress UI читает `store.currentTime`, а `commitSeek`/`updateSeek` пишут только `currentTimeRef`; отдельный `previewPct` state в hero/modal без `onPreviewSeek` → `updateSeek`.
+- **Норма:** `beginSeek` → `updateSeek` (preview) → `commitSeek` → `PlayerCore.seek`; `resolvePlaybackDurationSec` для duration до готовности audio element.
+
+### INV-SHEET-001 — `sheetDragY` — единственный драйвер Y модалки
+
+Вертикальная позиция fullscreen player (`MobilePlayerModal` overlay) задаётся **только** через `sheetDragY` из `usePlayerSheetState` (`style.y`). Никаких параллельных Framer `animate y` на том же overlay.
+
+- **Owner:** `usePlayerSheetState.js` + `utils/playerSheetPhysics.js`.
+- **Правило:** `.cursor/rules/earflow-player-sheet.mdc`.
+- **Красный флаг:** `animate(yMotion, …)`, `animate={{ y: 0 }}` на modal overlay при переданном `sheetDragY`; прямой `sheetDragY.set` из gestures/modal.
+
+### INV-SHEET-002 — Фаза OPEN только через owner settle
+
+`PLAYER_SHEET_PHASE.OPEN` выставляется **только** в `finishOpen()` (tap) или `runSnap(…, OPEN)` onComplete. Нельзя ставить OPEN, пока `sheetDragY` не у top (кроме instant open path).
+
+- **Красный флаг:** prop `openInstantly`; `sheetFullyOpen={true}` до `y===0`; phase OPEN при активном conflicting spring.
+
+### INV-SHEET-003 — Modal без Framer animate по оси Y
+
+`MobilePlayerModal` **запрещено** `initial`/`animate`/`exit` для vertical `y` на sheet overlay. Spring settle — только в `usePlayerSheetState.runSnap`.
+
+- **Красный флаг:** `initial={{ y: … }}`, `animate={{ y: … }}` на `ModalOverlay` / sheet root при integrated `sheetDragY`.
+
+### INV-SHEET-004 — Chrome overlay без spring lag
+
+Opacity, scale, border-radius, backdrop fade — из `sheetProgress` (`useTransform`), 1:1 с пальцем. Transport controls (`ControlsDock`) **монтируются** только при `sheetFullyOpen && !draggingFromMini` — без параллельной ветки `controlsOpacity` + `chromeSettled`.
+
+- **Красный флаг:** spring `animate` на overlay opacity/scale параллельно `sheetProgress`; три ветки chrome (`controlsOpacity`, `chromeSettled`, `showPlayerControls`) для одного блока.
+
+### INV-SHEET-005 — Drag прерывает snap; anchor + delta
+
+Любой новый drag (`beginSheetDrag` / `beginDrag`) **останавливает** snap-анимацию и якорит Y в текущей позиции. Движение: `applySheetDragDelta(dy)` = `rubberBand(anchorY + dy)`. Dismiss работает **с mid-snap**, не только когда `phase === OPEN`.
+
+- **Красный флаг:** `settleDrag` no-op «если snap идёт»; dismiss guard `!sheetFullyOpen`; `dragYFromMiniPull(closedY, dy)` без anchor при re-drag; `beginDrag` early return при `DRAGGING` без `stopSnapAnimation`.
+
+### INV-SHEET-006 — Modal dismiss через sheet API
+
+При integrated mini-bar sheet модалка **не** анимирует Y локально. Dismiss: `onSheetDragStart` → `beginSheetDrag`, `onSheetDragMove` → `applySheetDragDelta`, `onSheetDragSettle` → `settleDrag`. Кнопка close → `cancel()` / `finishClosed()`.
+
+- **Красный флаг:** `animateDismissClose`, `animateDismissBack`, `writeSheetY` в modal без owner; dismiss без `useOwnedSheetDrag`.
+
+### INV-SHEET-007 — Mini-bar не отдаёт жест page scroll
+
+Mini-bar (`touch-action: none`) классифицирует open через `classifyMiniBarSheetIntent` — **без** метрик `window.scrollY`. `handleGestureTrack` не вызывает `sheet.cancel()` при видимой модалке; `handleScrollIntent` не закрывает sheet.
+
+- **Красный флаг:** `classifyMiniPlayerOpenIntent(input)` напрямую в MINI_PLAYER_OPEN profile; `sheet.cancel()` в `onTrack`/`onScrollIntent` при `isSheetModalVisible`.
+
+### INV-SHEET-008 — Player chrome L3: portal, pointer-events, scroll handoff
+
+Mobile listener player chrome (`PlayerChrome` → `document.body` portal) **не** живёт внутри scrollable L1. Mini-bar: `pointer-events: none` при `modalVisible` или `sheetOpen` (in-flight drag сохраняется через pointer capture). Dismiss drag в modal: только при `scrollTop === 0` у `[data-queue-scrollarea]` / `[data-sheet-scrollarea]` (`sheetScrollHandoff.js`). Global `pointerup` settle — **только** для `dragSource === 'mini'`; modal dismiss не должен получать `settleDrag(0,0)` от window backup.
+
+- **Owner:** `PlayerChrome/`, `usePlayerSheetState.js`, `sheetScrollHandoff.js`, `MobilePlayerModal.js`.
+- **Правило:** `docs/MOBILE_PLAYER_SHEET_DESIGN.md` §2, §5–6.
+- **Красный флаг:** inline `<MobilePlayerBar>` в `App.js` на mobile; `miniBarPointerEvents: auto` при `modalVisible`; dismiss при `queue.scrollTop > 0`; window `pointerup` settle без `dragSourceRef` guard.
+
+### INV-GESTURE-010 — Exclusive mini-bar pointer (per slot)
+
+Жест, начатый на mini-bar (`data-mini-gesture-zone`, `claimOnPointerDown` + `exclusive`), **не отдаётся** другим surfaces на **том же `pointerId`** до `pointerup`. Другие surfaces вызывают `shouldDeferToMiniPlayerGesture` и не стартуют tracking в зоне mini. Перевод `PLAYER_SHEET` → `MINI_TRACK_SWIPE` на том же `pointerId` — единственный allowed transfer.
+
+- **Owner:** `GestureArbiterProvider.js`, `miniPlayerGestureZone.js`, `useMiniPlayerPan.js`, `usePointerGestureMachine.js`.
+- **Красный флаг:** SEEK перехватывает mini на том же `pointerId`; cover claim при touch на mini; `exclusive` без `pointer-down` на mini surfaces.
+
+### INV-GESTURE-011 — Per-pointer arbiter + domain session
+
+`GestureArbiterProvider` хранит **`Map<pointerId, owner>`**, не один глобальный `activeRef`. Политика claim — **`gestureDelegates.evaluateGestureClaim`**. UI-домены: **`useMiniPlayerGestureSession`** для mini-bar, не пара хуков в родителе. `recoverGestures` / `cancelOwner` — аварийный путь.
+
+- **Документация:** `docs/GESTURE_ARCHITECTURE.md`
+- **Красный флаг:** singleton arbiter; `MobilePlayerBar` вызывает `usePlayerSheetState` отдельно; preempt чужого `pointerId`.
+
+### INV-GESTURE-012 — Arbiter-native sheet drag (no Framer recognizer)
+
+Generic `BottomSheet` и аналоги двигают Y через **`useSheetDragArbitration` + `usePointerGestureMachine`**, не через Framer `drag` / `dragControls.start`. Spring только для settle (`animate(motionValue)`).
+
+- **Owner:** `BottomSheet.js`, `useSheetDragArbitration.js`
+- **Красный флаг:** `drag="y"`, `useDragControls`, `dragControls.start` на sheet handle; второй `tryClaim` без machine на том же handle.
+
+### INV-SHEET-009 — Snap-to-closed не блокирует mini-bar; recover при залипании
+
+Быстрые horizontal track swipes вызывают `finishClosed()` до анимации смены трека. Watchdog на `DRAGGING` вызывает `settleDrag`, не `recoverInteraction`. `recoverInteraction()` — **аварийный** путь (tab hide / unmount), не штатный после свайпов.
+
+- **Почему:** ранний `phase=CLOSED` до spring обнулял mini `pointer-events` при ещё видимой модалке → «всё мёртво».
+- **Owner:** `usePlayerSheetState.js`, `useMiniPlayerPan.js`, `miniTrackSwipeAnimation.js`.
+- **Красный флаг:** `snapToClosed` с `setPhaseSafe(CLOSED)` **до** `runSnap`; horizontal swipe без `finishClosed`; `forceUnlock` вызывает `recoverInteraction` на каждый `sheet-closed`; нет `recoverInteraction` в публичном API sheet.
+
+### INV-SHEET-011 — Фаза SNAPPING между finger-up и settled OPEN/CLOSED
+
+После `settleDrag` / dismiss commit sheet переходит в `PLAYER_SHEET_PHASE.SNAPPING` до завершения spring. `modalVisible` остаётся true при close-snap (`holdModalForCloseSnap`). Новый drag (`beginSheetDrag`) **прерывает** snap. Controls (`showPlayerControls`) монтируются только при `phase === OPEN`, не во время `SNAPPING`.
+
+- **Owner:** `playerSheetPhase.js`, `usePlayerSheetState.js`, `MobilePlayerModal.js`.
+- **Красный флаг:** `runSnap` без `SNAPPING`; dismiss/controls логика читает только `DRAGGING|OPEN` без `SNAPPING`; `settleDrag` no-op в `SNAPPING`.
+
+### INV-SHEET-010 — Mini-bar: один pan controller, legacy stack запрещён
+
+Mini-bar expand / track swipe / tap — **один** поток: `document` capture `pointerdown` (rail steal) + `window` `pointermove/up` в `useMiniPlayerPan.js`. React handlers на `MiniPlayerShell` **запрещены**. Legacy stack (`useMiniPlayerGestureMachine`, `useMiniPlayerGestures`, `useMiniPlayerGestureCoordinator`, `useMiniPlayerGestureCaptureRouting`) **удалён** — не восстанавливать.
+
+- **Почему:** слои capture-routing + gesture machine + React shell + window continuation давали freeze ~50%, TDZ crash, mid-drag settle.
+- **Owner:** `useMiniPlayerPan.js`, `useMiniPlayerGestureSession.js`, `miniPlayerPanSession.js`.
+- **Эталон:** `docs/MOBILE_PLAYER_SHEET_DESIGN.md` §2, §5.
+- **Красный флаг:** любой из legacy файлов; `onPointerDown` на mini shell; `settleDrag` во время active expand pan (кроме `pointerup`); второй mini pan path параллельно `useMiniPlayerPan`.
+
+---
+
+## Backend (Node)
+
+### INV-BE-001 — Health endpoint + graceful shutdown в каждом сервисе
+
+Каждый Node-сервис экспортит `GET /health` и слушает `SIGTERM` для graceful shutdown.
+
+### INV-BE-002 — Миграции через явные SQL-файлы
+
+Никаких автомиграций ORM. Все changes в `backend/<service>/db/migrations/` или `backend/00-create-tables.sql`.
+
+---
+
+## Gateway (Go)
+
+### INV-GW-001 — Маршруты только в `gateway.yaml` / `gateway.artist.yaml`
+
+Никакого hardcoded routing в `.go` файлах. Routing — конфигом.
+
+### INV-GW-002 — Policy classes не ослаблять без аудита
+
+`public` → `unsafe` или `stream` → `public` требует security review.
+
+---
+
+## Когда вводить новый инвариант
+
+Новое правило в этот файл добавляется **только** после того, как:
+
+1. Произошёл архитектурный регресс (race, security, performance).
+2. Записан в `docs/DECISIONS.md` с разделом "Чтобы не повторилось".
+3. Сформулирован "красный флаг" — конкретный паттерн кода, который AI/человек должен ловить при review.
+
+Инвариант — не «пожелание». Инвариант — это **контракт**, нарушение которого ломает систему.

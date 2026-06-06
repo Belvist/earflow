@@ -1,0 +1,104 @@
+# PEND-SEC-001 — full-stack auth/PoP e2e (manual / server only)
+#
+# Triggers: manual workflow_dispatch only (heavy docker + Playwright).
+# Does NOT run on every PR push.
+
+name: auth-fullstack-e2e
+
+on:
+  workflow_dispatch:
+    inputs:
+      auth_e2e_email:
+        description: Test user email
+        required: false
+        default: pop-e2e@earflow.test
+      auth_e2e_password:
+        description: Test user password (min 8, letters+digits)
+        required: false
+        default: PopE2eTest1
+
+concurrency:
+  group: auth-fullstack-e2e
+  cancel-in-progress: true
+
+jobs:
+  fullstack-pop-e2e:
+    name: PEND-SEC-001 full-stack PoP e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      AUTH_E2E_BASE_URL: http://127.0.0.1:18080
+      AUTH_E2E_ORIGIN: http://127.0.0.1:18080
+      AUTH_E2E_HOST_PORT: "18080"
+      AUTH_E2E_EMAIL: ${{ github.event.inputs.auth_e2e_email }}
+      AUTH_E2E_PASSWORD: ${{ github.event.inputs.auth_e2e_password }}
+      AUTH_E2E_ALLOWED_ORIGINS: http://127.0.0.1:18080,http://localhost:18080
+      NODE_ENV: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create .env from example (CI secrets must be in repo secrets / vars)
+        run: |
+          cp .env.example .env
+          # Minimal overrides for CI — replace with GitHub secrets in prod CI wiring
+          JWT_SECRET="${JWT_SECRET:-ci-jwt-secret-ci-jwt-secret-ci-jwt-32b}"
+          echo "JWT_SECRET=$JWT_SECRET" >> .env
+          echo "DB_NAME=${DB_NAME:-music_platform}" >> .env
+          echo "DB_USER=${DB_USER:-music_user}" >> .env
+          echo "DB_PASSWORD=${DB_PASSWORD:-ci_db_password_change_me}" >> .env
+          echo "ENCRYPTION_KEY=${ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef}" >> .env
+          echo "SERVICE_KEY_API_GATEWAY=${SERVICE_KEY_API_GATEWAY:-ci-service-key-api-gateway-32chars!!}" >> .env
+          echo "SERVICE_KEY_AUTH_SERVICE=${SERVICE_KEY_AUTH_SERVICE:-ci-service-key-auth-service-32chars!!}" >> .env
+          echo "SERVICE_JWT_PRIVATE_KEY_B64=${SERVICE_JWT_PRIVATE_KEY_B64:-}" >> .env
+          echo "SERVICE_JWT_PUBLIC_KEY_B64=${SERVICE_JWT_PUBLIC_KEY_B64:-}" >> .env
+
+      - name: Start auth-e2e docker stack
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.auth-e2e.yml up -d \
+            postgres redis redis-auth database-service auth-service security-service \
+            api-gateway frontend auth-e2e-edge
+
+      - name: Wait for stack
+        run: bash scripts/auth-e2e-wait-healthy.sh
+
+      - name: Bootstrap test user
+        run: bash scripts/auth-e2e-bootstrap.sh
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend + Playwright
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install chromium --with-deps
+
+      - name: Run full-stack PoP e2e
+        working-directory: frontend
+        env:
+          CI: "true"
+        run: npm run test:e2e:auth-fullstack
+
+      - name: Collect docker logs on failure
+        if: failure()
+        run: |
+          mkdir -p artifacts/auth-e2e/logs
+          for svc in api-gateway auth-service security-service frontend auth-e2e-edge postgres redis-auth; do
+            docker compose -f docker-compose.yml -f docker-compose.auth-e2e.yml logs --no-color "$svc" \
+              > "artifacts/auth-e2e/logs/${svc}.log" 2>&1 || true
+          done
+
+      - name: Upload Playwright + logs artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auth-fullstack-e2e-${{ github.run_id }}
+          path: |
+            frontend/e2e/artifacts/auth-fullstack
+            artifacts/auth-e2e/logs
+          retention-days: 14

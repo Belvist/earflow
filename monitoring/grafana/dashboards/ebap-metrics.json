@@ -1,0 +1,183 @@
+{
+    "uid": "ebap-metrics",
+    "title": "EBAP Metrics",
+    "tags": [
+        "music-platform",
+        "ebap",
+        "prometheus"
+    ],
+    "timezone": "browser",
+    "schemaVersion": 39,
+    "version": 1,
+    "refresh": "10s",
+    "time": {
+        "from": "now-30m",
+        "to": "now"
+    },
+    "panels": [
+        {
+            "type": "timeseries",
+            "title": "EBAP v3 requests rate by route",
+            "gridPos": {
+                "x": 0,
+                "y": 0,
+                "w": 24,
+                "h": 8
+            },
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "expr": "sum(rate(ebap_http_requests_total[5m])) by (route)",
+                    "legendFormat": "{{route}}"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "reqps"
+                },
+                "overrides": []
+            }
+        },
+        {
+            "type": "timeseries",
+            "title": "EBAP v3 requests rate by status (top)",
+            "gridPos": {
+                "x": 0,
+                "y": 8,
+                "w": 24,
+                "h": 8
+            },
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "expr": "topk(10, sum(rate(ebap_http_requests_total[5m])) by (route, status))",
+                    "legendFormat": "{{route}} {{status}}"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "reqps"
+                },
+                "overrides": []
+            }
+        },
+        {
+            "type": "timeseries",
+            "title": "EBAP v3 latency p95 (ms) by route",
+            "gridPos": {
+                "x": 0,
+                "y": 16,
+                "w": 24,
+                "h": 8
+            },
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "expr": "histogram_quantile(0.95, sum(rate(ebap_http_request_duration_ms_bucket[5m])) by (le, route))",
+                    "legendFormat": "{{route}} p95"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "ms"
+                },
+                "overrides": []
+            }
+        },
+        {
+            "type": "timeseries",
+            "title": "Active EBAP requests (in-flight)",
+            "gridPos": {
+                "x": 0,
+                "y": 24,
+                "w": 12,
+                "h": 6
+            },
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "expr": "ebap_active_connections",
+                    "legendFormat": "in_flight"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "min": 0
+                },
+                "overrides": []
+            }
+        },
+        {
+            "type": "timeseries",
+            "title": "EBAP bytes sent rate",
+            "gridPos": {
+                "x": 12,
+                "y": 24,
+                "w": 12,
+                "h": 6
+            },
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "expr": "rate(ebap_bytes_sent_total[5m])",
+                    "legendFormat": "bytes/s"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "Bps",
+                    "min": 0
+                },
+                "overrides": []
+            }
+        },
+        {
+            "type": "timeseries",
+            "title": "EBAP errors_total by type",
+            "gridPos": {
+                "x": 0,
+                "y": 30,
+                "w": 24,
+                "h": 8
+            },
+            "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "expr": "sum(rate(ebap_errors_total[5m])) by (type)",
+                    "legendFormat": "{{type}}"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "ops"
+                },
+                "overrides": []
+            }
+        }
+    ]
+}

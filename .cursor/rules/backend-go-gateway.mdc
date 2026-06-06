@@ -1,0 +1,36 @@
+---
+description: Go API gateway routing, auth, CSRF, and proxy conventions
+globs: backend/go-api-gateway/**/*
+alwaysApply: false
+---
+
+# Earflow Go API Gateway
+
+Routes defined in `gateway.yaml` (listeners) and `gateway.artist.yaml` (artists). Code: `internal/auth/`, `internal/proxy/`, `internal/ratelimit/`.
+
+## Adding a route
+
+```yaml
+- id: my_route
+  match:
+    type: prefix
+    value: /api/my-service
+  upstream: my_service
+  policies:
+    class: unsafe          # public | unsafe | stream
+    require_user: true
+    rate_limit: default
+```
+
+Register upstream name in gateway config/env. Run `go test ./...` in `backend/go-api-gateway/`.
+
+## Must preserve
+
+- CSRF on unsafe methods (`class: unsafe`)
+- Session middleware before upstream proxy
+- Strip client `X-User-Id`, `X-Service-Token` spoof attempts
+- Stream routes use `class: stream` + `rate_limit: stream`
+
+## Tests
+
+Add/update tests in `internal/auth/` or `internal/proxy/` when changing session, CSRF, or routing behavior.

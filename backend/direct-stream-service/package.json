@@ -1,0 +1,25 @@
+{
+  "name": "direct-stream-service",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun src/main.ts",
+    "dev": "bun --watch src/main.ts",
+    "typecheck": "bun x tsc -p tsconfig.json",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.758.0",
+    "@aws-sdk/s3-request-presigner": "^3.758.0",
+    "@smithy/node-http-handler": "^4.0.4",
+    "ioredis": "^5.6.0",
+    "postgres": "^3.4.5",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.1.20",
+    "@types/node": "^22.10.10",
+    "typescript": "^5.7.2"
+  }
+}

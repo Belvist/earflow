@@ -1,0 +1,364 @@
+services:
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: music-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+      - --web.enable-remote-write-receiver
+    ports:
+      - "${MONITORING_BIND_ADDRESS:-127.0.0.1}:9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    networks:
+      - music-network
+      - monitoring-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64M
+
+  loki:
+    image: grafana/loki:2.9.10
+    container_name: music-loki
+    command:
+      - -config.file=/etc/loki/loki.yml
+    ports:
+      - "${MONITORING_BIND_ADDRESS:-127.0.0.1}:3100:3100"
+    volumes:
+      - ./monitoring/loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki-data:/loki
+    networks:
+      - monitoring-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64M
+
+  promtail:
+    image: grafana/promtail:2.9.10
+    container_name: music-promtail
+    profiles: [ "legacy" ]
+    user: root
+    command:
+      - -config.file=/etc/promtail/promtail.yml
+    volumes:
+      - ./monitoring/promtail/promtail.yml:/etc/promtail/promtail.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - promtail-positions:/tmp
+    networks:
+      - music-network
+    depends_on:
+      - loki
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: music-tempo
+    user: root
+    command:
+      - -config.file=/etc/tempo/tempo.yml
+    ports:
+      - "${MONITORING_BIND_ADDRESS:-127.0.0.1}:3200:3200"
+    volumes:
+      - ./monitoring/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+      - tempo-data:/var/tempo
+    networks:
+      - monitoring-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64M
+
+  alloy:
+    image: grafana/alloy:v1.5.1
+    container_name: music-alloy
+    user: root
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy
+      - /etc/alloy/config.alloy
+    ports:
+      - "${MONITORING_BIND_ADDRESS:-127.0.0.1}:12345:12345"
+    volumes:
+      - ./monitoring/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy-data:/var/lib/alloy
+    networks:
+      - music-network
+      - monitoring-network
+    depends_on:
+      - tempo
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64M
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: music-cadvisor
+    command:
+      - --docker_only=true
+      - --housekeeping_interval=10s
+    expose:
+      - "8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - music-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64M
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: music-node-exporter
+    command:
+      - --path.rootfs=/host
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+    expose:
+      - "9100"
+    volumes:
+      - /:/host:ro,rslave
+    networks:
+      - music-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64M
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    container_name: music-blackbox-exporter
+    command:
+      - --config.file=/etc/blackbox_exporter/config.yml
+    expose:
+      - "9115"
+    volumes:
+      - ./monitoring/blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    networks:
+      - music-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64M
+
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: music-postgres-exporter
+    environment:
+      DATA_SOURCE_URI: ${POSTGRES_EXPORTER_DATA_SOURCE_URI:-postgres:5432/${DB_NAME}?sslmode=disable}
+      DATA_SOURCE_USER: ${DB_USER}
+      DATA_SOURCE_PASS: ${DB_PASSWORD}
+    expose:
+      - "9187"
+    networks:
+      - music-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64M
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.67.0
+    container_name: music-redis-exporter
+    environment:
+      REDIS_ADDR: redis://redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    expose:
+      - "9121"
+    networks:
+      - music-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64M
+
+  redis-auth-exporter:
+    image: oliver006/redis_exporter:v1.67.0
+    container_name: music-redis-auth-exporter
+    environment:
+      REDIS_ADDR: redis://redis-auth:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    expose:
+      - "9121"
+    networks:
+      - music-network
+    depends_on:
+      redis-auth:
+        condition: service_healthy
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64M
+
+  pgbouncer-exporter:
+    image: prometheuscommunity/pgbouncer-exporter:v0.11.0
+    container_name: music-pgbouncer-exporter
+    profiles: [ "pgbouncer-metrics" ]
+    environment:
+      PGBOUNCER_EXPORTER_CONNECTION_STRING: ${PGBOUNCER_EXPORTER_CONNECTION_STRING}
+    expose:
+      - "9127"
+    networks:
+      - music-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64M
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: music-alertmanager
+    profiles: [ "alerts" ]
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        if [ -z "$${ALERTMANAGER_TELEGRAM_BOT_TOKEN}" ] || [ -z "$${ALERTMANAGER_TELEGRAM_CHAT_ID}" ]; then
+          echo "ALERTMANAGER_TELEGRAM_BOT_TOKEN and ALERTMANAGER_TELEGRAM_CHAT_ID are required when the alerts profile is enabled" >&2
+          exit 1
+        fi
+        umask 077
+        mkdir -p /tmp/alertmanager
+        printf '%s' "$${ALERTMANAGER_TELEGRAM_BOT_TOKEN}" > /tmp/alertmanager/telegram_bot_token
+        printf '%s' "$${ALERTMANAGER_TELEGRAM_CHAT_ID}" > /tmp/alertmanager/telegram_chat_id
+        exec /bin/alertmanager \
+          --config.file=/etc/alertmanager/alertmanager.yml \
+          --storage.path=/alertmanager \
+          --web.listen-address=0.0.0.0:9093 \
+          --web.external-url="$${ALERTMANAGER_EXTERNAL_URL:-http://127.0.0.1:9093}" \
+          --cluster.listen-address=
+    ports:
+      - "${MONITORING_BIND_ADDRESS:-127.0.0.1}:9093:9093"
+    environment:
+      ALERTMANAGER_EXTERNAL_URL: ${ALERTMANAGER_EXTERNAL_URL:-http://127.0.0.1:9093}
+      ALERTMANAGER_TELEGRAM_BOT_TOKEN: ${ALERTMANAGER_TELEGRAM_BOT_TOKEN:-}
+      ALERTMANAGER_TELEGRAM_CHAT_ID: ${ALERTMANAGER_TELEGRAM_CHAT_ID:-}
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./monitoring/alertmanager/templates:/etc/alertmanager/templates:ro
+      - alertmanager-data:/alertmanager
+    networks:
+      - monitoring-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64M
+
+  telegram-ops-bot:
+    image: node:22-alpine
+    container_name: music-telegram-ops-bot
+    profiles: [ "telegram-ops" ]
+    working_dir: /app
+    command: [ "node", "/app/scripts/telegram-ops-bot.js" ]
+    environment:
+      TELEGRAM_OPS_BOT_TOKEN: ${TELEGRAM_OPS_BOT_TOKEN:-}
+      TELEGRAM_OPS_BOOTSTRAP_SECRET: ${TELEGRAM_OPS_BOOTSTRAP_SECRET:-}
+      TELEGRAM_OPS_ALLOWED_USER_IDS: ${TELEGRAM_OPS_ALLOWED_USER_IDS:-}
+      TELEGRAM_OPS_ALLOWED_CHAT_IDS: ${TELEGRAM_OPS_ALLOWED_CHAT_IDS:-}
+      TELEGRAM_OPS_PROMETHEUS_URL: http://prometheus:9090
+      TELEGRAM_OPS_STATE_FILE: /data/state.json
+      TELEGRAM_OPS_ALLOW_GROUPS: ${TELEGRAM_OPS_ALLOW_GROUPS:-false}
+      TELEGRAM_OPS_ALLOW_MULTIPLE_CLAIMS: ${TELEGRAM_OPS_ALLOW_MULTIPLE_CLAIMS:-false}
+      TELEGRAM_OPS_SEND_RESOLVED: ${TELEGRAM_OPS_SEND_RESOLVED:-true}
+      TELEGRAM_OPS_DELETE_WEBHOOK: ${TELEGRAM_OPS_DELETE_WEBHOOK:-true}
+    volumes:
+      - ./scripts/telegram-ops-bot.js:/app/scripts/telegram-ops-bot.js:ro
+      - telegram-ops-data:/data
+    networks:
+      - monitoring-network
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64M
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: music-grafana
+    ports:
+      - "${MONITORING_BIND_ADDRESS:-127.0.0.1}:3300:3000"
+    environment:
+      GF_SERVER_HTTP_PORT: 3000
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - monitoring-network
+    depends_on:
+      - prometheus
+      - loki
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64M
+      - /var/log/grafana:size=64M
+
+networks:
+  music-network:
+    driver: bridge
+
+  monitoring-network:
+    driver: bridge
+
+volumes:
+  prometheus-data:
+  loki-data:
+  grafana-data:
+  alertmanager-data:
+  telegram-ops-data:
+  promtail-positions:
+  tempo-data:
+  alloy-data:

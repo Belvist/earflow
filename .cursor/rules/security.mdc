@@ -1,0 +1,31 @@
+---
+description: Earflow security requirements — auth, cookies, CSRF, uploads
+globs: backend/auth-service/**/*,backend/security-service/**/*,backend/go-api-gateway/internal/auth/**/*,nginx/**/*
+alwaysApply: false
+---
+
+# Earflow Security
+
+Full reference: `reports/SECURITY.md`
+
+## Auth
+
+- Access JWT TTL ~15 min; refresh long-lived; PBKDF2-SHA512 passwords
+- Cookies: `mp_auth`, `mp_sid`, `mp_csrf` (artist variants: `*_artists`)
+- MFA step-up for artist write ops; recovery codes encrypted in Postgres
+
+## Gateway
+
+- Never expose internal service keys to clients
+- CSRF token HMAC-bound to session; validate on POST/PUT/PATCH/DELETE
+- Rate limits: do not remove or widen without justification
+
+## Upload / stream
+
+- Validate MIME, size, magic bytes on upload
+- Stream cookies (`mp_stream`) signed; short-lived session tokens
+
+## Secrets
+
+- `JWT_SECRET`, `SERVICE_KEY_*`, `SESSION_ENCRYPTION_KEY` — env only
+- Never log tokens, passwords, or recovery codes

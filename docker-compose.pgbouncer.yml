@@ -1,0 +1,173 @@
+services:
+  pgbouncer:
+    build:
+      context: ./infra/pgbouncer
+    container_name: music-pgbouncer
+    expose:
+      - "6432"
+    environment:
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      PGBOUNCER_PORT: 6432
+      PGBOUNCER_POOL_MODE: ${PGBOUNCER_POOL_MODE:-transaction}
+      PGBOUNCER_MAX_CLIENT_CONN: ${PGBOUNCER_MAX_CLIENT_CONN:-1000}
+      PGBOUNCER_DEFAULT_POOL_SIZE: ${PGBOUNCER_DEFAULT_POOL_SIZE:-50}
+      PGBOUNCER_MIN_POOL_SIZE: ${PGBOUNCER_MIN_POOL_SIZE:-5}
+      PGBOUNCER_RESERVE_POOL_SIZE: ${PGBOUNCER_RESERVE_POOL_SIZE:-20}
+      PGBOUNCER_RESERVE_POOL_TIMEOUT: ${PGBOUNCER_RESERVE_POOL_TIMEOUT:-5}
+      PGBOUNCER_SERVER_IDLE_TIMEOUT: ${PGBOUNCER_SERVER_IDLE_TIMEOUT:-60}
+      PGBOUNCER_SERVER_LIFETIME: ${PGBOUNCER_SERVER_LIFETIME:-3600}
+      PGBOUNCER_QUERY_TIMEOUT: ${PGBOUNCER_QUERY_TIMEOUT:-0}
+      PGBOUNCER_CLIENT_IDLE_TIMEOUT: ${PGBOUNCER_CLIENT_IDLE_TIMEOUT:-0}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - music-network
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "PGPASSWORD=\"$DB_PASSWORD\" pg_isready -h 127.0.0.1 -p 6432 -U \"$DB_USER\" -d \"$DB_NAME\"" ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  database-service:
+    environment:
+      DB_HOST: pgbouncer
+      DB_PORT: 6432
+      DB_MAX_CONNECTIONS: ${DATABASE_DB_MAX_CONNECTIONS_POOLED:-10}
+      DB_MIN_CONNECTIONS: ${DATABASE_DB_MIN_CONNECTIONS_POOLED:-1}
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+
+  upload-service:
+    environment:
+      DB_HOST: pgbouncer
+      DB_PORT: 6432
+      DB_MAX_CONNECTIONS: ${UPLOAD_DB_MAX_CONNECTIONS_POOLED:-10}
+      DB_MIN_CONNECTIONS: ${UPLOAD_DB_MIN_CONNECTIONS_POOLED:-1}
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+
+  artist-service:
+    environment:
+      DB_HOST: pgbouncer
+      DB_PORT: 6432
+      DB_MAX_CONNECTIONS: ${ARTIST_DB_MAX_CONNECTIONS_POOLED:-10}
+      DB_MIN_CONNECTIONS: ${ARTIST_DB_MIN_CONNECTIONS_POOLED:-1}
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+
+  recommendations-service:
+    environment:
+      DB_HOST: pgbouncer
+      DB_PORT: 6432
+      DB_MAX_CONNECTIONS: ${RECO_DB_MAX_CONNECTIONS_POOLED:-10}
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+
+  playlist-service:
+    environment:
+      DATABASE_URL: ${PGBOUNCER_DATABASE_URL:-postgresql://${DB_USER}:${DB_PASSWORD}@pgbouncer:6432/${DB_NAME}}
+      DB_MAX_CONNECTIONS: ${PLAYLIST_DB_MAX_CONNECTIONS_POOLED:-10}
+      DB_MIN_CONNECTIONS: ${PLAYLIST_DB_MIN_CONNECTIONS_POOLED:-1}
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+
+  lyrics-service:
+    environment:
+      DB_HOST: pgbouncer
+      DB_PORT: 6432
+      DB_MAX_CONNECTIONS: ${LYRICS_DB_MAX_CONNECTIONS_POOLED:-10}
+      DB_MIN_CONNECTIONS: ${LYRICS_DB_MIN_CONNECTIONS_POOLED:-1}
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+
+  subscription-service:
+    environment:
+      DB_HOST: pgbouncer
+      DB_PORT: 6432
+      DB_MAX_CONNECTIONS: ${SUBSCRIPTION_DB_MAX_CONNECTIONS_POOLED:-5}
+      DB_PREPARE: "false"
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+
+  direct-stream-service:
+    environment:
+      DB_HOST: pgbouncer
+      DB_PORT: 6432
+      DB_MAX_CONNECTIONS: ${DIRECT_STREAM_DB_MAX_CONNECTIONS_POOLED:-10}
+      DB_PREPARE: "false"
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+
+  search-service:
+    environment:
+      DB_HOST: pgbouncer
+      DB_PORT: 6432
+      DB_MAX_CONNECTIONS: ${SEARCH_DB_MAX_CONNECTIONS_POOLED:-10}
+      DB_PREPARE: "false"
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+
+  security-service:
+    environment:
+      DB_HOST: pgbouncer
+      DB_PORT: 6432
+      DB_MAX_CONNECTIONS: ${SECURITY_DB_MAX_CONNECTIONS_POOLED:-5}
+      DB_MIN_CONNECTIONS: ${SECURITY_DB_MIN_CONNECTIONS_POOLED:-0}
+      DB_PREPARE: "false"
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+
+  ranking-service:
+    environment:
+      DB_HOST: pgbouncer
+      DB_PORT: 6432
+      RANKING_DB_MAX_CONNECTIONS: ${RANKING_DB_MAX_CONNECTIONS_POOLED:-5}
+      DB_PREPARE: "false"
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+
+  reco-feedback-worker-go:
+    environment:
+      DB_HOST: pgbouncer
+      DB_PORT: 6432
+      DB_MAX_CONNECTIONS: ${RECO_WORKER_DB_MAX_CONNECTIONS_POOLED:-5}
+      DB_PREPARE: "false"
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+
+  reco-offline-worker:
+    environment:
+      DB_HOST: pgbouncer
+      DB_PORT: 6432
+      DB_MAX_CONNECTIONS: ${RECO_WORKER_DB_MAX_CONNECTIONS_POOLED:-5}
+      DB_PREPARE: "false"
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+
+  import-service:
+    environment:
+      DATABASE_URL: ${PGBOUNCER_DATABASE_URL:-postgresql://${DB_USER}:${DB_PASSWORD}@pgbouncer:6432/${DB_NAME}}
+      DB_MAX_CONNECTIONS: ${IMPORT_DB_MAX_CONNECTIONS_POOLED:-3}
+    depends_on:
+      pgbouncer:
+        condition: service_healthy

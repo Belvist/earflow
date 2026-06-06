@@ -1,0 +1,68 @@
+# ==============================================================================
+# MUSIC PLATFORM - Kubernetes ConfigMap
+# ==============================================================================
+# ⚠️ ПЕРЕД ДЕПЛОЕМ: Замените DOMAIN_PLACEHOLDER на ваш домен!
+# sed -i 's/DOMAIN_PLACEHOLDER/yourdomain.com/g' configmap.yaml
+# ==============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: music-config
+  namespace: music-platform
+data:
+  NODE_ENV: "production"
+
+  APP_VERSION: "unknown"
+  GIT_SHA: "unknown"
+  
+  # Database
+  DB_HOST: "postgres"
+  DB_PORT: "5432"
+  DB_NAME: "music_platform"
+  DB_USER: "postgres"
+  
+  # Redis
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+
+  # Redis (auth/session) - dedicated no-eviction instance
+  REDIS_AUTH_HOST: "redis-auth"
+  REDIS_AUTH_PORT: "6379"
+  REDIS_AUTH_DB: "0"
+
+  # Redis (rate limit)
+  REDIS_RL_HOST: "redis"
+  REDIS_RL_PORT: "6379"
+  REDIS_RL_DB: "0"
+  
+  # MinIO
+  STORAGE_MODE: "minio"
+  MINIO_ENDPOINT: "minio"
+  MINIO_PORT: "9000"
+  MINIO_BUCKET_AUDIO: "music-audio"
+  MINIO_BUCKET_COVERS: "music-covers"
+  
+  # Service URLs (K8s internal DNS - порты через Service)
+  AUTH_SERVICE_URL: "http://auth-service"
+  UPLOAD_SERVICE_URL: "http://upload-service"
+  DATABASE_SERVICE_URL: "http://database-service"
+  RECOMMENDATIONS_SERVICE_URL: "http://recommendations-service"
+  PARTY_SERVICE_URL: "http://party-state-service:3130"
+  
+  # CORS (⚠️ ЗАМЕНИТЕ НА ВАШИ ДОМЕНЫ!)
+  ALLOWED_ORIGINS: "https://earflow.ru,https://www.earflow.ru,https://auth.earflow.ru,https://api.earflow.ru"
+  ALLOWED_SERVICES: "auth-service,upload-service,api-gateway,track-processor,recommendations-service"
+  
+  # Frontend
+  REACT_APP_API_URL: "https://api.earflow.ru"
+  
+  # JWT
+  JWT_EXPIRES_IN: "30d"
+  
+  # Party
+  PARTY_MAX_PER_USER: "100"
+  PARTY_MAX_PARTICIPANTS: "50"
+  
+  # Logging
+  LOG_LEVEL: "info"

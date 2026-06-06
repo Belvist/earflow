@@ -1,0 +1,105 @@
+---
+description: Earflow — client UI prefs, escape hatches, mandatory user disclosure (all AI agents)
+alwaysApply: true
+---
+
+# Earflow — UI prefs, escape hatches, architectural honesty
+
+**Область:** Cursor, Windsurf, KLM Runtime, любой агент в этом репозитории.
+**Инварианты:** `INV-ARCH-001`, `INV-FE-006`, `INV-FE-007`, `INV-FE-008` в `docs/ARCHITECTURE_INVARIANTS.md`.
+**История:** `docs/DECISIONS.md` → grep `mini play style`, `escape hatch`, `INV-FE-008`.
+
+Пользователь не должен узнавать о техдолге и тройных слоях **после** деплоя — агент обязан сказать **в том же ответе**, когда пишет или предлагает такой код.
+
+---
+
+## INV-ARCH-001 — один механизм на одну ответственность (весь проект)
+
+Не добавляй **второй параллельный путь** управления тем же состоянием/поведением, не убрав или не сведя старый.
+
+| Область | Норма | Запрещённый «слоёный пирог» |
+|--------|------|------------------------------|
+| Frontend UI | React + один store / один CSS-слой (`dataset`) | React + imperative DOM + `App.js` `!important` + `public/*-overrides.css` + SW cache bust для **одного** pref |
+| DeviceSync / playback | Backend frames → frontend receiver | Frontend optimistic ownership + backend + локальный rebuild |
+| Backend | Один сервис — owner поля | Дублирование бизнес-правила в gateway и Node «на всякий случай» |
+| Gateway | Маршрут + policy в yaml | Дублирующий auth bypass в proxy handler |
+| Ops / deploy | Один артефакт, один cache policy | «Ещё один» override-файл в nginx без удаления старого костыля |
+
+**Красные флаги (любой слой):**
+- `apply*ToDom`, `querySelectorAll` + inline `style.setProperty(..., 'important')`
+- Новый `*-overrides.css` / глобальный `!important` для фикса, который уже чинится в компоненте
+- Второй `setInterval` / polling «на случай если WS не сработал»
+- `// workaround prod` без `PEND-*` в `docs/PENDING.md`
+
+**Перед добавлением escape hatch:** сначала устранить корень (деплой, lazy mount, styled-components specificity, cache). Если escape hatch неизбежен — см. ниже «Обязательная запись».
+
+---
+
+## Client UI prefs (listener SPA)
+
+Косметика: mini bar variant, play/pause style, будущие prefs в Profile.
+
+### Норма (`INV-FE-006`)
+
+1. Модуль `frontend/src/utils/<name>.js`: enum, `localStorage`, `document.documentElement.dataset`, `subscribe` + `dispatchEvent`.
+2. Хук `useSyncExternalStore(subscribe, getSnapshot)`.
+3. Picker (Profile) и потребитель (`MobilePlayerBar`, lazy) — **один** store, не изолированный `useState` в Profile.
+4. Опционально: `:root[data-*]` в `App.js` для layout — **один** CSS-слой, не дублировать ту же логику в React props **и** в imperative DOM.
+
+**Эталон:** `frontend/src/preferences/listenerUiPrefs.js` (+ `ListenerUiPrefsSync`, `user_settings.listener_ui`). Wrappers: `miniBarVariant.js`, `miniPlayStyle.js`.
+
+### Техдолг (`INV-FE-007`) — `apply*ToDom` запрещён
+
+`applyMiniPlayStyleToDom` **снят** (2026-06-01). Новый `apply*ToDom` / dual hidden DOM slots **запрещены**. `mini-player-overrides.css` — только ранний FOUC для play-control (без slot toggle), не второй control path.
+
+Новый escape hatch **запрещён** без:
+- записи в `docs/PENDING.md`;
+- записи в `docs/DECISIONS.md` (что временно, как снять);
+- **явного блока пользователю** в том же ответе (см. шаблон ниже).
+
+### Раскрытие пользователю (`INV-FE-008`) — не опционально
+
+Если в diff есть escape hatch, dual slot, override CSS, SW version bump для UI — ответ **обязан** содержать три пункта (можно кратко):
+
+1. **Норма** — что сделано правильно (store, hook, тесты).
+2. **Техдолг** — что временно и почему (prod/cache/lazy bar).
+3. **Проверка** — как убедиться (local URL, `mini-play-build-hint`, деплой frontend image, не «просто Ctrl+F5»).
+
+Запрещено: только «готово, обновите страницу» при наличии imperative paint или override CSS.
+
+---
+
+## KLM Runtime (обязательно)
+
+При задаче, затрагивающей UI pref, `MobilePlayerBar`, Profile settings, или escape hatch:
+
+1. **Старт:** `klm_get_project_memory` — проверить invariants по `escape hatch`, `miniPlayStyle`, `INV-ARCH-001`.
+2. **План:** `klm_verify_plan` — план не должен добавлять 2-й control path без снятия 1-го.
+3. **После кода:** `klm_verify_code` + при значимом решении:
+
+```text
+klm_analyze_task: Record — Earflow INV-ARCH-001: one control path per behavior. Client UI prefs: utils/* + useSyncExternalStore + conditional React render (INV-FE-006). apply*ToDom forbidden (INV-FE-007). Disclose norm/debt/verify to user (INV-FE-008).
+```
+
+4. **Re-index** после merge: `pnpm index:codebase -- --root "<repo>"`.
+
+---
+
+## Шаблон для ответа пользователю (копировать структуру)
+
+```markdown
+### Архитектура (честно)
+- **Норма:** …
+- **Техдолг (если есть):** … → `PEND-FE-00x`, снять когда …
+- **Как проверить:** …
+```
+
+---
+
+## Definition of done для агента
+
+- [ ] Прочитаны `INV-ARCH-001`, `INV-FE-006..008`
+- [ ] Grep `DECISIONS` по теме задачи
+- [ ] Нет нового escape hatch без PEND + DECISIONS
+- [ ] Пользователю сообщены norm / debt / verify **в этом же ответе**
+- [ ] `npm run validate:ai` проходит (если менялись правила/frontend utils)

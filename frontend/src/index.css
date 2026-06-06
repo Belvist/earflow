@@ -1,0 +1,100 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  height: 100%;
+  overscroll-behavior-y: none;
+  -webkit-text-size-adjust: 100%;
+  font-size: 16px;
+}
+
+body {
+  margin: 0;
+  font-family: 'Unbounded', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-size: 14px;
+  line-height: 1.35;
+  letter-spacing: 0;
+  background: #000;
+  color: #fff;
+  overflow-x: hidden;
+  min-height: 100vh;
+  min-height: calc(var(--app-vh, 1vh) * 100);
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 768px) {
+  html {
+    font-size: 14px;
+  }
+  body {
+    font-size: 13px;
+  }
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+#root {
+  min-height: 100vh;
+  min-height: calc(var(--app-vh, 1vh) * 100);
+  width: 100%;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+input,
+textarea,
+select {
+  font-size: 13px;
+  letter-spacing: 0;
+}
+
+@media (max-width: 768px) {
+  input,
+  textarea,
+  select {
+    font-size: 15px;
+  }
+}
+
+@media (display-mode: standalone) {
+  html,
+  body {
+    overscroll-behavior-y: none;
+    overflow-x: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  input,
+  textarea,
+  [contenteditable="true"] {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
+  body {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  #root {
+    padding-top: 0;
+  }
+}
+
+@media (display-mode: standalone) and (orientation: portrait) {
+  html {
+    height: 100vh;
+    height: calc(var(--app-vh, 1vh) * 100);
+  }
+}

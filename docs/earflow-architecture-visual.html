@@ -1,0 +1,2764 @@
+<!doctype html>
+<html lang="ru">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#000000">
+  <title>Earflow — Architecture Deck</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Unbounded:wght@200;300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap">
+  <style>
+    :root {
+      --bg: #000;
+      --panel: rgba(255, 255, 255, 0.04);
+      --panel-2: rgba(255, 255, 255, 0.06);
+      --b1: rgba(255, 255, 255, 0.08);
+      --b2: rgba(255, 255, 255, 0.16);
+      --b3: rgba(255, 255, 255, 0.28);
+      --text: #fff;
+      --muted: rgba(255, 255, 255, 0.72);
+      --faint: rgba(255, 255, 255, 0.48);
+      --dim: rgba(255, 255, 255, 0.32);
+      --shadow-1: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 24px 60px rgba(0, 0, 0, 0.55);
+      --r-s: 12px;
+      --r-m: 18px;
+      --r-l: 28px;
+      --r-xl: 36px;
+      --pad-x: clamp(24px, 5vw, 72px);
+      --pad-y: clamp(28px, 6vh, 72px);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(1200px 600px at 10% -10%, rgba(255, 255, 255, 0.10), transparent 60%),
+        radial-gradient(900px 500px at 90% 0%, rgba(255, 255, 255, 0.07), transparent 55%),
+        radial-gradient(1400px 700px at 50% 110%, rgba(255, 255, 255, 0.06), transparent 60%),
+        var(--bg);
+      color: var(--text);
+      font-family: 'Unbounded', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-weight: 300;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    code,
+    .mono {
+      font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-weight: 500;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      padding: 14px clamp(16px, 3vw, 36px);
+      background: rgba(0, 0, 0, 0.78);
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      border-bottom: 1px solid var(--b1);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 800;
+      letter-spacing: 0.18em;
+      font-size: 13px;
+      text-transform: uppercase;
+    }
+
+    .brand-mark {
+      width: 22px;
+      height: 22px;
+      display: inline-grid;
+      place-items: center;
+      background: #fff;
+      color: #000;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .brand-meta {
+      color: var(--faint);
+      font-weight: 400;
+      letter-spacing: 0.14em;
+    }
+
+    .topbar-spacer {
+      flex: 1;
+    }
+
+    .topbar-nav {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .topbar-nav a {
+      padding: 7px 11px;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-radius: 999px;
+      border: 1px solid transparent;
+      transition: 0.15s ease;
+    }
+
+    .topbar-nav a:hover {
+      color: #000;
+      background: #fff;
+      border-color: #fff;
+    }
+
+    .topbar-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--b2);
+      background: rgba(255, 255, 255, 0.04);
+      color: #fff;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: 0.15s ease;
+    }
+
+    .btn:hover {
+      background: #fff;
+      color: #000;
+      border-color: #fff;
+    }
+
+    .btn-primary {
+      background: #fff;
+      color: #000;
+      border-color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: #000;
+      color: #fff;
+      border-color: #fff;
+    }
+
+    .kbd {
+      display: inline-grid;
+      place-items: center;
+      min-width: 22px;
+      height: 20px;
+      padding: 0 6px;
+      border: 1px solid var(--b2);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+    }
+
+    .progress-track {
+      position: fixed;
+      left: 0;
+      right: 0;
+      top: 0;
+      height: 2px;
+      background: rgba(255, 255, 255, 0.04);
+      z-index: 200;
+      pointer-events: none;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: #fff;
+      transition: width 0.18s ease;
+    }
+
+    .deck {
+      width: 100%;
+      max-width: 1640px;
+      margin: 0 auto;
+      padding: 0 clamp(16px, 3vw, 36px) 80px;
+    }
+
+    .slide {
+      position: relative;
+      padding: var(--pad-y) var(--pad-x);
+      margin: 22px 0;
+      border: 1px solid var(--b1);
+      border-radius: var(--r-xl);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.015) 60%, rgba(255, 255, 255, 0));
+      box-shadow: var(--shadow-1);
+      overflow: hidden;
+    }
+
+    .slide::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      border-radius: inherit;
+      background:
+        radial-gradient(800px 300px at 0% 0%, rgba(255, 255, 255, 0.06), transparent 60%),
+        radial-gradient(600px 240px at 100% 0%, rgba(255, 255, 255, 0.04), transparent 65%);
+      mix-blend-mode: screen;
+    }
+
+    .slide>* {
+      position: relative;
+    }
+
+    .slide-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 12px 6px 8px;
+      border: 1px solid var(--b2);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.04);
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .slide-tag .dot {
+      width: 7px;
+      height: 7px;
+      background: #fff;
+      border-radius: 50%;
+      box-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+    }
+
+    .slide-num {
+      position: absolute;
+      top: var(--pad-y);
+      right: var(--pad-x);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      color: var(--dim);
+    }
+
+    .h-display {
+      margin: 18px 0 14px;
+      font-weight: 200;
+      font-size: clamp(40px, 6vw, 96px);
+      line-height: 0.95;
+      letter-spacing: -0.05em;
+    }
+
+    .h-display em {
+      font-style: normal;
+      font-weight: 700;
+      letter-spacing: -0.06em;
+    }
+
+    .h-display .stroke {
+      -webkit-text-stroke: 1px rgba(255, 255, 255, 0.5);
+      color: transparent;
+      font-weight: 600;
+    }
+
+    .h-section {
+      margin: 14px 0 10px;
+      font-weight: 300;
+      font-size: clamp(28px, 3.6vw, 56px);
+      line-height: 1;
+      letter-spacing: -0.04em;
+    }
+
+    .h-section strong {
+      font-weight: 700;
+    }
+
+    .h-eyebrow {
+      margin: 0;
+      font-size: 11px;
+      letter-spacing: 0.32em;
+      text-transform: uppercase;
+      color: var(--faint);
+      font-weight: 500;
+    }
+
+    .lead {
+      max-width: 1100px;
+      margin: 14px 0 0;
+      color: var(--muted);
+      font-size: clamp(15px, 1.3vw, 19px);
+      font-weight: 300;
+      line-height: 1.55;
+    }
+
+    .lead strong {
+      color: #fff;
+      font-weight: 500;
+    }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      margin-top: 28px;
+    }
+
+    .kpi {
+      padding: 18px 18px 16px;
+      border: 1px solid var(--b1);
+      border-radius: var(--r-m);
+      background: rgba(0, 0, 0, 0.45);
+    }
+
+    .kpi .num {
+      display: block;
+      font-size: clamp(36px, 4.2vw, 60px);
+      line-height: 1;
+      letter-spacing: -0.05em;
+      font-weight: 200;
+    }
+
+    .kpi .num em {
+      font-style: normal;
+      font-weight: 600;
+    }
+
+    .kpi .lbl {
+      display: block;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    .cap-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 14px;
+      margin-top: 26px;
+    }
+
+    .cap {
+      position: relative;
+      padding: 22px;
+      border: 1px solid var(--b1);
+      border-radius: var(--r-l);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01));
+      min-height: 168px;
+      transition: transform 0.25s ease, border-color 0.2s ease;
+    }
+
+    .cap:hover {
+      transform: translateY(-2px);
+      border-color: var(--b2);
+    }
+
+    .cap .glyph {
+      display: inline-grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      background: #fff;
+      color: #000;
+      border-radius: 10px;
+      font-weight: 800;
+      font-size: 16px;
+    }
+
+    .cap h3 {
+      margin: 14px 0 8px;
+      font-size: 19px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .cap p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .cap-tags {
+      margin-top: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .tag {
+      padding: 3px 9px;
+      border: 1px solid var(--b2);
+      border-radius: 999px;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--faint);
+    }
+
+    .tag.live {
+      color: #fff;
+      border-color: #fff;
+    }
+
+    .layer-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 22px;
+    }
+
+    .layer-col {
+      padding: 18px;
+      border: 1px solid var(--b1);
+      border-radius: var(--r-m);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+      min-height: 460px;
+    }
+
+    .layer-col .lbl {
+      display: block;
+      color: var(--faint);
+      font-size: 10px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+    }
+
+    .layer-col h3 {
+      margin: 8px 0 16px;
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    .node {
+      margin-top: 10px;
+      padding: 12px 12px 10px;
+      border: 1px solid var(--b1);
+      border-radius: var(--r-s);
+      background: rgba(0, 0, 0, 0.45);
+    }
+
+    .node strong {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .node span {
+      display: block;
+      margin-top: 4px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: 1.05fr 1fr;
+      gap: clamp(18px, 2.5vw, 36px);
+      margin-top: 26px;
+      align-items: start;
+    }
+
+    @media (max-width: 1020px) {
+      .split {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .panel {
+      padding: 22px;
+      border: 1px solid var(--b1);
+      border-radius: var(--r-l);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01));
+    }
+
+    .panel h3 {
+      margin: 0 0 12px;
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .panel-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      gap: 10px;
+    }
+
+    .panel-list li {
+      padding: 10px 12px;
+      border: 1px solid var(--b1);
+      border-radius: var(--r-s);
+      background: rgba(0, 0, 0, 0.32);
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .panel-list li strong {
+      color: #fff;
+      font-weight: 600;
+    }
+
+    .diagram {
+      margin-top: 26px;
+      padding: 24px;
+      border: 1px solid var(--b2);
+      border-radius: var(--r-l);
+      background: #050505;
+      overflow: auto;
+      max-height: clamp(520px, 78vh, 1100px);
+    }
+
+    body.mode-slides .diagram {
+      max-height: 70vh;
+    }
+
+    .mermaid {
+      min-width: 820px;
+      margin: 0;
+      display: block;
+      text-align: center;
+    }
+
+    .mermaid svg {
+      max-width: none !important;
+      width: auto !important;
+      height: auto !important;
+      margin: 0 auto;
+    }
+
+    .mermaid .nodeLabel,
+    .mermaid .edgeLabel,
+    .mermaid .cluster .nodeLabel {
+      font-family: 'Unbounded', system-ui, sans-serif !important;
+      font-size: 14px !important;
+      font-weight: 500 !important;
+    }
+
+    .mermaid .cluster rect {
+      fill: rgba(255, 255, 255, 0.02) !important;
+      stroke: rgba(255, 255, 255, 0.5) !important;
+    }
+
+    .mermaid .cluster text {
+      font-size: 13px !important;
+      letter-spacing: 0.06em !important;
+      fill: rgba(255, 255, 255, 0.85) !important;
+    }
+
+    .table-wrap {
+      margin-top: 26px;
+      border: 1px solid var(--b1);
+      border-radius: var(--r-l);
+      overflow: hidden;
+    }
+
+    .table-wrap-scroll {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      min-width: 760px;
+      border-collapse: collapse;
+      background: rgba(0, 0, 0, 0.2);
+    }
+
+    th,
+    td {
+      padding: 13px 16px;
+      border-bottom: 1px solid var(--b1);
+      text-align: left;
+      vertical-align: top;
+      font-size: 13px;
+    }
+
+    th {
+      background: #fff;
+      color: #000;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-size: 11px;
+    }
+
+    td {
+      color: var(--muted);
+    }
+
+    td strong,
+    td code {
+      color: #fff;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    td code,
+    p code,
+    li code {
+      padding: 2px 8px;
+      border: 1px solid var(--b1);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      font-size: 12px;
+    }
+
+    .inv-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 14px;
+      margin-top: 24px;
+    }
+
+    .inv {
+      padding: 20px;
+      border: 1px solid var(--b1);
+      border-radius: var(--r-l);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01));
+    }
+
+    .inv-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .inv-head .badge {
+      padding: 2px 8px;
+      border: 1px solid var(--b2);
+      border-radius: 999px;
+      font-size: 9px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--faint);
+    }
+
+    .inv h3 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      flex: 1;
+    }
+
+    .inv ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      gap: 6px;
+    }
+
+    .inv li {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      padding: 8px 10px;
+      border: 1px solid var(--b1);
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.4);
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .inv li .name {
+      color: #fff;
+      font-weight: 500;
+      flex: 1;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11.5px;
+    }
+
+    .inv li .port {
+      color: var(--faint);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+    }
+
+    .inv li .rt {
+      padding: 1px 6px;
+      border: 1px solid var(--b1);
+      border-radius: 4px;
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      color: var(--faint);
+      text-transform: uppercase;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border: 1px solid var(--b1);
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.4);
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .stages {
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: minmax(180px, 1fr);
+      gap: 10px;
+      margin-top: 24px;
+      overflow-x: auto;
+      padding-bottom: 6px;
+    }
+
+    .stage {
+      padding: 16px;
+      border: 1px solid var(--b1);
+      border-radius: var(--r-m);
+      background: rgba(0, 0, 0, 0.45);
+      position: relative;
+    }
+
+    .stage::after {
+      content: '→';
+      position: absolute;
+      right: -16px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--dim);
+      font-size: 22px;
+      z-index: 2;
+    }
+
+    .stage:last-child::after {
+      display: none;
+    }
+
+    .stage .step {
+      display: inline-block;
+      padding: 2px 7px;
+      border: 1px solid var(--b2);
+      border-radius: 999px;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      color: var(--faint);
+    }
+
+    .stage h4 {
+      margin: 8px 0 6px;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    .stage p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .footer {
+      margin: 50px 0 0;
+      padding: 22px 26px;
+      border: 1px solid var(--b1);
+      border-radius: var(--r-l);
+      background: rgba(255, 255, 255, 0.02);
+      color: var(--muted);
+      font-size: 13px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 18px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .footer .links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .hud {
+      position: fixed;
+      bottom: 18px;
+      right: 22px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border: 1px solid var(--b1);
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.72);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      z-index: 90;
+      pointer-events: none;
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--muted);
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+
+    .hud.show {
+      opacity: 1;
+    }
+
+    .hud .counter {
+      font-family: 'JetBrains Mono', monospace;
+      color: #fff;
+    }
+
+    .hud .sep {
+      color: var(--dim);
+    }
+
+    body.mode-slides .topbar {
+      display: none;
+    }
+
+    body.mode-slides {
+      overflow: hidden;
+      height: 100vh;
+    }
+
+    body.mode-slides .deck {
+      height: 100vh;
+      overflow-y: scroll;
+      scroll-snap-type: y mandatory;
+      padding: 0 clamp(16px, 3vw, 36px);
+      max-width: none;
+      scrollbar-width: none;
+    }
+
+    body.mode-slides .deck::-webkit-scrollbar {
+      display: none;
+    }
+
+    body.mode-slides .slide {
+      min-height: 100vh;
+      margin: 0;
+      border-radius: 0;
+      border-left: none;
+      border-right: none;
+      scroll-snap-align: start;
+      scroll-snap-stop: always;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    body.mode-slides .slide+.slide {
+      border-top: 1px solid var(--b1);
+    }
+
+    body.mode-slides .hud {
+      opacity: 1;
+    }
+
+    body.mode-slides .footer {
+      display: none;
+    }
+
+    .btn:focus-visible,
+    .topbar-nav a:focus-visible {
+      outline: 2px solid #fff;
+      outline-offset: 2px;
+    }
+
+    .diagram[data-expandable] {
+      cursor: zoom-in;
+      position: relative;
+    }
+
+    .diagram[data-expandable]::after {
+      content: '⤢ на весь экран';
+      position: absolute;
+      top: 12px;
+      right: 14px;
+      padding: 5px 10px;
+      border: 1px solid var(--b2);
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.62);
+      color: var(--muted);
+      font-family: 'Unbounded', sans-serif;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      pointer-events: none;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    }
+
+    .diagram[data-expandable]:hover::after {
+      color: #000;
+      background: #fff;
+      border-color: #fff;
+    }
+
+    .diagram-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 250;
+      display: none;
+      flex-direction: column;
+      background: rgba(0, 0, 0, 0.94);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+    }
+
+    .diagram-modal.show {
+      display: flex;
+    }
+
+    .diagram-modal__bar {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px clamp(16px, 3vw, 36px);
+      border-bottom: 1px solid var(--b1);
+    }
+
+    .diagram-modal__title {
+      flex: 1;
+      font-size: 12px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .diagram-modal__hint {
+      color: var(--faint);
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .diagram-modal__body {
+      flex: 1;
+      overflow: auto;
+      padding: clamp(16px, 3vw, 36px);
+      display: grid;
+      place-items: center;
+    }
+
+    .diagram-modal__inner {
+      width: max-content;
+      max-width: none;
+      transform-origin: center center;
+      transition: transform 0.18s ease;
+    }
+
+    .diagram-modal__inner svg {
+      display: block;
+      max-width: none !important;
+      height: auto;
+    }
+
+    body.has-diagram-modal {
+      overflow: hidden;
+    }
+
+    @media (max-width: 1100px) {
+      .layer-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 720px) {
+      .topbar-nav {
+        display: none;
+      }
+
+      .layer-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .slide-num {
+        position: static;
+        display: inline-block;
+        margin-bottom: 14px;
+      }
+
+      .slide {
+        padding: 28px 22px;
+      }
+
+      .stages {
+        grid-auto-flow: row;
+        grid-auto-columns: 1fr;
+      }
+
+      .stage::after {
+        content: '↓';
+        right: 50%;
+        top: auto;
+        bottom: -18px;
+        transform: translateX(50%);
+      }
+    }
+
+    @media print {
+      :root {
+        color-scheme: only light;
+      }
+
+      html,
+      body {
+        background: #fff !important;
+        color: #000 !important;
+      }
+
+      body {
+        font-size: 11pt;
+      }
+
+      .topbar,
+      .hud,
+      .progress-track,
+      .footer .btn {
+        display: none !important;
+      }
+
+      .deck {
+        max-width: none;
+        padding: 0;
+      }
+
+      .slide {
+        page-break-before: always;
+        page-break-inside: avoid;
+        break-before: page;
+        background: #fff !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 24pt !important;
+        margin: 0 !important;
+      }
+
+      .slide:first-of-type {
+        page-break-before: avoid;
+        break-before: avoid;
+      }
+
+      .slide::before {
+        display: none !important;
+      }
+
+      .h-display,
+      .h-section,
+      h3,
+      h4,
+      .lead,
+      .kpi .num,
+      .kpi .lbl,
+      td,
+      th,
+      .node,
+      .cap,
+      .inv,
+      .panel,
+      .panel-list li,
+      .footer {
+        color: #000 !important;
+      }
+
+      .h-display .stroke {
+        -webkit-text-stroke: 1px #000;
+        color: transparent;
+      }
+
+      .kpi,
+      .cap,
+      .layer-col,
+      .inv,
+      .panel,
+      .panel-list li,
+      .node,
+      .legend-item,
+      .slide-tag,
+      .tag,
+      .stage,
+      .diagram,
+      .table-wrap {
+        background: #fff !important;
+        border: 1px solid #000 !important;
+      }
+
+      .brand-mark,
+      th,
+      .cap .glyph,
+      .btn-primary {
+        background: #000 !important;
+        color: #fff !important;
+        border-color: #000 !important;
+      }
+
+      .progress-bar {
+        background: #000 !important;
+      }
+
+      .mermaid {
+        color: #000 !important;
+      }
+
+      a {
+        color: #000 !important;
+        text-decoration: underline;
+      }
+
+      code {
+        background: #f4f4f4 !important;
+        color: #000 !important;
+        border-color: #ccc !important;
+      }
+    }
+  </style>
+</head>
+
+<body class="mode-scroll">
+  <div class="progress-track" aria-hidden="true">
+    <div class="progress-bar" id="progressBar"></div>
+  </div>
+
+  <header class="topbar" role="banner">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">E</span>
+      <span>Earflow</span>
+      <span class="brand-meta">Architecture deck · 2026</span>
+    </div>
+    <div class="topbar-spacer"></div>
+    <nav class="topbar-nav" aria-label="Sections">
+      <a href="#s-overview">Обзор</a>
+      <a href="#s-capabilities">Возможности</a>
+      <a href="#s-architecture">Архитектура</a>
+      <a href="#s-streaming">Стриминг</a>
+      <a href="#s-realtime">Реалтайм</a>
+      <a href="#s-intelligence">Рекомендации</a>
+      <a href="#s-security">Безопасность</a>
+      <a href="#s-services">Сервисы</a>
+    </nav>
+    <div class="topbar-actions">
+      <button class="btn" id="printBtn" title="Сохранить как PDF (Ctrl+P)" type="button">PDF</button>
+      <button class="btn btn-primary" id="modeBtn" title="Режим презентации (P)" type="button">Презентация</button>
+    </div>
+  </header>
+
+  <main class="deck" id="deck">
+
+    <!-- ============ 01. COVER ============ -->
+    <section class="slide" id="s-overview" data-slide>
+      <span class="slide-num">01 / 16</span>
+      <span class="slide-tag"><span class="dot"></span> Earflow Music Platform · Production · 2026</span>
+      <h1 class="h-display">Музыка <em>живёт</em>,<br><span class="stroke">архитектура</span> работает.</h1>
+      <p class="lead">
+        <strong>Earflow</strong> — единая платформа для слушателей и артистов: высококачественный стриминг,
+        ML-рекомендации, синхронное прослушивание, защищённый артистский кабинет и server-authoritative переключение
+        устройств. Один продукт, один кодрепозиторий, два изолированных gateway, тридцать с лишним сервисов и воркеров —
+        собрано как pitch-deck для одного экрана.
+      </p>
+      <div class="kpi-grid">
+        <div class="kpi"><span class="num"><em>5</em></span><span class="lbl">публичных доменов</span></div>
+        <div class="kpi"><span class="num"><em>2</em></span><span class="lbl">гейтвея на Go</span></div>
+        <div class="kpi"><span class="num"><em>30</em>+</span><span class="lbl">сервисов и воркеров</span></div>
+        <div class="kpi"><span class="num"><em>6</em></span><span class="lbl">хранилищ данных</span></div>
+        <div class="kpi"><span class="num"><em>3</em></span><span class="lbl">стека стриминга</span></div>
+        <div class="kpi"><span class="num">∞</span><span class="lbl">безопасность по умолчанию</span></div>
+      </div>
+      <div class="legend" aria-label="Navigation hint">
+        <span class="legend-item"><span class="kbd">P</span> презентация</span>
+        <span class="legend-item"><span class="kbd">←</span> <span class="kbd">→</span> пролистать</span>
+        <span class="legend-item"><span class="kbd">Space</span> дальше</span>
+        <span class="legend-item"><span class="kbd">Esc</span> выход</span>
+        <span class="legend-item"><span class="kbd">Ctrl</span>+<span class="kbd">P</span> сохранить PDF</span>
+        <span class="legend-item"><span class="kbd">Клик</span> по схеме — на весь экран</span>
+      </div>
+    </section>
+
+    <!-- ============ 02. PRODUCT CAPABILITIES ============ -->
+    <section class="slide" id="s-capabilities" data-slide>
+      <span class="slide-num">02 / 16</span>
+      <p class="h-eyebrow">Что умеет платформа</p>
+      <h2 class="h-section">Восемь продуктовых <strong>возможностей</strong>.</h2>
+      <p class="lead">Под капотом — десятки сервисов, наверху — простой опыт: слушать, открывать, делиться, выступать.
+      </p>
+      <div class="cap-grid">
+        <article class="cap">
+          <span class="glyph">♪</span>
+          <h3>Listening</h3>
+          <p>Аудиоплеер уровня iOS: фоновое воспроизведение, MediaSession, Range-streaming, защита от прерываний и
+            качественная синхронизация с lock-screen.</p>
+          <div class="cap-tags"><span class="tag live">Live</span><span class="tag">Direct v3</span><span
+              class="tag">HLS iOS</span></div>
+        </article>
+        <article class="cap">
+          <span class="glyph">⌕</span>
+          <h3>Discovery</h3>
+          <p>Полнотекстовый поиск через Meilisearch, daily mixes, рекомендации, артистские страницы и кураторские
+            плейлисты — всё из одной поисковой строки.</p>
+          <div class="cap-tags"><span class="tag live">Live</span><span class="tag">Meili 1.7</span><span
+              class="tag">pgvector</span></div>
+        </article>
+        <article class="cap">
+          <span class="glyph">∞</span>
+          <h3>Personalization</h3>
+          <p>Online-intent learning: каждый skip/like/complete сразу влияет на ленту. Engine v2 смешивает exact / near /
+            discovery с adaptive taste mix и session-anchor retrieval.</p>
+          <div class="cap-tags"><span class="tag live">Live</span><span class="tag">Engine v2</span><span
+              class="tag">Skip-aware</span></div>
+        </article>
+        <article class="cap">
+          <span class="glyph">♛</span>
+          <h3>Artist Portal</h3>
+          <p>Изолированный кабинет на отдельном поддомене и cookie-namespace: claims, загрузка треков, статистика, MFA +
+            step-up на критичных операциях.</p>
+          <div class="cap-tags"><span class="tag live">Live</span><span class="tag">artists.earflow.ru</span></div>
+        </article>
+        <article class="cap">
+          <span class="glyph">⊛</span>
+          <h3>Party Mode</h3>
+          <p>Совместное прослушивание: общий host/guest queue, синхронные позиция/паузы и live-чат через NATS JetStream
+            + Redis DB2 + WebSocket gateway.</p>
+          <div class="cap-tags"><span class="tag live">Live</span><span class="tag">NATS</span><span
+              class="tag">Realtime</span></div>
+        </article>
+        <article class="cap">
+          <span class="glyph">⇄</span>
+          <h3>Device Sync</h3>
+          <p>Server-authoritative переключение устройств в духе Spotify Connect: backend владеет активным выходом,
+            отбирает звук у предыдущего, плейлист продолжается без рассинхрона.</p>
+          <div class="cap-tags"><span class="tag live">Live</span><span class="tag">Connect-like</span></div>
+        </article>
+        <article class="cap">
+          <span class="glyph">⇊</span>
+          <h3>Adaptive Streaming</h3>
+          <p>Direct v3 c подписанными session-cookie, HLS для iOS, multi-quality AAC/Opus/FLAC варианты от
+            <code>transcode-worker</code>, ABR на клиенте по live bandwidth.
+          </p>
+          <div class="cap-tags"><span class="tag live">Live</span><span class="tag">ABR</span><span
+              class="tag">Range</span></div>
+        </article>
+        <article class="cap">
+          <span class="glyph">⛨</span>
+          <h3>Privacy by default</h3>
+          <p>HTTPS-only, HSTS, CSP, CORS allowlist, HttpOnly + SameSite cookies, CSRF на всех unsafe методах, MFA
+            step-up, fail-closed на ошибках авторизации.</p>
+          <div class="cap-tags"><span class="tag live">Hardened</span><span class="tag">MFA</span><span
+              class="tag">CSRF</span></div>
+        </article>
+      </div>
+    </section>
+
+    <!-- ============ 03. DOMAINS & EDGE ============ -->
+    <section class="slide" id="s-domains" data-slide>
+      <span class="slide-num">03 / 16</span>
+      <p class="h-eyebrow">Точки входа</p>
+      <h2 class="h-section">Пять <strong>публичных доменов</strong>, один edge.</h2>
+      <p class="lead">Каждый продукт получает свой домен и свой набор cookie/CORS правил. Один Nginx раздаёт TLS,
+        статический кэш, CSP, rate-limits и ACME-сертификаты — и проксирует трафик в нужный gateway или origin.</p>
+      <div class="table-wrap">
+        <div class="table-wrap-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Домен</th>
+                <th>Назначение</th>
+                <th>SPA / Origin</th>
+                <th>Auth namespace</th>
+                <th>Стек</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>earflow.ru</strong></td>
+                <td>Слушательский SPA: плеер, поиск, плейлисты, профиль, party</td>
+                <td><code>frontend</code> (React 18, CRACO)</td>
+                <td><code>mp_sid</code> + <code>mp_csrf</code> на <code>.earflow.ru</code></td>
+                <td>Nginx → SPA + <code>api-gateway</code></td>
+              </tr>
+              <tr>
+                <td><strong>auth.earflow.ru</strong></td>
+                <td>Логин, регистрация, MFA, восстановление</td>
+                <td>тот же <code>frontend</code> (auth-режим)</td>
+                <td>тот же session/csrf namespace</td>
+                <td>Nginx → SPA + <code>api-gateway</code></td>
+              </tr>
+              <tr>
+                <td><strong>api.earflow.ru</strong></td>
+                <td>HTTP API, <code>/ws/v2</code>, <code>/ws/devices</code>, EBAP-HLS, обложки</td>
+                <td>—</td>
+                <td>Cookie-binding + bearer для media</td>
+                <td>Nginx → <code>api-gateway</code> → microservices</td>
+              </tr>
+              <tr>
+                <td><strong>artists.earflow.ru</strong></td>
+                <td>Артистский кабинет: claims, загрузка треков, статистика</td>
+                <td><code>artist-frontend</code> (React 18)</td>
+                <td><code>mp_sid_artists</code> + <code>mp_csrf_artists</code> на <code>.artists.earflow.ru</code></td>
+                <td>Nginx → SPA + <code>artist-api-gateway</code></td>
+              </tr>
+              <tr>
+                <td><strong>strmhaha.earflow.ru</strong></td>
+                <td>Direct audio origin: <code>/audio/v3/&lt;session&gt;/stream</code> с Range</td>
+                <td>—</td>
+                <td>HttpOnly stream cookie + URL-token</td>
+                <td>Nginx → <code>direct-stream-service</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="legend">
+        <span class="legend-item"><span class="kbd">TLS</span> Let's Encrypt + auto-renew</span>
+        <span class="legend-item"><span class="kbd">CSP</span> strict default-src</span>
+        <span class="legend-item"><span class="kbd">HSTS</span> 1y + preload</span>
+        <span class="legend-item"><span class="kbd">RL</span> per-domain rate limits</span>
+        <span class="legend-item"><span class="kbd">SSH</span> admin/metrics через 127.0.0.1</span>
+      </div>
+    </section>
+
+    <!-- ============ 04. LAYER MAP ============ -->
+    <section class="slide" id="s-architecture" data-slide>
+      <span class="slide-num">04 / 16</span>
+      <p class="h-eyebrow">Слои системы</p>
+      <h2 class="h-section">Пять <strong>слоёв</strong>: от пользователя до диска.</h2>
+      <p class="lead">Запрос проходит сверху вниз: продукт → edge → frontend/gateway → сервисы и воркеры → data plane.
+        Никакой другой путь не разрешён: фронт не ходит в Postgres, сервис не ходит в чужой namespace, gateway не
+        пробрасывает spoofed identity headers.</p>
+      <div class="layer-grid">
+        <div class="layer-col">
+          <span class="lbl">Layer 1</span>
+          <h3>Users / Products</h3>
+          <div class="node"><strong>Listener SPA</strong><span>earflow.ru — плеер, поиск, плейлисты, профиль</span>
+          </div>
+          <div class="node"><strong>Auth UI</strong><span>auth.earflow.ru — login, register, MFA, recovery</span></div>
+          <div class="node"><strong>Artist Portal</strong><span>artists.earflow.ru — claims, tracks, analytics</span>
+          </div>
+          <div class="node"><strong>Direct audio origin</strong><span>strmhaha.earflow.ru — audio Range stream</span>
+          </div>
+          <div class="node"><strong>Ops dashboards</strong><span>localhost-only через SSH-туннель</span></div>
+        </div>
+        <div class="layer-col">
+          <span class="lbl">Layer 2</span>
+          <h3>Edge</h3>
+          <div class="node"><strong>nginx</strong><span>TLS, HSTS, CSP, CORS, rate-limits, static cache</span></div>
+          <div class="node"><strong>media proxy</strong><span>Range, HLS, X-Stream-Error диагностика</span></div>
+          <div class="node"><strong>certbot</strong><span>Let's Encrypt auto-renew</span></div>
+          <div class="node"><strong>cert-reloader</strong><span>inotify → SIGHUP без даунтайма</span></div>
+          <div class="node"><strong>admin guards</strong><span>127.0.0.1 + 8085/8443 only</span></div>
+        </div>
+        <div class="layer-col">
+          <span class="lbl">Layer 3</span>
+          <h3>Frontends + Gateways</h3>
+          <div class="node"><strong>frontend</strong><span>React 18, styled-components, hls.js, CRACO splitChunks</span>
+          </div>
+          <div class="node"><strong>artist-frontend</strong><span>React 18, изолированный билд под
+              artists.earflow.ru</span></div>
+          <div class="node"><strong>api-gateway</strong><span>Go 1.22, gateway.yaml, sessions, CSRF, route
+              policies</span></div>
+          <div class="node"><strong>artist-api-gateway</strong><span>тот же бинарь, gateway.artist.yaml, изолированный
+              namespace</span></div>
+        </div>
+        <div class="layer-col">
+          <span class="lbl">Layer 4</span>
+          <h3>Services + Workers</h3>
+          <div class="node"><strong>Identity</strong><span>auth-service · security-service</span></div>
+          <div class="node"><strong>Catalog</strong><span>database · artist · playlist · subscription · lyrics ·
+              search</span></div>
+          <div class="node"><strong>Media</strong><span>upload · direct-stream · ebap-hls-adapter · transcode · metadata
+              · features · track-processor · import</span></div>
+          <div class="node"><strong>Realtime</strong><span>party-state · party-gateway · device-sync</span></div>
+          <div class="node"><strong>Intelligence</strong><span>recommendations · ranking · reco-feedback ·
+              reco-offline</span></div>
+        </div>
+        <div class="layer-col">
+          <span class="lbl">Layer 5</span>
+          <h3>Data plane</h3>
+          <div class="node"><strong>PostgreSQL 15 + pgvector</strong><span>source of truth: пользователи, треки,
+              эмбеддинги</span></div>
+          <div class="node"><strong>Redis main 7.4</strong><span>cache, RL, party (DB2), device-sync (DB3)</span></div>
+          <div class="node"><strong>Redis auth 7.4</strong><span>sessions, CSRF, step-up — noeviction</span></div>
+          <div class="node"><strong>MinIO</strong><span>music-audio · music-covers · ebap-cache · ebap-hls</span></div>
+          <div class="node"><strong>Meilisearch 1.7 · NATS 2.10</strong><span>full-text index · JetStream event
+              bus</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 05. BIG PICTURE ============ -->
+    <section class="slide" id="s-big-picture" data-slide>
+      <span class="slide-num">05 / 16</span>
+      <p class="h-eyebrow">Архитектура с первого взгляда</p>
+      <h2 class="h-section">От браузера до диска — <strong>один кадр</strong>.</h2>
+      <p class="lead">Слушатель и артист входят через свои домены, получают свой SPA, проходят через свой gateway,
+        попадают только в разрешённые сервисы и завершают путь в общем data plane. Все цветовые группы — это уровни
+        доверия.</p>
+      <div class="diagram" data-expandable>
+        <pre class="mermaid">%%{init: {'flowchart': {'nodeSpacing': 24, 'rankSpacing': 36, 'curve': 'basis', 'useMaxWidth': false, 'htmlLabels': true}}}%%
+flowchart TB
+  subgraph users["Пользователи"]
+    direction LR
+    listener["Слушатель<br/>браузер · PWA · iOS"]:::user
+    artist["Артист<br/>браузер"]:::user
+  end
+
+  subgraph edge["Edge"]
+    direction TB
+    nginx["Nginx<br/>TLS · CSP · кэш · RL"]:::edge
+    certbot["certbot"]:::edge
+    reloader["cert-reloader"]:::edge
+  end
+
+  subgraph spas["Frontends · React 18"]
+    direction TB
+    feMain["frontend<br/>earflow + auth"]:::front
+    feArtist["artist-frontend<br/>artists.earflow.ru"]:::front
+  end
+
+  subgraph gws["Gateways · Go"]
+    direction TB
+    mainGW["api-gateway<br/>×2 · gateway.yaml"]:::gw
+    artistGW["artist-api-gateway<br/>gateway.artist.yaml"]:::gw
+  end
+
+  subgraph identity["Идентификация"]
+    direction TB
+    authSvc["auth-service<br/>логин · MFA · JWT"]:::svc
+    secSvc["security-service<br/>пароли · сессии"]:::svc
+  end
+
+  subgraph catalog["Каталог"]
+    direction TB
+    dbSvc["database-service<br/>песни · users"]:::svc
+    artistSvc["artist-service<br/>артисты · альбомы"]:::svc
+    playlistSvc["playlist-service<br/>плейлисты · queue"]:::svc
+    subSvc["subscription-service<br/>подписки"]:::svc
+    lyricsSvc["lyrics-service<br/>тексты"]:::svc
+    searchSvc["search-service<br/>Meili indexer"]:::svc
+    portalSvc["artist-portal-service<br/>кабинет артиста"]:::svc
+  end
+
+  subgraph media["Медиа"]
+    direction TB
+    uploadSvc["upload-service<br/>загрузка"]:::svc
+    directSvc["direct-stream<br/>Range · ABR"]:::svc
+    hlsSvc["ebap-hls-adapter<br/>HLS iOS"]:::svc
+    metaSvc["metadata-parser<br/>ID3"]:::svc
+    importSvc["import-service<br/>MB · Spotify"]:::svc
+  end
+
+  subgraph workers["Воркеры"]
+    direction TB
+    txWorker["transcode-worker<br/>AAC · Opus · FLAC"]:::worker
+    encWorker["ebap-encoder<br/>чанки"]:::worker
+    pkgWorker["ebap-hls-packager<br/>HLS сегменты"]:::worker
+    featWorker["audio-features<br/>эмбеддинги"]:::worker
+    trackWorker["track-processor<br/>авто-импорт"]:::worker
+    fbWorker["reco-feedback<br/>online learning"]:::worker
+    offWorker["reco-offline<br/>ночной пересчёт"]:::worker
+  end
+
+  subgraph rt["Реалтайм"]
+    direction TB
+    partyState["party-state<br/>состояние"]:::svc
+    partyGW["party-gateway<br/>WebSocket"]:::svc
+    devSync["device-sync<br/>active owner"]:::svc
+  end
+
+  subgraph intel["Рекомендации"]
+    direction TB
+    recoSvc["recommendations<br/>engine v2"]:::svc
+    rankSvc["ranking-service<br/>сортировка"]:::svc
+  end
+
+  subgraph data["Хранилища · stateful"]
+    direction LR
+    pg[("Postgres 15<br/>+ pgvector")]:::data
+    rauth[("redis-auth<br/>сессии · MFA")]:::data
+    rmain[("redis main<br/>кэш · party · device")]:::data
+    minio[("MinIO<br/>аудио · обложки · HLS")]:::data
+    meili[("Meilisearch")]:::data
+    nats[("NATS JetStream")]:::data
+  end
+
+  users --> edge
+  certbot --- nginx
+  reloader --- nginx
+  edge --> spas
+  edge --> gws
+  edge -- "/audio/v3" --> media
+  edge -- "/api/ebap-hls" --> media
+
+  mainGW --> identity
+  mainGW --> catalog
+  mainGW --> media
+  mainGW --> rt
+  mainGW --> intel
+
+  artistGW --> identity
+  artistGW --> portalSvc
+  artistGW --> media
+
+  uploadSvc -.-> txWorker
+  uploadSvc -.-> metaSvc
+  uploadSvc -.-> featWorker
+  uploadSvc -.-> trackWorker
+  hlsSvc -.-> encWorker
+  hlsSvc -.-> pkgWorker
+  recoSvc -.-> fbWorker
+  recoSvc -.-> offWorker
+
+  identity --> rauth
+  catalog --> pg
+  searchSvc --> meili
+  media --> pg
+  media --> minio
+  directSvc --> rmain
+  hlsSvc --> rmain
+  intel --> pg
+  recoSvc --> rmain
+  partyState --> rmain
+  partyState --> nats
+  partyGW --> nats
+  devSync --> rmain
+  txWorker --> minio
+  encWorker --> minio
+  pkgWorker --> minio
+  featWorker --> pg
+  trackWorker --> pg
+  fbWorker --> rmain
+  offWorker --> pg
+
+  classDef user fill:#ffffff,color:#000,stroke:#fff,stroke-width:2px;
+  classDef edge fill:#222,color:#fff,stroke:#fff,stroke-width:1.4px;
+  classDef front fill:#0d0d0d,color:#fff,stroke:#bbb,stroke-width:1.2px;
+  classDef gw fill:#1a1a1a,color:#fff,stroke:#fff,stroke-width:1.6px;
+  classDef svc fill:#0a0a0a,color:#fff,stroke:#888,stroke-width:1.1px;
+  classDef worker fill:#0a0a0a,color:#ddd,stroke:#666,stroke-dasharray:4 3;
+  classDef data fill:#000,color:#fff,stroke:#fff,stroke-width:2px;
+  linkStyle default stroke:#bbb,stroke-width:1.2px;</pre>
+      </div>
+      <div class="legend">
+        <span class="legend-item">Пользователь</span>
+        <span class="legend-item">Edge · Nginx</span>
+        <span class="legend-item">Frontend · React</span>
+        <span class="legend-item">Gateway · Go</span>
+        <span class="legend-item">Сервис</span>
+        <span class="legend-item">Воркер · фоновая обработка</span>
+        <span class="legend-item">Хранилище</span>
+        <span class="legend-item">Клик по схеме — на весь экран</span>
+      </div>
+    </section>
+
+    <!-- ============ 06. ROUTING MODEL ============ -->
+    <section class="slide" id="s-routing" data-slide>
+      <span class="slide-num">06 / 16</span>
+      <p class="h-eyebrow">Маршрутизация</p>
+      <h2 class="h-section">Два gateway, <strong>декларативный YAML</strong>.</h2>
+      <p class="lead">Маршруты живут в <code>gateway.yaml</code> и <code>gateway.artist.yaml</code>. Каждый маршрут
+        несёт policy class (<code>public</code> · <code>auth_only</code> · <code>unsafe</code> · <code>stream</code> ·
+        <code>static</code>), требование <code>require_user</code>, rate-limit и таймаут. Никаких inline-исключений в
+        коде — только конфиг.
+      </p>
+      <div class="split">
+        <div class="panel">
+          <h3>main · api-gateway</h3>
+          <ul class="panel-list">
+            <li><strong>/api/auth · /api/profile · /api/verify</strong> → <code>auth-service</code> · class
+              <code>auth_only</code>
+            </li>
+            <li><strong>/api/stream/v3/session</strong> → <code>direct-stream-service</code> · class <code>unsafe</code>
+              · RL <code>stream</code></li>
+            <li><strong>/api/stream/v2/*</strong> → <code>direct-stream-service</code> · class <code>stream</code></li>
+            <li><strong>/audio/v3/* (GET/HEAD)</strong> → <code>direct-stream-service</code> · cookie-bound</li>
+            <li><strong>/api/ebap-hls/v1/session</strong> → <code>ebap-hls-adapter</code> · RL <code>stream</code></li>
+            <li><strong>/api/songs · /api/user</strong> → <code>database-service</code> · service-token + cache
+              <code>catalog_short</code>
+            </li>
+            <li><strong>/api/artists · /api/albums</strong> → <code>artist-service</code> · cache <code>catalog</code>
+            </li>
+            <li><strong>/api/playlists · /api/queue · /api/mix</strong> → <code>playlist-service</code></li>
+            <li><strong>/api/search/v1</strong> → <code>search-service</code> · RL <code>search</code></li>
+            <li><strong>/api/recommendations</strong> → <code>recommendations-service</code></li>
+            <li><strong>/api/lyrics</strong> → <code>lyrics-service</code> · service-token</li>
+            <li><strong>/api/party · /ws/v2</strong> → <code>party-state</code> + <code>party-gateway</code></li>
+            <li><strong>/api/devices · /ws/devices</strong> → <code>device-sync-service</code></li>
+            <li><strong>/covers · /api/songs/.../cover</strong> → <code>upload-service</code> · class
+              <code>static</code> · CDN-headers
+            </li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>artist · artist-api-gateway</h3>
+          <ul class="panel-list">
+            <li><strong>/api/artists · /api/artists/popular</strong> → <code>artist-service</code> · RL
+              <code>artist_search</code>
+            </li>
+            <li><strong>/api/artists/claims · /api/artists/admin</strong> → <code>artist-service</code> · class
+              <code>unsafe</code>
+            </li>
+            <li><strong>/api/auth/2fa/recovery</strong> → <code>security-service</code> · приоритет над общим
+              <code>2fa</code>
+            </li>
+            <li><strong>/api/auth/2fa</strong> → <code>auth-service</code></li>
+            <li><strong>/api/auth/security · /api/auth/password</strong> → <code>security-service</code></li>
+            <li><strong>/api/auth/sessions · /api/auth/telegram/unlink</strong> → <code>security-service</code></li>
+            <li><strong>/api/auth/profile · /api/auth/verify</strong> → <code>auth-service</code></li>
+            <li><strong>/api/artist-portal/tracks (POST)</strong> → <code>artist-portal-service</code> · timeout 180s ·
+              MFA step-up</li>
+            <li><strong>/api/artist-portal/*</strong> → <code>artist-portal-service</code></li>
+          </ul>
+        </div>
+      </div>
+      <div class="legend">
+        <span class="legend-item"><span class="kbd">public</span> read-only без CSRF</span>
+        <span class="legend-item"><span class="kbd">auth_only</span> только auth-сервис</span>
+        <span class="legend-item"><span class="kbd">unsafe</span> CSRF + require_user</span>
+        <span class="legend-item"><span class="kbd">stream</span> long-lived + RL stream</span>
+        <span class="legend-item"><span class="kbd">static</span> CDN cache</span>
+      </div>
+    </section>
+
+    <!-- ============ 07. PRODUCT SURFACES ============ -->
+    <section class="slide" id="s-product-surfaces" data-slide>
+      <span class="slide-num">07 / 16</span>
+      <p class="h-eyebrow">Продуктовые поверхности</p>
+      <h2 class="h-section">Каждая фича — <strong>в своей колонке</strong>.</h2>
+      <p class="lead">Продукты, видимые пользователю, разложены по frontend entry, API, сервисам и data plane. Это та же
+        таблица, по которой команда DevOps мониторит SLO, а команда продукта — KPI.</p>
+      <div class="table-wrap">
+        <div class="table-wrap-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Продукт</th>
+                <th>Frontend</th>
+                <th>API</th>
+                <th>Сервисы</th>
+                <th>Data</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Home player</strong></td>
+                <td><code>/</code> · MusicPlayer · GlobalPlayerBar</td>
+                <td><code>/api/songs</code>, <code>/api/recommendations</code>, <code>/api/stream/v3/session</code></td>
+                <td>database · recommendations · direct-stream · ebap-hls-adapter</td>
+                <td>Postgres · Redis · MinIO</td>
+              </tr>
+              <tr>
+                <td><strong>Search</strong></td>
+                <td><code>/search</code></td>
+                <td><code>/api/search/v1</code></td>
+                <td>search-service · database-service</td>
+                <td>Meilisearch · Postgres</td>
+              </tr>
+              <tr>
+                <td><strong>Artist pages</strong></td>
+                <td><code>/artist/:artistPublicId</code></td>
+                <td><code>/api/artists</code> · <code>/api/albums</code></td>
+                <td>artist-service · database-service</td>
+                <td>Postgres</td>
+              </tr>
+              <tr>
+                <td><strong>Playlists / mixes</strong></td>
+                <td><code>/playlist</code> · <code>/p</code> · <code>/mix</code></td>
+                <td><code>/api/playlists</code> · <code>/api/queue</code> · <code>/api/mix</code></td>
+                <td>playlist-service · database-service</td>
+                <td>Postgres · Redis</td>
+              </tr>
+              <tr>
+                <td><strong>Profile / Library</strong></td>
+                <td><code>/profile</code> · <code>/account</code></td>
+                <td><code>/api/profile</code> · <code>/api/likes</code> · <code>/api/eq</code></td>
+                <td>auth · database · upload · subscription</td>
+                <td>Postgres · Redis-auth · MinIO</td>
+              </tr>
+              <tr>
+                <td><strong>Direct playback</strong></td>
+                <td>PlaybackConnector · DirectSession</td>
+                <td><code>/api/stream/v3/session</code> · <code>/audio/v3/&lt;sid&gt;/stream</code></td>
+                <td>direct-stream-service · transcode-worker</td>
+                <td>Postgres · Redis · MinIO</td>
+              </tr>
+              <tr>
+                <td><strong>HLS / iOS</strong></td>
+                <td>HlsSession (hls.js + native)</td>
+                <td><code>/api/ebap-hls/v1/session</code> · <code>/api/ebap-hls/v1/lyrics.bin</code></td>
+                <td>ebap-hls-adapter · ebap-encoder-worker · ebap-hls-packager-worker</td>
+                <td>MinIO ebap-cache + ebap-hls · Redis</td>
+              </tr>
+              <tr>
+                <td><strong>Party Mode</strong></td>
+                <td>PartyDrawer · PartyModal · PartyPage</td>
+                <td><code>/api/party</code> · <code>/ws/v2</code></td>
+                <td>party-state-service · party-gateway-service</td>
+                <td>Redis DB2 · NATS JetStream</td>
+              </tr>
+              <tr>
+                <td><strong>Device Sync</strong></td>
+                <td>DeviceSyncProvider · useDeviceSync</td>
+                <td><code>/api/devices</code> · <code>/ws/devices</code></td>
+                <td>device-sync-service</td>
+                <td>Redis DB3</td>
+              </tr>
+              <tr>
+                <td><strong>Artist Portal</strong></td>
+                <td>ManageHero · DashboardHero · Tracks · Security</td>
+                <td><code>/api/artist-portal/*</code> · <code>/api/auth/2fa</code> · <code>/api/artists/claims</code>
+                </td>
+                <td>artist-portal · artist · upload · auth · security</td>
+                <td>Postgres · Redis-auth · MinIO</td>
+              </tr>
+              <tr>
+                <td><strong>Ops</strong></td>
+                <td>SSH-туннели на 8085/8443/9002/5050/9443</td>
+                <td>Prometheus · Grafana · pgAdmin · Portainer · OTLP</td>
+                <td>Nginx · gateway admin · monitoring stack</td>
+                <td>Prometheus · Loki · Tempo · Docker API</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 08. STREAMING PIPELINES ============ -->
+    <section class="slide" id="s-streaming" data-slide>
+      <span class="slide-num">08 / 16</span>
+      <p class="h-eyebrow">Медиа-пайплайны</p>
+      <h2 class="h-section">Три стека стриминга, <strong>один контракт</strong>.</h2>
+      <p class="lead">Direct v3 — основа: подписанная session-cookie, RFC-Range, ABR. HLS-адаптер закрывает iOS-плеер.
+        Upload-конвейер связывает то, что загрузил артист, и то, что слышит слушатель — через transcode-worker в
+        Opus/AAC/FLAC варианты.</p>
+      <div class="diagram" data-expandable>
+        <pre class="mermaid">flowchart LR
+  subgraph direct["Прямое воспроизведение · Range + ABR"]
+    direction LR
+    d1["Плеер<br/>в браузере"]:::user --> d2["Гейтвей<br/>проверяет CSRF и сессию"]:::gw
+    d2 --> d3["direct-stream-service<br/>создаёт сессию"]:::svc
+    d3 --> d4["Подписанная cookie<br/>+ ссылка на аудио"]:::out
+    d4 --> d5["Браузер запрашивает<br/>фрагменты (Range)"]:::user
+    d5 --> d6[("MinIO · аудио")]:::data
+  end
+
+  subgraph hls["HLS · iOS"]
+    direction LR
+    h1["iOS-плеер<br/>HLS"]:::user --> h2["ebap-hls-adapter<br/>выдаёт плейлист"]:::svc
+    h2 --> h3["ebap-hls-packager-worker<br/>режет на сегменты"]:::worker
+    h3 --> h4[("MinIO · HLS-сегменты")]:::data
+  end
+
+  subgraph upload["Загрузка трека артистом"]
+    direction LR
+    u1["Артист загружает<br/>файл"]:::user --> u2["upload-service<br/>+ MFA step-up"]:::svc
+    u2 --> u3[("MinIO · оригинал")]:::data
+    u2 --> u4[("Postgres · status=pending")]:::data
+    u4 --> u5["transcode-worker<br/>AAC · Opus · FLAC"]:::worker
+    u5 --> u6[("quality_variants<br/>в Postgres")]:::data
+  end
+
+  classDef user fill:#fff,color:#000,stroke:#fff,stroke-width:2px;
+  classDef gw fill:#1f1f1f,color:#fff,stroke:#fff,stroke-width:1.6px;
+  classDef svc fill:#0a0a0a,color:#fff,stroke:#aaa,stroke-width:1.2px;
+  classDef worker fill:#0a0a0a,color:#ddd,stroke:#666,stroke-dasharray:4 3;
+  classDef data fill:#000,color:#fff,stroke:#fff,stroke-width:2px;
+  classDef out fill:#fff,color:#000,stroke:#fff;
+  linkStyle default stroke:#bbb,stroke-width:1.3px;</pre>
+      </div>
+      <div class="stages">
+        <div class="stage">
+          <span class="step">01 · загрузка</span>
+          <h4>Артист загружает трек</h4>
+          <p>Через MFA-подтверждение и подписанный POST в <code>upload-service</code>; оригинал и обложка попадают в
+            MinIO.</p>
+        </div>
+        <div class="stage">
+          <span class="step">02 · обогащение</span>
+          <h4>Метаданные и фичи</h4>
+          <p><code>metadata-parser</code> читает ID3, <code>audio-features-worker</code> считает эмбеддинги в pgvector.
+          </p>
+        </div>
+        <div class="stage">
+          <span class="step">03 · перекодирование</span>
+          <h4>Несколько качеств</h4>
+          <p><code>transcode-worker</code> делает AAC 128/256/320 + Opus + FLAC и сохраняет в
+            <code>quality_variants</code>.
+          </p>
+        </div>
+        <div class="stage">
+          <span class="step">04 · сессия</span>
+          <h4>Подписанная сессия</h4>
+          <p>Клиент запрашивает <code>/api/stream/v3/session</code>, получает HttpOnly-cookie и непрозрачный URL.</p>
+        </div>
+        <div class="stage">
+          <span class="step">05 · воспроизведение</span>
+          <h4>Range и адаптив</h4>
+          <p>Браузер тянет фрагменты по Range; клиент сам выбирает качество по реальной скорости интернета.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 09. REALTIME ============ -->
+    <section class="slide" id="s-realtime" data-slide>
+      <span class="slide-num">09 / 16</span>
+      <p class="h-eyebrow">Реалтайм · Party + Device Sync</p>
+      <h2 class="h-section">Слушать <strong>вместе</strong> — и переключаться <strong>между устройствами</strong>.</h2>
+      <p class="lead">Party Sync делит очередь, паузы и положение по группе через WebSocket-gateway и NATS JetStream.
+        Device Sync делает плеер похожим на Spotify Connect: backend владеет активным выходом и отбирает звук у
+        предыдущего устройства командой <code>revoke_audio</code>.</p>
+      <div class="diagram" data-expandable>
+        <pre class="mermaid">flowchart LR
+  subgraph party["Совместное прослушивание (Party)"]
+    direction LR
+    host["Хост<br/>(управляет очередью)"]:::user --> ps["party-state-service<br/>хранит сессию"]:::svc
+    guest["Гости"]:::user --> ps
+    ps --> pdata[("Redis · состояние<br/>NATS · события")]:::data
+    pdata -. синхронные обновления .-> host
+    pdata -. синхронные обновления .-> guest
+  end
+
+  subgraph dev["Переключение устройств (Device Sync)"]
+    direction LR
+    active["Активное устройство<br/>(играет звук)"]:::user --> ds["device-sync-service<br/>сервер-владелец"]:::svc
+    passive["Остальные устройства<br/>(в режиме ожидания)"]:::user --> ds
+    ds --> ddata[("Redis · кто активен")]:::data
+    ds -. передать управление .-> active
+    ds -. отозвать звук .-> passive
+  end
+
+  classDef user fill:#fff,color:#000,stroke:#fff,stroke-width:2px;
+  classDef svc fill:#0a0a0a,color:#fff,stroke:#aaa,stroke-width:1.2px;
+  classDef data fill:#000,color:#fff,stroke:#fff,stroke-width:2px;
+  linkStyle default stroke:#bbb,stroke-width:1.3px;</pre>
+      </div>
+      <div class="split">
+        <div class="panel">
+          <h3>Party Mode гарантии</h3>
+          <ul class="panel-list">
+            <li><strong>Стабильный queueId</strong> — удаление по идентификатору, а не по индексу.</li>
+            <li><strong>NACK обработка</strong> — backend reply <code>{ok:false, code}</code> доходит до UI как ошибка.
+            </li>
+            <li><strong>NATS JetStream</strong> — durable subscriptions, fanout по <code>shard_count</code>.</li>
+            <li><strong>Redis DB2</strong> — Lua-скрипты для атомарного <code>add_to_queue</code> / <code>remove</code>.
+            </li>
+            <li><strong>WS auth</strong> — short-lived <code>PARTY_V2_WS_TOKEN</code> с привязкой к пользователю.</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>Device Sync гарантии</h3>
+          <ul class="panel-list">
+            <li><strong>Server-authoritative ownership</strong> — <code>activeRevision</code> монотонно растёт.</li>
+            <li><strong>revoke_audio</strong> — server-only command, гасит выход у пассивных без локального override.
+            </li>
+            <li><strong>transfer · resume</strong> — новый активный получает <code>nowPlaying</code> и стартует output.
+            </li>
+            <li><strong>Stale-revision защита</strong> — UI игнорирует устаревшие события.</li>
+            <li><strong>Suspend output</strong> — клиент останавливает sink, но не публикует pause наружу.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 10. SECURITY & TRUST ============ -->
+    <section class="slide" id="s-security" data-slide>
+      <span class="slide-num">10 / 16</span>
+      <p class="h-eyebrow">Безопасность и доверие</p>
+      <h2 class="h-section">Безопасность — это <strong>фича продукта</strong>, не аддон.</h2>
+      <p class="lead">Каждая граница доверия задокументирована и проверяется тестами: edge → gateway → внутренний
+        service mesh → data plane. Артистский кабинет полностью изолирован от слушательской платформы — отдельный домен,
+        cookie namespace, gateway-конфиг и MFA-политика.</p>
+      <div class="split">
+        <div class="panel">
+          <h3>Edge boundary</h3>
+          <ul class="panel-list">
+            <li><strong>TLS 1.2+ Let's Encrypt</strong> · auto-renew + reload без даунтайма.</li>
+            <li><strong>HSTS preload</strong> · 1 год · includeSubDomains.</li>
+            <li><strong>CSP</strong> · strict default-src · отдельные политики для earflow / auth / artists / strmhaha.
+            </li>
+            <li><strong>CORS allowlist</strong> · никаких <code>*</code> · per-domain origin.</li>
+            <li><strong>Rate / body limits</strong> · stream/cover/upload/auth zones.</li>
+            <li><strong>Admin endpoints</strong> · только 127.0.0.1 на портах 8085 / 8443.</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>Gateway boundary</h3>
+          <ul class="panel-list">
+            <li><strong>HttpOnly cookies</strong> · <code>mp_sid</code>/<code>mp_csrf</code> на listener;
+              <code>mp_sid_artists</code>/<code>mp_csrf_artists</code> на artist.
+            </li>
+            <li><strong>CSRF на unsafe методах</strong> · HMAC <code>sid.nonce</code> с JWT_SECRET.</li>
+            <li><strong>require_user / route policy</strong> · декларативно в YAML, не в коде.</li>
+            <li><strong>Service tokens</strong> · короткоживущие JWT для service-to-service.</li>
+            <li><strong>Identity header sanitation</strong> · spoofed <code>X-User-*</code> ломаются на входе, ставятся
+              middleware.</li>
+            <li><strong>Fail-closed</strong> · ошибка авторизации = 401, никогда не 200.</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>Auth & MFA</h3>
+          <ul class="panel-list">
+            <li><strong>PBKDF2-SHA512</strong> · 600k итераций · auth-service + security-service.</li>
+            <li><strong>MFA TOTP + recovery codes</strong> · обязательный для артистов.</li>
+            <li><strong>Step-up</strong> · подтверждение для опасных операций (трек upload, password change, telegram
+              unlink).</li>
+            <li><strong>Session resilience</strong> · backend возвращает <code>recoverable</code> +
+              <code>reauthRequired</code>; UI держит DEGRADED state, не дропает юзера.
+            </li>
+            <li><strong>Refresh rotation</strong> · /api/auth/refresh с binding на UA/IP hash.</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>Data & supply chain</h3>
+          <ul class="panel-list">
+            <li><strong>Postgres</strong> · только internal Docker network, без публичных портов.</li>
+            <li><strong>Redis-auth</strong> · отдельный инстанс, <code>noeviction</code>, без auto-deletion sessions при
+              rotateStatusInvalid.</li>
+            <li><strong>MinIO</strong> · localhost-only консоль, anonymous=none на audio/EBAP buckets.</li>
+            <li><strong>Pinned images</strong> · MinIO/Postgres/Redis/Meili/NATS закреплены SHA-релизами.</li>
+            <li><strong>Secrets</strong> · только <code>.env</code> + secret manager, не в git.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 11. INTELLIGENCE ============ -->
+    <section class="slide" id="s-intelligence" data-slide>
+      <span class="slide-num">11 / 16</span>
+      <p class="h-eyebrow">Рекомендации</p>
+      <h2 class="h-section">Лента, которая <strong>учится за один skip</strong>.</h2>
+      <p class="lead">Engine v2 в <code>recommendations-service</code> сочетает три источника (exact / near /
+        discovery), online-intent learning через <code>reco-feedback-worker</code> и pgvector-эмбеддинги от
+        <code>audio-features-worker</code>. Каждое действие пользователя приземляется в Redis Streams и в течение секунд
+        меняет ленту.
+      </p>
+      <div class="diagram" data-expandable>
+        <pre class="mermaid">flowchart LR
+  user["Слушатель"]:::user -- лайк / скип / прослушивание --> reco["recommendations-service<br/>движок v2"]:::svc
+  reco --> mix["Смешивание<br/>знакомое 0.55 · похожее 0.25 · открытия 0.20"]:::svc
+  mix --> rank["ranking-service<br/>финальная сортировка"]:::svc
+  rank --> feed["Персональная лента"]:::out
+  feed --> user
+
+  reco --> intent[("Redis · намерение сессии<br/>позитив + негатив")]:::data
+  reco --> worker["reco-feedback-worker<br/>учится на каждом действии"]:::worker
+  worker --> pg[("Postgres + pgvector<br/>профили и эмбеддинги")]:::data
+  features["audio-features-worker<br/>считает фичи треков"]:::worker --> pg
+  offline["reco-offline-worker<br/>ночной пересчёт"]:::worker --> pg
+
+  classDef user fill:#fff,color:#000,stroke:#fff,stroke-width:2px;
+  classDef svc fill:#0a0a0a,color:#fff,stroke:#aaa,stroke-width:1.2px;
+  classDef worker fill:#0a0a0a,color:#ddd,stroke:#666,stroke-dasharray:4 3;
+  classDef data fill:#000,color:#fff,stroke:#fff,stroke-width:2px;
+  classDef out fill:#fff,color:#000,stroke:#fff;
+  linkStyle default stroke:#bbb,stroke-width:1.3px;</pre>
+      </div>
+      <div class="kpi-grid">
+        <div class="kpi"><span class="num"><em>0.55</em></span><span class="lbl">знакомое</span></div>
+        <div class="kpi"><span class="num"><em>0.25</em></span><span class="lbl">похожее</span></div>
+        <div class="kpi"><span class="num"><em>0.20</em></span><span class="lbl">открытия</span></div>
+        <div class="kpi"><span class="num"><em>≥0.65</em></span><span class="lbl">порог «прослушал»</span></div>
+        <div class="kpi"><span class="num"><em>~1с</em></span><span class="lbl">скип → пересчёт ленты</span></div>
+        <div class="kpi"><span class="num"><em>5</em></span><span class="lbl">типов сигналов</span></div>
+      </div>
+    </section>
+
+    <!-- ============ 12. DATA PLANE ============ -->
+    <section class="slide" id="s-data" data-slide>
+      <span class="slide-num">12 / 16</span>
+      <p class="h-eyebrow">Слой данных</p>
+      <h2 class="h-section">Шесть <strong>состояний</strong>, каждое — со своей ролью.</h2>
+      <p class="lead">Все stateful-сервисы — внутри Docker network, без публичных портов. Postgres — единый источник
+        истины, Redis main и Redis auth разнесены, MinIO раздаёт media в нескольких бакетах с разными политиками
+        доступа, Meilisearch держит поисковый индекс, NATS JetStream возит realtime-события.</p>
+      <div class="inv-grid">
+        <div class="inv">
+          <div class="inv-head">
+            <h3>PostgreSQL 15 + pgvector</h3><span class="badge">Primary</span>
+          </div>
+          <ul>
+            <li><span class="name">users · sessions metadata</span><span class="rt">SQL</span></li>
+            <li><span class="name">songs · transcode_status · quality_variants JSONB</span><span class="rt">SQL</span>
+            </li>
+            <li><span class="name">artists · albums · public_id</span><span class="rt">SQL</span></li>
+            <li><span class="name">playlists · playlist_tracks · queue</span><span class="rt">SQL</span></li>
+            <li><span class="name">user_models · embeddings</span><span class="rt">vector</span></li>
+            <li><span class="name">recommendations schema · subscriptions · mood</span><span class="rt">SQL</span></li>
+          </ul>
+        </div>
+        <div class="inv">
+          <div class="inv-head">
+            <h3>Redis main 7.4</h3><span class="badge">Cache + RT</span>
+          </div>
+          <ul>
+            <li><span class="name">DB0 · cache · response_cache</span><span class="rt">cache</span></li>
+            <li><span class="name">DB0 · rate-limit · session intent · feedback streams</span><span
+                class="rt">stream</span></li>
+            <li><span class="name">DB2 · party state · invites · queues</span><span class="rt">party</span></li>
+            <li><span class="name">DB3 · device sync · active device · revoke</span><span class="rt">device</span></li>
+            <li><span class="name">allkeys-lru · 256 MB</span><span class="rt">policy</span></li>
+          </ul>
+        </div>
+        <div class="inv">
+          <div class="inv-head">
+            <h3>Redis auth 7.4</h3><span class="badge">Sessions</span>
+          </div>
+          <ul>
+            <li><span class="name">mp:sess:&lt;sid&gt; · listener sessions</span><span class="rt">session</span></li>
+            <li><span class="name">artist sessions · csrf nonces</span><span class="rt">session</span></li>
+            <li><span class="name">step-up · password attempts · profile cache</span><span class="rt">security</span>
+            </li>
+            <li><span class="name">noeviction · 512 MB</span><span class="rt">policy</span></li>
+          </ul>
+        </div>
+        <div class="inv">
+          <div class="inv-head">
+            <h3>MinIO buckets</h3><span class="badge">Object</span>
+          </div>
+          <ul>
+            <li><span class="name">music-audio · originals + variants</span><span class="rt">private</span></li>
+            <li><span class="name">music-covers · публичные обложки</span><span class="rt">public-r</span></li>
+            <li><span class="name">ebap-cache · encoded chunks</span><span class="rt">private</span></li>
+            <li><span class="name">ebap-hls · HLS playlists + segments</span><span class="rt">private</span></li>
+            <li><span class="name">single-node + scanner=slowest</span><span class="rt">policy</span></li>
+          </ul>
+        </div>
+        <div class="inv">
+          <div class="inv-head">
+            <h3>Meilisearch 1.7</h3><span class="badge">Search</span>
+          </div>
+          <ul>
+            <li><span class="name">songs index · artist index · album index</span><span class="rt">index</span></li>
+            <li><span class="name">live indexer · backfill on start</span><span class="rt">sync</span></li>
+            <li><span class="name">master-key auth · no analytics</span><span class="rt">security</span></li>
+          </ul>
+        </div>
+        <div class="inv">
+          <div class="inv-head">
+            <h3>NATS JetStream 2.10</h3><span class="badge">Realtime</span>
+          </div>
+          <ul>
+            <li><span class="name">party events · durable consumers</span><span class="rt">stream</span></li>
+            <li><span class="name">shard fanout · 64 partitions default</span><span class="rt">scale</span></li>
+            <li><span class="name">monitoring on :8222</span><span class="rt">ops</span></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 13. DEPLOYMENT & SCALE ============ -->
+    <section class="slide" id="s-deploy" data-slide>
+      <span class="slide-num">13 / 16</span>
+      <p class="h-eyebrow">Развёртывание и масштаб</p>
+      <h2 class="h-section">Production — это <strong>один docker compose up</strong>.</h2>
+      <p class="lead">Платформа разворачивается одним <code>docker-compose.yml</code>: pinned образы, healthchecks,
+        security hardening (read-only fs, no-new-privileges, resource limits), масштабируемый api-gateway за Nginx,
+        Let's Encrypt с авто-перезагрузкой и tools-профиль для тестов и миграций.</p>
+      <div class="split">
+        <div class="panel">
+          <h3>Compose topology</h3>
+          <ul class="panel-list">
+            <li><strong>nginx</strong> · <code>music-nginx-lb:hardened</code> · 80/443 публично, 8085/8443 на 127.0.0.1.
+            </li>
+            <li><strong>api-gateway</strong> · replicas <code>2</code> по умолчанию (<code>API_GATEWAY_REPLICAS</code>),
+              0.5 cpu / 512 MB на инстанс.</li>
+            <li><strong>artist-api-gateway</strong> · отдельный контейнер с <code>gateway.artist.yaml</code>.</li>
+            <li><strong>frontend / artist-frontend</strong> · production-сборки, read-only rootfs + tmpfs.</li>
+            <li><strong>certbot + cert-reloader</strong> · ACME-renew + inotify SIGHUP, без даунтайма.</li>
+            <li><strong>tools profile</strong> · pgadmin, integration-tests, upload-service-tests,
+              reco-feedback-loadgen.</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>Resilience controls</h3>
+          <ul class="panel-list">
+            <li><strong>healthcheck</strong> на каждом сервисе · 30s/5s/3 retries.</li>
+            <li><strong>graceful shutdown</strong> · SIGTERM в Go-сервисах + draining inflight requests.</li>
+            <li><strong>resource limits</strong> · cpu/memory limits + reservations.</li>
+            <li><strong>read-only fs + tmpfs</strong> · большинство Bun/Go контейнеров.</li>
+            <li><strong>backups</strong> · scripts/backup-postgres.sh, backup-minio.sh, ./backups/.</li>
+            <li><strong>monitoring overlay</strong> · отдельный <code>docker-compose.monitoring.yml</code>.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="kpi-grid">
+        <div class="kpi"><span class="num"><em>30</em>+</span><span class="lbl">контейнеров в проде</span></div>
+        <div class="kpi"><span class="num"><em>2</em></span><span class="lbl">реплики главного гейтвея</span></div>
+        <div class="kpi"><span class="num"><em>4</em></span><span class="lbl">бакета MinIO</span></div>
+        <div class="kpi"><span class="num"><em>4</em></span><span class="lbl">логических баз Redis</span></div>
+        <div class="kpi"><span class="num"><em>0</em></span><span class="lbl">публичных портов БД</span></div>
+        <div class="kpi"><span class="num"><em>365д</em></span><span class="lbl">окно refresh JWT</span></div>
+      </div>
+    </section>
+
+    <!-- ============ 14. OBSERVABILITY ============ -->
+    <section class="slide" id="s-observability" data-slide>
+      <span class="slide-num">14 / 16</span>
+      <p class="h-eyebrow">Наблюдаемость</p>
+      <h2 class="h-section">Видно <strong>каждый запрос</strong>, слышно каждую ошибку.</h2>
+      <p class="lead">Метрики, логи и traces сходятся в монобэкенд из Grafana-stack: Prometheus + Loki + Tempo +
+        Alertmanager. Каждый сервис экспонирует <code>/metrics</code>, gateway шлёт OTLP traces
+        (<code>parentbased_traceidratio</code>), Telegram-канал получает алерты.</p>
+      <div class="cap-grid">
+        <article class="cap">
+          <span class="glyph">M</span>
+          <h3>Prometheus</h3>
+          <p>Скрейп метрик с gateway, сервисов, blackbox-экспортера; Alloy-агент пушит OTLP.</p>
+          <div class="cap-tags"><span class="tag">/metrics</span><span class="tag">recording rules</span></div>
+        </article>
+        <article class="cap">
+          <span class="glyph">L</span>
+          <h3>Loki + Alloy</h3>
+          <p>Структурные JSON-логи без секретов, запросы по trace_id и user_id_hash.</p>
+          <div class="cap-tags"><span class="tag">JSON logs</span><span class="tag">retention</span></div>
+        </article>
+        <article class="cap">
+          <span class="glyph">T</span>
+          <h3>Tempo + OTLP</h3>
+          <p>Распределённые трейсы между gateway, сервисами, БД; sampling 0.2 по умолчанию.</p>
+          <div class="cap-tags"><span class="tag">OTEL</span><span class="tag">tail sampling</span></div>
+        </article>
+        <article class="cap">
+          <span class="glyph">G</span>
+          <h3>Grafana</h3>
+          <p>Дашборды по доменам: streaming, recommendations, party, device-sync, gateway, edge.</p>
+          <div class="cap-tags"><span class="tag">provisioning</span><span class="tag">SLO</span></div>
+        </article>
+        <article class="cap">
+          <span class="glyph">!</span>
+          <h3>Alertmanager → Telegram</h3>
+          <p>Routing по severity, on-call канал, runbook-ссылки в каждом алерте.</p>
+          <div class="cap-tags"><span class="tag">runbook</span><span class="tag">on-call</span></div>
+        </article>
+        <article class="cap">
+          <span class="glyph">B</span>
+          <h3>Blackbox + uptime</h3>
+          <p>Внешний пинг earflow.ru / api.earflow.ru / artists.earflow.ru / strmhaha с гранулярной диагностикой.</p>
+          <div class="cap-tags"><span class="tag">SLI</span><span class="tag">probes</span></div>
+        </article>
+      </div>
+    </section>
+
+    <!-- ============ 15. SERVICE INVENTORY ============ -->
+    <section class="slide" id="s-services" data-slide>
+      <span class="slide-num">15 / 16</span>
+      <p class="h-eyebrow">Реестр сервисов · из docker-compose.yml</p>
+      <h2 class="h-section">Тридцать сервисов, <strong>каждый по делу</strong>.</h2>
+      <p class="lead">Полный реестр запускаемых контейнеров с портами и назначением. Группировка по доменам
+        ответственности; внутренние сервисы не имеют публичных портов и доступны только через gateway.</p>
+      <div class="inv-grid">
+        <div class="inv">
+          <div class="inv-head">
+            <h3>Edge & Frontends</h3><span class="badge">Public</span>
+          </div>
+          <ul>
+            <li><span class="name">nginx</span><span class="port">:80 :443</span><span class="rt">edge</span></li>
+            <li><span class="name">certbot</span><span class="port">—</span><span class="rt">acme</span></li>
+            <li><span class="name">nginx-cert-reloader</span><span class="port">—</span><span class="rt">ops</span></li>
+            <li><span class="name">frontend</span><span class="port">:3004</span><span class="rt">React</span></li>
+            <li><span class="name">artist-frontend</span><span class="port">:3005</span><span class="rt">React</span>
+            </li>
+          </ul>
+        </div>
+        <div class="inv">
+          <div class="inv-head">
+            <h3>Gateways</h3><span class="badge">Go</span>
+          </div>
+          <ul>
+            <li><span class="name">api-gateway</span><span class="port">:3000 ×N</span><span class="rt">go</span></li>
+            <li><span class="name">artist-api-gateway</span><span class="port">:3000</span><span class="rt">go</span>
+            </li>
+          </ul>
+        </div>
+        <div class="inv">
+          <div class="inv-head">
+            <h3>Identity</h3><span class="badge">Internal</span>
+          </div>
+          <ul>
+            <li><span class="name">auth-service</span><span class="port">:3001</span><span class="rt">node</span></li>
+            <li><span class="name">security-service</span><span class="port">:3074</span><span class="rt">go</span></li>
+          </ul>
+        </div>
+        <div class="inv">
+          <div class="inv-head">
+            <h3>Catalog</h3><span class="badge">Internal</span>
+          </div>
+          <ul>
+            <li><span class="name">database-service</span><span class="port">:3003</span><span class="rt">node</span>
+            </li>
+            <li><span class="name">artist-service</span><span class="port">:3040</span><span class="rt">node</span></li>
+            <li><span class="name">playlist-service</span><span class="port">:3020</span><span class="rt">node</span>
+            </li>
+            <li><span class="name">subscription-service</span><span class="port">:3010</span><span
+                class="rt">node</span></li>
+            <li><span class="name">lyrics-service</span><span class="port">:3010</span><span class="rt">node</span></li>
+            <li><span class="name">search-service</span><span class="port">:3062</span><span class="rt">node</span></li>
+            <li><span class="name">artist-portal-service</span><span class="port">:3085</span><span
+                class="rt">node</span></li>
+          </ul>
+        </div>
+        <div class="inv">
+          <div class="inv-head">
+            <h3>Media</h3><span class="badge">Internal</span>
+          </div>
+          <ul>
+            <li><span class="name">upload-service</span><span class="port">:3002</span><span class="rt">node</span></li>
+            <li><span class="name">direct-stream-service</span><span class="port">:3096</span><span
+                class="rt">bun</span></li>
+            <li><span class="name">ebap-hls-adapter</span><span class="port">:3095</span><span class="rt">bun</span>
+            </li>
+            <li><span class="name">metadata-parser-service</span><span class="port">:3072</span><span
+                class="rt">node</span></li>
+            <li><span class="name">import-service</span><span class="port">:3073</span><span class="rt">node</span></li>
+          </ul>
+        </div>
+        <div class="inv">
+          <div class="inv-head">
+            <h3>Workers</h3><span class="badge">Background</span>
+          </div>
+          <ul>
+            <li><span class="name">transcode-worker</span><span class="port">:3098</span><span class="rt">node</span>
+            </li>
+            <li><span class="name">ebap-encoder-worker</span><span class="port">:3091</span><span class="rt">bun</span>
+            </li>
+            <li><span class="name">ebap-hls-packager-worker</span><span class="port">:3092</span><span
+                class="rt">bun</span></li>
+            <li><span class="name">audio-features-worker</span><span class="port">:3051</span><span
+                class="rt">python</span></li>
+            <li><span class="name">track-processor</span><span class="port">—</span><span class="rt">node</span></li>
+            <li><span class="name">reco-feedback-worker-go</span><span class="port">—</span><span class="rt">go</span>
+            </li>
+            <li><span class="name">reco-offline-worker</span><span class="port">—</span><span class="rt">node</span>
+            </li>
+          </ul>
+        </div>
+        <div class="inv">
+          <div class="inv-head">
+            <h3>Realtime</h3><span class="badge">Internal</span>
+          </div>
+          <ul>
+            <li><span class="name">party-state-service</span><span class="port">:3130</span><span class="rt">go</span>
+            </li>
+            <li><span class="name">party-gateway-service</span><span class="port">:3131</span><span class="rt">go
+                ws</span></li>
+            <li><span class="name">device-sync-service</span><span class="port">:3050</span><span class="rt">go</span>
+            </li>
+          </ul>
+        </div>
+        <div class="inv">
+          <div class="inv-head">
+            <h3>Intelligence</h3><span class="badge">Internal</span>
+          </div>
+          <ul>
+            <li><span class="name">recommendations-service</span><span class="port">:3006</span><span
+                class="rt">node</span></li>
+            <li><span class="name">ranking-service</span><span class="port">:8080</span><span class="rt">go</span></li>
+          </ul>
+        </div>
+        <div class="inv">
+          <div class="inv-head">
+            <h3>Data plane</h3><span class="badge">Stateful</span>
+          </div>
+          <ul>
+            <li><span class="name">postgres (pgvector pg15)</span><span class="port">:5432</span><span
+                class="rt">internal</span></li>
+            <li><span class="name">redis (main)</span><span class="port">:6379</span><span class="rt">internal</span>
+            </li>
+            <li><span class="name">redis-auth</span><span class="port">:6379</span><span class="rt">internal</span></li>
+            <li><span class="name">minio</span><span class="port">:9000 :9001</span><span class="rt">127.0.0.1</span>
+            </li>
+            <li><span class="name">meilisearch</span><span class="port">:7700</span><span class="rt">internal</span>
+            </li>
+            <li><span class="name">nats (JetStream)</span><span class="port">:4222 :8222</span><span
+                class="rt">internal</span></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 16. TECH STACK & ROADMAP ============ -->
+    <section class="slide" id="s-stack" data-slide>
+      <span class="slide-num">16 / 16</span>
+      <p class="h-eyebrow">Стек · версии · планы</p>
+      <h2 class="h-section">На чём <strong>стоит</strong> и куда <strong>идёт</strong>.</h2>
+      <p class="lead">Стек подобран по принципу: каждый язык — на своей задаче. Go держит сетевые границы и hot-path,
+        Bun — низкоуровневую работу с медиа, Node — бизнес-логику и интеграции, React — UI. Версии прибиты, обновления
+        выкатываются в monitoring overlay.</p>
+      <div class="split">
+        <div class="panel">
+          <h3>Стек платформы</h3>
+          <ul class="panel-list">
+            <li><strong>Go 1.22+</strong> · gateway · party · device-sync · security · ranking · reco-feedback</li>
+            <li><strong>Node.js 22+</strong> · auth · database · artist · playlist · upload · subscription · search ·
+              lyrics · recommendations · transcode · metadata · import</li>
+            <li><strong>Bun</strong> · direct-stream · ebap-hls-adapter · ebap-encoder · ebap-hls-packager</li>
+            <li><strong>Python 3</strong> · audio-features-worker (librosa-style features)</li>
+            <li><strong>React 18</strong> · frontend (CRACO + splitChunks) · artist-frontend</li>
+            <li><strong>Nginx</strong> · TLS, cache, маршрутизация, security headers</li>
+            <li><strong>Docker Compose</strong> · единый production runtime</li>
+            <li><strong>Telegram Auth</strong> · только как identity для входа, без UI-зависимостей</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>Что мы доделали и что дальше</h3>
+          <ul class="panel-list">
+            <li><strong>Direct v3 protected playback</strong> · подписанный session-cookie + URL-token. <span
+                class="tag live">Done</span></li>
+            <li><strong>Recommendations engine v2</strong> · session intent + adaptive taste mix + skip-aware feedback.
+              <span class="tag live">Done</span>
+            </li>
+            <li><strong>Device Sync</strong> · server-authoritative ownership с <code>revoke_audio</code>. <span
+                class="tag live">Done</span></li>
+            <li><strong>Party v2</strong> · NATS JetStream + queueId + nack to UI. <span class="tag live">Done</span>
+            </li>
+            <li><strong>iOS HLS path</strong> · ebap-hls-adapter + lyrics.bin + background buffer. <span
+                class="tag live">Done</span></li>
+            <li><strong>Artist Portal hardening</strong> · MFA step-up + isolated cookie namespace. <span
+                class="tag live">Done</span></li>
+            <li><strong>iOS native shell</strong> · WKWebView + offline + EQ effects. <span class="tag">Next</span></li>
+            <li><strong>Multi-region MinIO</strong> · готовность к geo-replication. <span class="tag">Next</span></li>
+          </ul>
+        </div>
+      </div>
+      <div class="legend">
+        <span class="legend-item"><span class="kbd">DOC</span> docs/earflow-architecture-map.md</span>
+        <span class="legend-item"><span class="kbd">YAML</span> backend/go-api-gateway/gateway.yaml</span>
+        <span class="legend-item"><span class="kbd">YAML</span> backend/go-api-gateway/gateway.artist.yaml</span>
+        <span class="legend-item"><span class="kbd">CONF</span> nginx/nginx.conf</span>
+        <span class="legend-item"><span class="kbd">COMPOSE</span> docker-compose.yml</span>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <div>
+        <strong style="color:#fff;">Earflow Architecture Deck</strong> · 2026 · monochrome edition
+        <br>Дополняет <code>docs/earflow-architecture-map.md</code>. Точные значения route/method/policy — в
+        <code>gateway.yaml</code> · <code>gateway.artist.yaml</code> · <code>nginx/nginx.conf</code> ·
+        <code>docker-compose.yml</code>.
+      </div>
+      <div class="links">
+        <a class="btn" href="earflow-architecture-map.md">Markdown map</a>
+        <a class="btn" href="../reports/SECURITY.md">Security report</a>
+        <a class="btn" href="../reports/RUNBOOK.md">Runbook</a>
+      </div>
+    </footer>
+
+  </main>
+
+  <div class="hud" id="slideHud" role="status" aria-live="polite">
+    <span class="counter" id="slideCounter">01</span>
+    <span class="sep">/</span>
+    <span id="slideTotal">16</span>
+    <span class="sep">·</span>
+    <span id="slideTitle">Обзор</span>
+  </div>
+
+  <div class="diagram-modal" id="diagramModal" role="dialog" aria-modal="true" aria-labelledby="diagramModalTitle">
+    <div class="diagram-modal__bar">
+      <span class="diagram-modal__title" id="diagramModalTitle">Схема</span>
+      <span class="diagram-modal__hint">колесо — масштаб · перетащить — двигать · Esc — закрыть</span>
+      <button class="btn" type="button" id="diagramZoomOut" title="Уменьшить (−)">−</button>
+      <button class="btn" type="button" id="diagramZoomReset" title="Сбросить (0)">100%</button>
+      <button class="btn" type="button" id="diagramZoomIn" title="Увеличить (+)">+</button>
+      <button class="btn btn-primary" type="button" id="diagramModalClose" title="Закрыть (Esc)">Закрыть</button>
+    </div>
+    <div class="diagram-modal__body" id="diagramModalBody">
+      <div class="diagram-modal__inner" id="diagramModalInner"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    (function () {
+      'use strict';
+
+      function normalizeMermaidSvgs() {
+        document.querySelectorAll('.diagram .mermaid svg').forEach(function (svg) {
+          var vb = svg.getAttribute('viewBox');
+          if (!vb) { return; }
+          var parts = vb.split(/\s+/).map(parseFloat);
+          if (parts.length !== 4 || !isFinite(parts[2]) || !isFinite(parts[3]) || parts[2] <= 0 || parts[3] <= 0) {
+            return;
+          }
+          var natW = Math.ceil(parts[2]);
+          var natH = Math.ceil(parts[3]);
+          svg.setAttribute('width', natW);
+          svg.setAttribute('height', natH);
+          svg.style.maxWidth = 'none';
+          svg.style.width = natW + 'px';
+          svg.style.height = natH + 'px';
+        });
+      }
+
+      if (window.mermaid) {
+        window.mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: 'strict',
+          theme: 'base',
+          flowchart: { useMaxWidth: false, htmlLabels: true, curve: 'basis', nodeSpacing: 50, rankSpacing: 70 },
+          themeVariables: {
+            darkMode: true,
+            background: '#050505',
+            mainBkg: '#0a0a0a',
+            primaryColor: '#0a0a0a',
+            primaryTextColor: '#ffffff',
+            primaryBorderColor: '#ffffff',
+            lineColor: '#ffffff',
+            secondaryColor: '#1a1a1a',
+            tertiaryColor: '#111111',
+            textColor: '#ffffff',
+            fontFamily: 'Unbounded, system-ui, sans-serif',
+            clusterBkg: '#070707',
+            clusterBorder: 'rgba(255,255,255,0.45)',
+            edgeLabelBackground: '#050505'
+          }
+        });
+        if (typeof window.mermaid.run === 'function') {
+          window.mermaid.run({ querySelector: '.mermaid' }).then(normalizeMermaidSvgs).catch(function () { /* mermaid will surface its own error UI */ });
+        } else {
+          window.mermaid.init(undefined, document.querySelectorAll('.mermaid'));
+          setTimeout(normalizeMermaidSvgs, 100);
+        }
+      }
+
+      var body = document.body;
+      var deck = document.getElementById('deck');
+      var slides = Array.prototype.slice.call(document.querySelectorAll('section[data-slide]'));
+      var modeBtn = document.getElementById('modeBtn');
+      var printBtn = document.getElementById('printBtn');
+      var progressBar = document.getElementById('progressBar');
+      var hud = document.getElementById('slideHud');
+      var counterEl = document.getElementById('slideCounter');
+      var totalEl = document.getElementById('slideTotal');
+      var titleEl = document.getElementById('slideTitle');
+      var current = 0;
+
+      if (totalEl) {
+        totalEl.textContent = String(slides.length).padStart(2, '0');
+      }
+
+      function getSectionTitle(section) {
+        var h = section.querySelector('.h-section, .h-display');
+        if (!h) { return ''; }
+        var txt = h.textContent || '';
+        return txt.replace(/\s+/g, ' ').trim().slice(0, 48);
+      }
+
+      function updateHud(index) {
+        if (!slides[index]) { return; }
+        if (counterEl) { counterEl.textContent = String(index + 1).padStart(2, '0'); }
+        if (titleEl) { titleEl.textContent = getSectionTitle(slides[index]) || ''; }
+      }
+
+      function updateProgress() {
+        if (!progressBar) { return; }
+        var pct;
+        if (body.classList.contains('mode-slides')) {
+          pct = slides.length > 1 ? (current / (slides.length - 1)) * 100 : 100;
+        } else {
+          var doc = document.documentElement;
+          var max = (doc.scrollHeight - doc.clientHeight) || 1;
+          pct = (window.scrollY / max) * 100;
+        }
+        progressBar.style.width = Math.max(0, Math.min(100, pct)) + '%';
+      }
+
+      function findCurrentScrollSlide() {
+        var mid = window.innerHeight / 2;
+        var best = 0;
+        var bestDist = Infinity;
+        for (var i = 0; i < slides.length; i++) {
+          var rect = slides[i].getBoundingClientRect();
+          var center = rect.top + rect.height / 2;
+          var d = Math.abs(center - mid);
+          if (d < bestDist) { bestDist = d; best = i; }
+        }
+        return best;
+      }
+
+      function goTo(index, behavior) {
+        if (index < 0) { index = 0; }
+        if (index >= slides.length) { index = slides.length - 1; }
+        current = index;
+        var target = slides[index];
+        if (!target) { return; }
+        if (body.classList.contains('mode-slides')) {
+          deck.scrollTo({ top: target.offsetTop, behavior: behavior || 'smooth' });
+        } else {
+          target.scrollIntoView({ behavior: behavior || 'smooth', block: 'start' });
+        }
+        updateHud(index);
+        updateProgress();
+      }
+
+      function setMode(mode) {
+        if (mode === 'slides') {
+          body.classList.remove('mode-scroll');
+          body.classList.add('mode-slides');
+          if (modeBtn) { modeBtn.textContent = 'Scroll'; modeBtn.title = 'Switch to scroll mode (P)'; }
+          if (hud) { hud.classList.add('show'); }
+          requestAnimationFrame(function () { goTo(current, 'auto'); });
+        } else {
+          body.classList.remove('mode-slides');
+          body.classList.add('mode-scroll');
+          if (modeBtn) { modeBtn.textContent = 'Present'; modeBtn.title = 'Toggle presentation mode (P)'; }
+          if (hud) { hud.classList.remove('show'); }
+          requestAnimationFrame(function () { goTo(current, 'auto'); });
+        }
+        updateProgress();
+      }
+
+      function toggleMode() {
+        if (body.classList.contains('mode-slides')) { setMode('scroll'); } else { setMode('slides'); }
+      }
+
+      if (modeBtn) {
+        modeBtn.addEventListener('click', function () { toggleMode(); });
+      }
+      if (printBtn) {
+        printBtn.addEventListener('click', function () { window.print(); });
+      }
+
+      window.addEventListener('keydown', function (e) {
+        var target = e.target;
+        var tag = target && target.tagName ? target.tagName.toLowerCase() : '';
+        if (tag === 'input' || tag === 'textarea' || (target && target.isContentEditable)) {
+          return;
+        }
+        var inSlides = body.classList.contains('mode-slides');
+        switch (e.key) {
+          case 'ArrowRight':
+          case 'ArrowDown':
+          case 'PageDown':
+            e.preventDefault();
+            goTo(current + 1);
+            break;
+          case 'ArrowLeft':
+          case 'ArrowUp':
+          case 'PageUp':
+            e.preventDefault();
+            goTo(current - 1);
+            break;
+          case ' ':
+            e.preventDefault();
+            goTo(e.shiftKey ? current - 1 : current + 1);
+            break;
+          case 'Home':
+            e.preventDefault();
+            goTo(0);
+            break;
+          case 'End':
+            e.preventDefault();
+            goTo(slides.length - 1);
+            break;
+          case 'Escape':
+            if (inSlides) { e.preventDefault(); setMode('scroll'); }
+            break;
+          case 'p':
+          case 'P':
+            if (!e.ctrlKey && !e.metaKey) { e.preventDefault(); toggleMode(); }
+            break;
+          default:
+            if (/^[0-9]$/.test(e.key)) {
+              var idx = parseInt(e.key, 10) - 1;
+              if (idx >= 0 && idx < slides.length) {
+                e.preventDefault();
+                goTo(idx);
+              }
+            }
+            break;
+        }
+      });
+
+      var scrollHost = deck;
+      function onScroll() {
+        if (body.classList.contains('mode-slides')) {
+          var top = scrollHost.scrollTop;
+          var idx = 0;
+          for (var i = 0; i < slides.length; i++) {
+            if (slides[i].offsetTop - 8 <= top) { idx = i; }
+          }
+          if (idx !== current) { current = idx; updateHud(current); }
+        } else {
+          var idx2 = findCurrentScrollSlide();
+          if (idx2 !== current) { current = idx2; updateHud(current); }
+        }
+        updateProgress();
+      }
+      scrollHost.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', updateProgress);
+
+      // ======= Diagram expand modal =======
+      var diagramModal = document.getElementById('diagramModal');
+      var diagramModalBody = document.getElementById('diagramModalBody');
+      var diagramModalInner = document.getElementById('diagramModalInner');
+      var diagramModalTitle = document.getElementById('diagramModalTitle');
+      var diagramModalClose = document.getElementById('diagramModalClose');
+      var diagramZoomIn = document.getElementById('diagramZoomIn');
+      var diagramZoomOut = document.getElementById('diagramZoomOut');
+      var diagramZoomReset = document.getElementById('diagramZoomReset');
+      var diagramScale = 1;
+      var diagramMinScale = 0.4;
+      var diagramMaxScale = 4;
+
+      function diagramOpen() { return diagramModal && diagramModal.classList.contains('show'); }
+
+      function applyDiagramScale() {
+        if (!diagramModalInner) { return; }
+        diagramModalInner.style.transform = 'scale(' + diagramScale + ')';
+        if (diagramZoomReset) { diagramZoomReset.textContent = Math.round(diagramScale * 100) + '%'; }
+      }
+
+      function setDiagramScale(next) {
+        if (next < diagramMinScale) { next = diagramMinScale; }
+        if (next > diagramMaxScale) { next = diagramMaxScale; }
+        diagramScale = next;
+        applyDiagramScale();
+      }
+
+      function getSlideTitleFor(el) {
+        var section = el.closest ? el.closest('section[data-slide]') : null;
+        if (!section) { return 'Схема'; }
+        return getSectionTitle(section) || 'Схема';
+      }
+
+      function openDiagramModal(sourceDiagram) {
+        if (!diagramModal || !diagramModalInner || !sourceDiagram) { return; }
+        var svg = sourceDiagram.querySelector('svg');
+        if (!svg) { return; }
+        diagramModalInner.innerHTML = '';
+        var clone = svg.cloneNode(true);
+        clone.removeAttribute('style');
+        clone.style.background = 'transparent';
+        diagramModalInner.appendChild(clone);
+        diagramModalTitle.textContent = getSlideTitleFor(sourceDiagram) + ' · схема';
+        diagramScale = 1;
+        applyDiagramScale();
+        diagramModal.classList.add('show');
+        document.body.classList.add('has-diagram-modal');
+        if (diagramModalClose && typeof diagramModalClose.focus === 'function') {
+          diagramModalClose.focus();
+        }
+      }
+
+      function closeDiagramModal() {
+        if (!diagramModal) { return; }
+        diagramModal.classList.remove('show');
+        document.body.classList.remove('has-diagram-modal');
+        if (diagramModalInner) { diagramModalInner.innerHTML = ''; }
+      }
+
+      document.querySelectorAll('.diagram[data-expandable]').forEach(function (d) {
+        d.addEventListener('click', function (ev) {
+          // ignore selecting text
+          if (window.getSelection && String(window.getSelection()).length > 0) { return; }
+          openDiagramModal(d);
+          ev.preventDefault();
+        });
+      });
+
+      if (diagramModalClose) {
+        diagramModalClose.addEventListener('click', closeDiagramModal);
+      }
+      if (diagramZoomIn) {
+        diagramZoomIn.addEventListener('click', function () { setDiagramScale(diagramScale * 1.2); });
+      }
+      if (diagramZoomOut) {
+        diagramZoomOut.addEventListener('click', function () { setDiagramScale(diagramScale / 1.2); });
+      }
+      if (diagramZoomReset) {
+        diagramZoomReset.addEventListener('click', function () { setDiagramScale(1); });
+      }
+      if (diagramModalBody) {
+        diagramModalBody.addEventListener('wheel', function (ev) {
+          if (!diagramOpen()) { return; }
+          if (!ev.ctrlKey && !ev.metaKey && !ev.shiftKey) {
+            // allow free wheel-zoom for diagram modal
+            ev.preventDefault();
+            var delta = ev.deltaY < 0 ? 1.12 : 1 / 1.12;
+            setDiagramScale(diagramScale * delta);
+          }
+        }, { passive: false });
+        diagramModal.addEventListener('click', function (ev) {
+          if (ev.target === diagramModal || ev.target === diagramModalBody) {
+            closeDiagramModal();
+          }
+        });
+      }
+
+      // Patch global Escape to first close the diagram modal, only then exit slide mode.
+      window.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && diagramOpen()) {
+          e.preventDefault();
+          e.stopPropagation();
+          closeDiagramModal();
+        }
+      }, true);
+
+      // Initial state
+      updateHud(0);
+      updateProgress();
+
+      // Expose minimal API for keyboard tests / tooling
+      window.__earflowDeck = {
+        goTo: goTo,
+        toggleMode: toggleMode,
+        slides: slides,
+        openDiagramModal: openDiagramModal,
+        closeDiagramModal: closeDiagramModal
+      };
+    })();
+  </script>
+</body>
+
+</html>

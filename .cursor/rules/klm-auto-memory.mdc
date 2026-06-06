@@ -1,0 +1,63 @@
+---
+description: KLM MCP — project memory + codebase index (auto-linked)
+alwaysApply: true
+---
+
+# KLM Auto Memory
+
+This workspace is linked to **KLM Runtime** via `.klm/project.json`.
+
+Project id: `00000000-0000-4000-8000-000000000105`
+
+## At task start (READ)
+
+1. Call **`klm_project_status`** then **`klm_get_project_memory`**.
+2. Use **invariants** and **decisions** in every plan and code change.
+3. Use **`klm_search_codebase`** before grepping large monorepos.
+
+## Before code changes (IMPACT + PLAN VERIFY)
+
+Before non-trivial code changes (refactor, new feature, multi-file edit):
+
+1. Call **`klm_analyze_impact`** with the task description.
+2. Call **`klm_verify_plan`** with the same task and your implementation plan (steps, files, tests).
+3. Do not write code until verdict is `safe` or `requiredChanges` / `missingTests` are addressed.
+
+Impact and plan verify are read-only (metadata-only). They do not write memory.
+
+## After writing code (CODE VERIFY)
+
+When you have code or architecture text:
+
+- Call **`klm_verify_code`** — this does **not** replace `klm_verify_plan`; it checks written code.
+
+Full flow: **impact → verify_plan → code → verify_code → memory record**.
+
+## After significant work (WRITE)
+
+- **`klm_analyze_task`**: "Record to project memory: …" (durable decisions only).
+
+### KLM memory — escape hatches & UI prefs (mandatory)
+
+**Read rule file:** `.cursor/rules/earflow-ui-client-prefs.mdc` (must exist; `npm run validate:ai`).
+
+When task touches **any** of: `MobilePlayerBar`, Profile cosmetic settings, `miniBarVariant`, `miniPlayStyle`, `apply*ToDom`, `*-overrides.css`, stacked `!important`, frontend+backend duplicate control, new polling «на всякий случай»:
+
+1. **INV-ARCH-001** — one control path per behavior; no silent second layer.
+2. **INV-FE-006** — client UI prefs: `utils/*` + `useSyncExternalStore` + `dataset`.
+3. **INV-FE-007** — `apply*ToDom` for UI prefs forbidden (removed 2026-06-01).
+4. **INV-FE-008** — same reply to user: norm / tech debt / how to verify prod.
+
+**Before code:** `klm_verify_plan` must flag plans that add React + DOM paint + override CSS for one pref.
+
+**After significant change:** `klm_analyze_task` with durable facts (example):
+
+```text
+Record to project memory: Earflow INV-ARCH-001 — one mechanism per responsibility. INV-FE-006: client UI prefs via utils/* + useSyncExternalStore + conditional React. INV-FE-007: apply*ToDom forbidden. INV-FE-008: disclose norm/debt/verify to user. Rule: .cursor/rules/earflow-ui-client-prefs.mdc
+```
+
+## Re-index after code changes
+
+`pnpm index:codebase -- --root "C:/Users/Heave/Downloads/music-platform"`
+
+Agent mode required. MCP must show **klm-runtime** connected.

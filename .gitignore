@@ -1,0 +1,173 @@
+# ═══════════════════════════════════════════════════════════════
+# MUSIC PLATFORM - GITIGNORE
+# ═══════════════════════════════════════════════════════════════
+
+# ────────────────────────────────────────────────────────────────
+# DEPENDENCIES
+# ────────────────────────────────────────────────────────────────
+node_modules/
+**/node_modules/
+.npm
+.yarn
+
+# ────────────────────────────────────────────────────────────────
+# ENVIRONMENT & SECRETS (КРИТИЧЕСКИ ВАЖНО!)
+*.env
+*.env.*
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!.env.*.example
+!**/.env.example
+!**/.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.csr
+id_rsa*
+id_ed25519*
+*.kubeconfig
+credentials.json
+service-account*.json
+firebase-adminsdk*.json
+
+# ────────────────────────────────────────────────────────────────
+# BUILD OUTPUT
+# ────────────────────────────────────────────────────────────────
+dist/
+build/
+out/
+.next/
+.nuxt/
+
+# ────────────────────────────────────────────────────────────────
+# PLAYWRIGHT E2E ARTIFACTS
+# ────────────────────────────────────────────────────────────────
+frontend/e2e/report/
+frontend/e2e/report-live/
+frontend/e2e/.auth/
+frontend/e2e/.cache/
+frontend/test-results/
+frontend/playwright-report/
+**/playwright/.cache/
+
+# ────────────────────────────────────────────────────────────────
+# LOGS
+# ────────────────────────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Generated compose may contain interpolated environment values.
+docker-compose.scalable.generated.json
+
+# ────────────────────────────────────────────────────────────────
+# OPERATING SYSTEM
+# ────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+
+# ────────────────────────────────────────────────────────────────
+# IDE / EDITORS
+# ────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+*.code-workspace
+
+# ────────────────────────────────────────────────────────────────
+# DOCKER
+# ────────────────────────────────────────────────────────────────
+# Ignore local docker volumes (but not configs)
+docker-data/
+postgres-data/
+redis-data/
+minio-data/
+
+# ────────────────────────────────────────────────────────────────
+# UPLOADS & MEDIA
+# ────────────────────────────────────────────────────────────────
+uploads/
+**/uploads/
+!**/uploads/.gitkeep
+covers/
+**/covers/
+!**/covers/.gitkeep
+
+# ────────────────────────────────────────────────────────────────
+# TEMPORARY FILES
+# ────────────────────────────────────────────────────────────────
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+*.orig
+.cache/
+.temp/
+tmp/
+temp/
+
+# ────────────────────────────────────────────────────────────────
+# TESTING
+# ────────────────────────────────────────────────────────────────
+coverage/
+.nyc_output/
+*.lcov
+
+# ────────────────────────────────────────────────────────────────
+# MISC
+# ────────────────────────────────────────────────────────────────
+.eslintcache
+.stylelintcache
+*.tsbuildinfo
+
+# ────────────────────────────────────────────────────────────────
+# KUBERNETES SECRETS (КРИТИЧЕСКИ ВАЖНО!)
+# ────────────────────────────────────────────────────────────────
+k8s/secrets.local.yaml
+k8s/*-secrets.yaml
+!k8s/secrets.yaml
+# secrets.yaml - это ШАБЛОН без реальных значений
+
+# ────────────────────────────────────────────────────────────────
+# PROJECT SPECIFIC
+# ────────────────────────────────────────────────────────────────
+# Nginx logs and SSL certs
+nginx/logs/*.log
+nginx/ssl/*.pem
+nginx/ssl/*.key
+nginx/ssl/*.crt
+
+# Backups directory contents (keep .gitkeep)
+backups/*
+!backups/.gitkeep
+
+# Source music files (large)
+Мне нравится/
+
+# HAR / debug dumps (may contain tokens/cookies)
+*.har
+Explore-logs-*.json
+
+# Certbot account keys and archived material (must not be in repo)
+certbot/conf/accounts/**/private_key.json
+certbot/conf/accounts/**/regr.json
+certbot/conf/accounts/**/meta.json
+certbot/conf/archive/**
+certbot/conf/live/**
+
+# KLM local project identity (dev)
+.klm/

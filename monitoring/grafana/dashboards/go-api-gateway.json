@@ -1,0 +1,190 @@
+{
+  "uid": "go-api-gateway",
+  "title": "Go API Gateway",
+  "tags": [
+    "music-platform",
+    "gateway",
+    "prometheus"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "route",
+        "type": "query",
+        "label": "Route",
+        "hide": 0,
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "refresh": 2,
+        "query": { "query": "label_values(gateway_http_requests_total, route)", "refId": "route" },
+        "sort": 1,
+        "current": { "text": "All", "value": ".+" },
+        "includeAll": true,
+        "allValue": ".+",
+        "multi": true
+      },
+      {
+        "name": "upstream",
+        "type": "query",
+        "label": "Upstream",
+        "hide": 0,
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "refresh": 2,
+        "query": { "query": "label_values(gateway_http_requests_total{route=~\"${route:regex}\"}, upstream)", "refId": "upstream" },
+        "sort": 1,
+        "current": { "text": "All", "value": ".+" },
+        "includeAll": true,
+        "allValue": ".+",
+        "multi": true
+      },
+      {
+        "name": "method",
+        "type": "query",
+        "label": "Method",
+        "hide": 0,
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "refresh": 2,
+        "query": { "query": "label_values(gateway_http_requests_total{route=~\"${route:regex}\", upstream=~\"${upstream:regex}\"}, method)", "refId": "method" },
+        "sort": 1,
+        "current": { "text": "All", "value": ".+" },
+        "includeAll": true,
+        "allValue": ".+",
+        "multi": true
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "RPS (total)",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(gateway_http_requests_total{route=~\"${route:regex}\", upstream=~\"${upstream:regex}\", method=~\"${method:regex}\"}[5m]))",
+          "instant": true
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops", "min": 0 }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "orientation": "horizontal" }
+    },
+    {
+      "type": "stat",
+      "title": "5xx RPS",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(gateway_http_requests_total{status_class=\"5xx\", route=~\"${route:regex}\", upstream=~\"${upstream:regex}\", method=~\"${method:regex}\"}[5m]))",
+          "instant": true
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops", "min": 0 }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "orientation": "horizontal" }
+    },
+    {
+      "type": "stat",
+      "title": "Active users (estimate)",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(gateway_active_users_estimate)",
+          "instant": true
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "none", "min": 0 }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "orientation": "horizontal" }
+    },
+    {
+      "type": "stat",
+      "title": "In-flight",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(gateway_http_inflight_requests{route=~\"${route:regex}\", upstream=~\"${upstream:regex}\"})",
+          "instant": true
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "none", "min": 0 }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "orientation": "horizontal" }
+    },
+    {
+      "type": "timeseries",
+      "title": "RPS by status class",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(gateway_http_requests_total{route=~\"${route:regex}\", upstream=~\"${upstream:regex}\", method=~\"${method:regex}\"}[5m])) by (status_class)",
+          "legendFormat": "{{status_class}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops", "min": 0 }, "overrides": [] },
+      "options": { "legend": { "showLegend": true, "displayMode": "table", "placement": "right" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Latency p95/p99 (s)",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum(rate(gateway_http_request_duration_seconds_bucket{route=~\"${route:regex}\", upstream=~\"${upstream:regex}\", method=~\"${method:regex}\"}[5m])) by (le))",
+          "legendFormat": "p95"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.99, sum(rate(gateway_http_request_duration_seconds_bucket{route=~\"${route:regex}\", upstream=~\"${upstream:regex}\", method=~\"${method:regex}\"}[5m])) by (le))",
+          "legendFormat": "p99"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "min": 0 }, "overrides": [] },
+      "options": { "legend": { "showLegend": true, "displayMode": "table", "placement": "right" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Response bytes (bytes/s)",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(gateway_http_response_bytes_total{route=~\"${route:regex}\", upstream=~\"${upstream:regex}\"}[5m]))",
+          "legendFormat": "bytes/s"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "Bps", "min": 0 }, "overrides": [] },
+      "options": { "legend": { "showLegend": false } }
+    },
+    {
+      "type": "table",
+      "title": "Top routes by RPS",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(15, sum(rate(gateway_http_requests_total[5m])) by (route))",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "options": { "showHeader": true }
+    }
+  ]
+}

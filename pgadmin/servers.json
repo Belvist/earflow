@@ -1,0 +1,14 @@
+{
+    "Servers": {
+        "1": {
+            "Name": "Music Platform PostgreSQL",
+            "Group": "Servers",
+            "Host": "postgres",
+            "Port": 5432,
+            "MaintenanceDB": "music_platform",
+            "Username": "postgres",
+            "SSLMode": "prefer",
+            "Comment": "Main database for EarFlow music platform"
+        }
+    }
+}

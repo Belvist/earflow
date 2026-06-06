@@ -1,0 +1,222 @@
+{
+  "generatedAt": "2026-05-31T02:46:52.146Z",
+  "hint": "Открой e2e/artifacts/report/index.html или передай visual-manifest.json агенту для разбора.",
+  "tests": [
+    {
+      "title": "1) Tap на mini-bar открывает fullscreen player",
+      "file": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\gestures.spec.js",
+      "line": 43,
+      "status": "passed",
+      "durationMs": 4414,
+      "error": null,
+      "attachments": [
+        {
+          "name": "screenshot",
+          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\gestures-Mini-player-gestu-9e9a1-открывает-fullscreen-player-mobile-chromium\\test-finished-1.png",
+          "contentType": "image/png"
+        },
+        {
+          "name": "video",
+          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\gestures-Mini-player-gestu-9e9a1-открывает-fullscreen-player-mobile-chromium\\video.webm",
+          "contentType": "video/webm"
+        },
+        {
+          "name": "trace",
+          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\gestures-Mini-player-gestu-9e9a1-открывает-fullscreen-player-mobile-chromium\\trace.zip",
+          "contentType": "application/zip"
+        }
+      ],
+      "screenshots": [
+        "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\gestures-Mini-player-gestu-9e9a1-открывает-fullscreen-player-mobile-chromium\\test-finished-1.png"
+      ],
+      "video": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\gestures-Mini-player-gestu-9e9a1-открывает-fullscreen-player-mobile-chromium\\video.webm",
+      "trace": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\gestures-Mini-player-gestu-9e9a1-открывает-fullscreen-player-mobile-chromium\\trace.zip"
+    },
+    {
+      "title": "2) Swipe вверх на mini-bar открывает плеер",
+      "file": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\gestures.spec.js",
+      "line": 52,
+      "status": "passed",
+      "durationMs": 3425,
+      "error": null,
+      "attachments": [
+        {
+          "name": "screenshot",
+          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\gestures-Mini-player-gestu-ccd01-на-mini-bar-открывает-плеер-mobile-chromium\\test-finished-1.png",
+          "contentType": "image/png"
+        },
+        {
+          "name": "video",
+          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\gestures-Mini-player-gestu-ccd01-на-mini-bar-открывает-плеер-mobile-chromium\\video.webm",
+          "contentType": "video/webm"
+        },
+        {
+          "name": "trace",
+          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\gestures-Mini-player-gestu-ccd01-на-mini-bar-открывает-плеер-mobile-chromium\\trace.zip",
+          "contentType": "application/zip"
+        }
+      ],
+      "screenshots": [
+        "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\gestures-Mini-player-gestu-ccd01-на-mini-bar-открывает-плеер-mobile-chromium\\test-finished-1.png"
+      ],
+      "video": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\gestures-Mini-player-gestu-ccd01-на-mini-bar-открывает-плеер-mobile-chromium\\video.webm",
+      "trace": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\gestures-Mini-player-gestu-ccd01-на-mini-bar-открывает-плеер-mobile-chromium\\trace.zip"
+    },
+    {
+      "title": "5) Swipe вверх над каруселью под mini-bar - не теряется",
+      "file": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\gestures.spec.js",
+      "line": 119,
+      "status": "passed",
+      "durationMs": 3583,
+      "error": null,
+      "attachments": [
+        {
+          "name": "screenshot",
+          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\gestures-Mini-player-gestu-40ab7--под-mini-bar---не-теряется-mobile-chromium\\test-finished-1.png",
+          "contentType": "image/png"
+        },
+        {
+          "name": "video",
+          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\gestures-Mini-player-gestu-40ab7--под-mini-bar---не-теряется-mobile-chromium\\video.webm",
+          "contentType": "video/webm"
+        },
+        {
+          "name": "trace",
+          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\gestures-Mini-player-gestu-40ab7--под-mini-bar---не-теряется-mobile-chromium\\trace.zip",
+          "contentType": "application/zip"
+        }
+      ],
+      "screenshots": [
+        "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\gestures-Mini-player-gestu-40ab7--под-mini-bar---не-теряется-mobile-chromium\\test-finished-1.png"
+      ],
+      "video": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\gestures-Mini-player-gestu-40ab7--под-mini-bar---не-теряется-mobile-chromium\\video.webm",
+      "trace": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\gestures-Mini-player-gestu-40ab7--под-mini-bar---не-теряется-mobile-chromium\\trace.zip"
+    },
+    {
+      "title": "6) После scroll страницы mini-bar всё ещё принимает tap и swipe",
+      "file": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\gestures.spec.js",
+      "line": 145,
+      "status": "passed",
+      "durationMs": 6916,
+      "error": null,
+      "attachments": [
+        {
+          "name": "screenshot",
+          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\gestures-Mini-player-gestu-14e08-ё-ещё-принимает-tap-и-swipe-mobile-chromium\\test-finished-1.png",
+          "contentType": "image/png"
+        },
+        {
+          "name": "video",
+          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\gestures-Mini-player-gestu-14e08-ё-ещё-принимает-tap-и-swipe-mobile-chromium\\video.webm",
+          "contentType": "video/webm"
+        },
+        {
+          "name": "trace",
+          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\gestures-Mini-player-gestu-14e08-ё-ещё-принимает-tap-и-swipe-mobile-chromium\\trace.zip",
+          "contentType": "application/zip"
+        }
+      ],
+      "screenshots": [
+        "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\gestures-Mini-player-gestu-14e08-ё-ещё-принимает-tap-и-swipe-mobile-chromium\\test-finished-1.png"
+      ],
+      "video": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\gestures-Mini-player-gestu-14e08-ё-ещё-принимает-tap-и-swipe-mobile-chromium\\video.webm",
+      "trace": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\gestures-Mini-player-gestu-14e08-ё-ещё-принимает-tap-и-swipe-mobile-chromium\\trace.zip"
+    },
+    {
+      "title": "playground + homepage flows with step screenshots",
+      "file": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\visual-walkthrough.spec.js",
+      "line": 15,
+      "status": "passed",
+      "durationMs": 12453,
+      "error": null,
+      "attachments": [
+        {
+          "name": "01-playground-mini-bar",
+          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\visual-walkthrough-Visual--6fc6b-flows-with-step-screenshots-mobile-chromium\\attachments\\01-playground-mini-bar-fabd13c363cdc349cd972e3d24c84f2bd15b78b0.png",
+          "contentType": "image/png"
+        },
+        {
+          "name": "02-playground-modal-open",
+          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\visual-walkthrough-Visual--6fc6b-flows-with-step-screenshots-mobile-chromium\\attachments\\02-playground-modal-open-e979fc9b9e8ab26683e9fc73e5ff9d2be39bac88.png",
+          "contentType": "image/png"
+        },
+        {
+          "name": "03-playground-modal-closed",
+          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\visual-walkthrough-Visual--6fc6b-flows-with-step-screenshots-mobile-chromium\\attachments\\03-playground-modal-closed-fda3c5a5665e5e44d12860259e96b6bdd500d897.png",
+          "contentType": "image/png"
+        },
+        {
+          "name": "04-playground-track-changed",
+          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\visual-walkthrough-Visual--6fc6b-flows-with-step-screenshots-mobile-chromium\\attachments\\04-playground-track-changed-22b1055c26c868728a51bef32599c925e5a58ce0.png",
+          "contentType": "image/png"
+        },
+        {
+          "name": "05-home-guest-or-loading",
+          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\visual-walkthrough-Visual--6fc6b-flows-with-step-screenshots-mobile-chromium\\attachments\\05-home-guest-or-loading-f80b394f4d5dc09f78e4af7c2ee7745d6185ccf2.png",
+          "contentType": "image/png"
+        },
+        {
+          "name": "06-home-guest-login-prompt",
+          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\visual-walkthrough-Visual--6fc6b-flows-with-step-screenshots-mobile-chromium\\attachments\\06-home-guest-login-prompt-3f3d3c97ebc840b1749accc2101c27a3c1e443c6.png",
+          "contentType": "image/png"
+        },
+        {
+          "name": "07-home-with-tracks",
+          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\visual-walkthrough-Visual--6fc6b-flows-with-step-screenshots-mobile-chromium\\attachments\\07-home-with-tracks-dd1a9b94b14a99492d17166b1acb6c5f517c8fbb.png",
+          "contentType": "image/png"
+        },
+        {
+          "name": "08-home-mini-bar-visible",
+          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\visual-walkthrough-Visual--6fc6b-flows-with-step-screenshots-mobile-chromium\\attachments\\08-home-mini-bar-visible-8629d44e351d697c0103c866cbad5ad0ec3c4081.png",
+          "contentType": "image/png"
+        },
+        {
+          "name": "09-home-cover-swipe-next-track",
+          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\visual-walkthrough-Visual--6fc6b-flows-with-step-screenshots-mobile-chromium\\attachments\\09-home-cover-swipe-next-track-8c2dc27a1898d7cd2cc2cc60d26c6e22356b3a73.png",
+          "contentType": "image/png"
+        },
+        {
+          "name": "10-home-full-player-open",
+          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\visual-walkthrough-Visual--6fc6b-flows-with-step-screenshots-mobile-chromium\\attachments\\10-home-full-player-open-5e4887d031cac9b662881301d7f78b84ca39f2aa.png",
+          "contentType": "image/png"
+        },
+        {
+          "name": "11-home-scrolled-with-player",
+          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\visual-walkthrough-Visual--6fc6b-flows-with-step-screenshots-mobile-chromium\\attachments\\11-home-scrolled-with-player-739d8d5a5bf2ce434b32fee456d5b5fa5b079304.png",
+          "contentType": "image/png"
+        },
+        {
+          "name": "screenshot",
+          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\visual-walkthrough-Visual--6fc6b-flows-with-step-screenshots-mobile-chromium\\test-finished-1.png",
+          "contentType": "image/png"
+        },
+        {
+          "name": "video",
+          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\visual-walkthrough-Visual--6fc6b-flows-with-step-screenshots-mobile-chromium\\video.webm",
+          "contentType": "video/webm"
+        },
+        {
+          "name": "trace",
+          "path": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\visual-walkthrough-Visual--6fc6b-flows-with-step-screenshots-mobile-chromium\\trace.zip",
+          "contentType": "application/zip"
+        }
+      ],
+      "screenshots": [
+        "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\visual-walkthrough-Visual--6fc6b-flows-with-step-screenshots-mobile-chromium\\attachments\\01-playground-mini-bar-fabd13c363cdc349cd972e3d24c84f2bd15b78b0.png",
+        "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\visual-walkthrough-Visual--6fc6b-flows-with-step-screenshots-mobile-chromium\\attachments\\02-playground-modal-open-e979fc9b9e8ab26683e9fc73e5ff9d2be39bac88.png",
+        "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\visual-walkthrough-Visual--6fc6b-flows-with-step-screenshots-mobile-chromium\\attachments\\03-playground-modal-closed-fda3c5a5665e5e44d12860259e96b6bdd500d897.png",
+        "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\visual-walkthrough-Visual--6fc6b-flows-with-step-screenshots-mobile-chromium\\attachments\\04-playground-track-changed-22b1055c26c868728a51bef32599c925e5a58ce0.png",
+        "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\visual-walkthrough-Visual--6fc6b-flows-with-step-screenshots-mobile-chromium\\attachments\\05-home-guest-or-loading-f80b394f4d5dc09f78e4af7c2ee7745d6185ccf2.png",
+        "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\visual-walkthrough-Visual--6fc6b-flows-with-step-screenshots-mobile-chromium\\attachments\\06-home-guest-login-prompt-3f3d3c97ebc840b1749accc2101c27a3c1e443c6.png",
+        "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\visual-walkthrough-Visual--6fc6b-flows-with-step-screenshots-mobile-chromium\\attachments\\07-home-with-tracks-dd1a9b94b14a99492d17166b1acb6c5f517c8fbb.png",
+        "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\visual-walkthrough-Visual--6fc6b-flows-with-step-screenshots-mobile-chromium\\attachments\\08-home-mini-bar-visible-8629d44e351d697c0103c866cbad5ad0ec3c4081.png",
+        "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\visual-walkthrough-Visual--6fc6b-flows-with-step-screenshots-mobile-chromium\\attachments\\09-home-cover-swipe-next-track-8c2dc27a1898d7cd2cc2cc60d26c6e22356b3a73.png",
+        "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\visual-walkthrough-Visual--6fc6b-flows-with-step-screenshots-mobile-chromium\\attachments\\10-home-full-player-open-5e4887d031cac9b662881301d7f78b84ca39f2aa.png",
+        "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\visual-walkthrough-Visual--6fc6b-flows-with-step-screenshots-mobile-chromium\\attachments\\11-home-scrolled-with-player-739d8d5a5bf2ce434b32fee456d5b5fa5b079304.png",
+        "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\visual-walkthrough-Visual--6fc6b-flows-with-step-screenshots-mobile-chromium\\test-finished-1.png"
+      ],
+      "video": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\visual-walkthrough-Visual--6fc6b-flows-with-step-screenshots-mobile-chromium\\video.webm",
+      "trace": "C:\\Users\\Heave\\Downloads\\music-platform\\frontend\\e2e\\artifacts\\test-results\\visual-walkthrough-Visual--6fc6b-flows-with-step-screenshots-mobile-chromium\\trace.zip"
+    }
+  ]
+}

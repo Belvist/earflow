@@ -1,0 +1,197 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets:
+          - localhost:9090
+
+  - job_name: cadvisor
+    static_configs:
+      - targets:
+          - cadvisor:8080
+
+  - job_name: node
+    static_configs:
+      - targets:
+          - node-exporter:9100
+
+  - job_name: loki
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - loki:3100
+
+  - job_name: tempo
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - tempo:3200
+
+  - job_name: alloy
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - alloy:12345
+
+  - job_name: alertmanager
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - alertmanager:9093
+
+  - job_name: postgres
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - postgres-exporter:9187
+
+  - job_name: redis
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - redis-exporter:9121
+          - redis-auth-exporter:9121
+
+  - job_name: pgbouncer
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - pgbouncer-exporter:9127
+
+  - job_name: ebap-encoder-worker
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - ebap-encoder-worker:3091
+
+  - job_name: ebap-hls-adapter
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - ebap-hls-adapter:3095
+
+  - job_name: reco-feedback-worker-go
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - reco-feedback-worker-go:3016
+
+  - job_name: recommendations-service
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - recommendations-service:3006
+
+  - job_name: go-api-gateway
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - api-gateway:3000
+
+  - job_name: device-sync-service
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - device-sync-service:3050
+
+  - job_name: search-service
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - search-service:3062
+
+  - job_name: ranking-service
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - ranking-service:8080
+
+  - job_name: transcode-worker
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - transcode-worker:3098
+
+  - job_name: direct-stream-service
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - direct-stream-service:3096
+
+  - job_name: metadata-parser-service
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - metadata-parser-service:3072
+
+  - job_name: import-service
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - import-service:3073
+
+  - job_name: lyrics-service
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - lyrics-service:3010
+
+  - job_name: party-state-service
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - party-state-service:3130
+
+  - job_name: party-gateway-service
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - party-gateway-service:3131
+
+  - job_name: audio-features-worker
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - audio-features-worker:3051
+
+  - job_name: blackbox-http
+    metrics_path: /probe
+    params:
+      module:
+        - http_2xx
+    static_configs:
+      - targets:
+          - http://nginx/nginx-health
+          - http://api-gateway:3000/health
+          - http://device-sync-service:3050/health
+          - http://search-service:3062/health
+          - http://ranking-service:8080/health
+          - http://transcode-worker:3098/health
+          - http://direct-stream-service:3096/health
+          - http://metadata-parser-service:3072/health
+          - http://import-service:3073/health
+          - http://lyrics-service:3010/health
+          - http://party-state-service:3130/health
+          - http://party-gateway-service:3131/health
+          - http://audio-features-worker:3051/health
+    relabel_configs:
+      - source_labels:
+          - __address__
+        target_label: __param_target
+      - source_labels:
+          - __param_target
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115

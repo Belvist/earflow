@@ -1,0 +1,116 @@
+'use strict';
+
+const crypto = require('node:crypto');
+const rateLimit = require('express-rate-limit');
+
+const { slugifyForRoute } = require('./slugify');
+const { buildSitemapXml, normalizeIsoDateOrNull } = require('./xml');
+
+function createSitemapLimiter({ isProduction }) {
+    return rateLimit({
+        windowMs: 60 * 1000,
+        max: isProduction ? 60 : 500,
+        standardHeaders: true,
+        legacyHeaders: false,
+    });
+}
+
+function createEtag(xml) {
+    const hash = crypto.createHash('sha256').update(xml).digest('hex');
+    return `W/"${hash}"`;
+}
+
+function createSitemapService({ artistRegistryDb, albumsDb, publicBaseUrl, cacheTtlMs }) {
+    const baseUrl = String(publicBaseUrl || 'https://earflow.ru').trim().replace(/\/$/, '');
+    const ttlMs = Number.isFinite(Number(cacheTtlMs)) ? Number(cacheTtlMs) : 15 * 60 * 1000;
+
+    const cache = {
+        xml: null,
+        etag: null,
+        expiresAt: 0,
+    };
+
+    async function buildUrls() {
+        const [artists, albums] = await Promise.all([
+            artistRegistryDb.listArtistsForSitemap({ limit: 50000, offset: 0 }),
+            albumsDb.listAlbumsForSitemap({ limit: 50000, offset: 0 }),
+        ]);
+
+        const urls = [];
+        urls.push({ loc: `${baseUrl}/`, lastmod: null });
+        urls.push({ loc: `${baseUrl}/about`, lastmod: null });
+
+        for (const a of Array.isArray(artists) ? artists : []) {
+            const pid = a && a.publicId ? String(a.publicId).trim().toLowerCase() : '';
+            if (!pid) continue;
+            const name = a && a.name ? String(a.name) : '';
+            const slug = slugifyForRoute(name);
+            const lastmod = normalizeIsoDateOrNull(a.updatedAt);
+            const path = slug ? `/artist/${encodeURIComponent(pid)}-${encodeURIComponent(slug)}` : `/artist/${encodeURIComponent(pid)}`;
+            urls.push({ loc: `${baseUrl}${path}`, lastmod });
+        }
+
+        for (const alb of Array.isArray(albums) ? albums : []) {
+            const pid = alb && alb.albumPublicId ? String(alb.albumPublicId).trim().toLowerCase() : '';
+            if (!pid) continue;
+            const name = alb && alb.albumName ? String(alb.albumName) : '';
+            const slug = slugifyForRoute(name);
+            const lastmod = normalizeIsoDateOrNull(alb.updatedAt);
+            const path = slug ? `/album/${encodeURIComponent(pid)}-${encodeURIComponent(slug)}` : `/album/${encodeURIComponent(pid)}`;
+            urls.push({ loc: `${baseUrl}${path}`, lastmod });
+        }
+
+        return urls;
+    }
+
+    async function getCached() {
+        const now = Date.now();
+        if (cache.xml && now < cache.expiresAt) return cache;
+
+        const urls = await buildUrls();
+        const xml = buildSitemapXml(urls);
+        const etag = createEtag(xml);
+
+        cache.xml = xml;
+        cache.etag = etag;
+        cache.expiresAt = now + ttlMs;
+        return cache;
+    }
+
+    return {
+        getCached,
+    };
+}
+
+function registerSitemap(app, { artistRegistryDb, albumsDb, isProduction, publicBaseUrl }) {
+    const limiter = createSitemapLimiter({ isProduction: !!isProduction });
+    const service = createSitemapService({
+        artistRegistryDb,
+        albumsDb,
+        publicBaseUrl,
+        cacheTtlMs: 15 * 60 * 1000,
+    });
+
+    app.get('/sitemap.xml', limiter, async (req, res) => {
+        try {
+            const cache = await service.getCached();
+            const inm = typeof req.headers['if-none-match'] === 'string' ? req.headers['if-none-match'] : '';
+
+            res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+            res.setHeader('Cache-Control', 'public, max-age=900');
+            res.setHeader('ETag', cache.etag);
+
+            if (inm && cache.etag && inm === cache.etag) {
+                return res.status(304).end();
+            }
+
+            return res.status(200).send(cache.xml);
+        } catch {
+            return res.status(500).type('text/plain').send('sitemap unavailable');
+        }
+    });
+}
+
+module.exports = {
+    registerSitemap,
+};

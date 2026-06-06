@@ -1,0 +1,424 @@
+routes:
+  - id: ebap_hls_session
+    match:
+      type: exact
+      value: /api/ebap-hls/v1/session
+    upstream: ebap_hls_adapter
+    policies:
+      class: unsafe
+      require_user: true
+      rate_limit: stream
+      timeout: 12s
+
+  - id: ebap_hls
+    match:
+      type: prefix
+      value: /api/ebap-hls
+    upstream: ebap_hls_adapter
+    policies:
+      class: stream
+      require_user: true
+      rate_limit: stream
+
+  - id: direct_stream_session
+    match:
+      type: exact
+      value: /api/stream/v2/session
+    upstream: direct_stream
+    policies:
+      class: unsafe
+      require_user: true
+      rate_limit: stream
+      timeout: 10s
+
+  - id: protected_hls_playback_session
+    match:
+      type: exact
+      value: /api/stream/v3/session
+    upstream: direct_stream
+    policies:
+      class: unsafe
+      require_user: true
+      rate_limit: stream
+      timeout: 10s
+
+  - id: protected_hls_playback_refresh
+    match:
+      type: regex
+      value: ^/api/stream/v3/session/[^/]+/refresh$
+    upstream: direct_stream
+    policies:
+      class: unsafe
+      require_user: true
+      rate_limit: stream
+      timeout: 10s
+
+  - id: protected_hls_audio_v3
+    methods:
+      - GET
+      - HEAD
+    match:
+      type: prefix
+      value: /audio/v3/
+    upstream: direct_stream
+    policies:
+      class: stream
+      require_user: false
+      rate_limit: stream
+
+  - id: direct_stream_session_batch
+    match:
+      type: exact
+      value: /api/stream/v2/session/batch
+    upstream: direct_stream
+    policies:
+      class: unsafe
+      require_user: true
+      rate_limit: stream
+      timeout: 10s
+
+  - id: direct_stream_share
+    match:
+      type: exact
+      value: /api/stream/v2/share
+    upstream: direct_stream
+    policies:
+      class: unsafe
+      require_user: true
+      rate_limit: stream
+      timeout: 10s
+
+  - id: direct_stream
+    match:
+      type: prefix
+      value: /api/stream/v2
+    upstream: direct_stream
+    policies:
+      class: stream
+      require_user: true
+      rate_limit: stream
+
+  - id: covers
+    methods:
+      - GET
+    match:
+      type: prefix
+      value: /covers
+    upstream: upload
+    policies:
+      class: static
+      rate_limit: cover
+      strip_auth: true
+      set_response_headers:
+        Cross-Origin-Resource-Policy: cross-origin
+        Cache-Control: public, max-age=31536000, immutable
+        Vary: Accept-Encoding
+
+  - id: songs_cover_alias
+    methods:
+      - GET
+    match:
+      type: exact
+      value: /api/songs/cover
+    upstream: upload
+    policies:
+      class: static
+      rate_limit: cover
+      strip_auth: true
+      set_response_headers:
+        Cross-Origin-Resource-Policy: cross-origin
+        Cache-Control: public, max-age=31536000, immutable
+        Vary: Accept-Encoding
+
+  - id: songs_cover_by_id
+    methods:
+      - GET
+    match:
+      type: regex
+      value: ^/api/songs/[^/]+/cover$
+    upstream: upload
+    policies:
+      class: static
+      rate_limit: cover
+      set_response_headers:
+        Cross-Origin-Resource-Policy: cross-origin
+        Cache-Control: public, max-age=86400
+
+  - id: user_avatar_upload
+    methods:
+      - POST
+    match:
+      type: exact
+      value: /api/upload/user/avatar
+    upstream: upload
+    policies:
+      class: unsafe
+      rate_limit: upload
+      timeout: 20s
+
+  - id: auth_passthrough
+    match:
+      type: prefix
+      values:
+        - /api/auth
+        - /api/verify
+        - /api/profile
+    upstream: auth
+    rewrite: auth_alias
+    policies:
+      class: auth_only
+      timeout: 10s
+
+  - id: recommendations
+    match:
+      type: prefix
+      value: /api/recommendations
+    upstream: recommendations
+    policies:
+      class: public
+      timeout: 10s
+
+  - id: songs_recommendations
+    match:
+      type: exact
+      value: /api/songs/recommendations
+    upstream: database
+    policies:
+      class: public
+      require_service_token: true
+      timeout: 8s
+
+  - id: playlists
+    match:
+      type: prefix
+      values:
+        - /api/playlists
+        - /api/queue
+    upstream: playlist
+    policies:
+      class: unsafe
+      timeout: 12s
+      invalidate_cache_namespaces:
+        - catalog
+
+  - id: playlists_discover
+    methods:
+      - GET
+    match:
+      type: exact
+      value: /api/playlists/discover
+    upstream: playlist
+    policies:
+      class: public
+
+  - id: subscription_plans
+    methods:
+      - GET
+    match:
+      type: exact
+      value: /api/subscriptions/plans
+    upstream: subscription
+    policies:
+      class: public
+      response_cache: catalog_medium
+      response_cache_namespace: subscriptions
+
+  - id: subscriptions
+    match:
+      type: prefix
+      value: /api/subscriptions
+    upstream: subscription
+    policies:
+      class: unsafe
+      require_user: true
+      timeout: 10s
+
+  - id: mix
+    match:
+      type: prefix
+      value: /api/mix
+    upstream: playlist
+    policies:
+      class: public
+
+  - id: lyrics_search
+    match:
+      type: exact
+      value: /api/lyrics/search
+    upstream: lyrics
+    policies:
+      class: public
+      require_user: true
+      require_service_token: true
+      timeout: 8s
+
+  - id: lyrics
+    match:
+      type: prefix
+      value: /api/lyrics
+    upstream: lyrics
+    policies:
+      class: unsafe
+      require_user: true
+      require_service_token: true
+      timeout: 8s
+
+  # Party: single stack (go party-state: REST, go party-gateway: WSS on /ws/v2).
+  # /api/party/* includes /api/party/v2/* compatibility routes on the same service.
+  - id: party
+    match:
+      type: prefix
+      value: /api/party
+    upstream: party
+    policies:
+      class: unsafe
+      timeout: 12s
+
+  - id: party_v2_ws
+    match:
+      type: prefix
+      value: /ws/v2
+    upstream: party_v2_gateway
+    policies:
+      class: stream
+      websocket: true
+      require_user: true
+
+  - id: songs_search
+    match:
+      type: prefix
+      value: /api/songs/search
+    upstream: database
+    policies:
+      class: public
+      require_service_token: true
+      timeout: 8s
+
+  - id: search_v1
+    methods:
+      - GET
+    match:
+      type: exact
+      value: /api/search/v1
+    upstream: search
+    policies:
+      class: public
+      rate_limit: search
+      timeout: 4s
+
+  - id: artists
+    match:
+      type: prefix
+      value: /api/artists
+    upstream: artist
+    policies:
+      class: public
+      response_cache: catalog_short
+      response_cache_namespace: catalog
+      invalidate_cache_namespaces:
+        - catalog
+
+  - id: albums
+    match:
+      type: prefix
+      value: /api/albums
+    upstream: artist
+    policies:
+      class: public
+      response_cache: catalog_short
+      response_cache_namespace: catalog
+
+  - id: songs
+    match:
+      type: prefix
+      value: /api/songs
+    upstream: database
+    policies:
+      class: public
+      require_service_token: true
+      response_cache: catalog_short
+      response_cache_namespace: catalog
+
+  - id: likes
+    match:
+      type: prefix
+      values:
+        - /api/likes
+        - /api/dislikes
+        - /api/eq
+    upstream: upload
+    policies:
+      class: unsafe
+      timeout: 8s
+      invalidate_cache_namespaces:
+        - catalog
+
+  - id: metadata_parse
+    match:
+      type: prefix
+      value: /api/metadata
+    upstream: metadata_parser
+    policies:
+      class: unsafe
+      require_user: true
+      timeout: 20s
+
+  - id: import_service
+    match:
+      type: prefix
+      value: /api/import
+    upstream: import_service
+    policies:
+      class: unsafe
+      require_user: true
+      timeout: 20s
+
+  - id: user_alias
+    match:
+      type: prefix
+      value: /api/user
+    upstream: database
+    rewrite: user_alias
+    policies:
+      class: unsafe
+      require_user: true
+      require_service_token: true
+      timeout: 10s
+
+  # Account security (sessions list/revoke) — security-service Go handlers.
+  - id: auth_sessions
+    match:
+      type: prefix
+      value: /api/auth/sessions
+    upstream: security
+    policies:
+      class: unsafe
+      require_user: true
+      timeout: 10s
+
+  # Device Sync (Spotify Connect-like). Both routes require an authenticated
+  # user. The microservice itself is gated by DEVICE_SYNC_ENABLED and returns
+  # 503 on every HTTP call / closes every WS upgrade with 503 when disabled,
+  # so this is safe to deploy with the feature switched off.
+  #
+  # /ws/devices is more specific than party's /ws prefix rule, and the
+  # gateway matcher prefers the longest prefix — so party is untouched.
+  - id: device_sync
+    match:
+      type: prefix
+      value: /api/devices
+    upstream: device_sync
+    policies:
+      class: unsafe
+      require_user: true
+      timeout: 8s
+
+  - id: device_sync_ws
+    match:
+      type: prefix
+      value: /ws/devices
+    upstream: device_sync
+    policies:
+      class: stream
+      websocket: true
+      require_user: true

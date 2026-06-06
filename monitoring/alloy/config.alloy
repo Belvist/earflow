@@ -1,0 +1,105 @@
+otelcol.receiver.otlp "default" {
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+
+  output {
+    traces = [otelcol.processor.batch.default.input]
+  }
+}
+
+otelcol.processor.batch "default" {
+  output {
+    traces = [otelcol.exporter.otlp.tempo.input]
+  }
+}
+
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = "tempo:4317"
+    tls {
+      insecure = true
+      insecure_skip_verify = true
+    }
+  }
+}
+
+discovery.docker "local" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "docker" {
+  targets = discovery.docker.local.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    action        = "keep"
+    regex         = "music-platform"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    action        = "drop"
+    regex         = "^(pgadmin)$"
+  }
+
+  rule {
+    target_label = "project"
+    replacement  = "music-platform"
+  }
+
+  rule {
+    target_label = "group"
+    replacement  = "app"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "group"
+    action        = "replace"
+    regex         = "^(prometheus|loki|grafana|tempo|alloy|cadvisor|node-exporter|blackbox-exporter|promtail)$"
+    replacement   = "monitoring"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+    action        = "replace"
+    regex         = "(.+)"
+    replacement   = "$1"
+  }
+
+  rule {
+    source_labels = ["service", "__meta_docker_container_name"]
+    separator     = ";"
+    target_label  = "service"
+    action        = "replace"
+    regex         = "^;/(.*)$"
+    replacement   = "$1"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    target_label  = "container"
+    action        = "replace"
+    regex         = "/(.*)"
+    replacement   = "$1"
+  }
+}
+
+loki.source.docker "docker" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.docker.output
+  labels     = {"job" = "docker", "stream" = "docker"}
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Earflow — офлайн</title>
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <style>
+        :root {
+            color-scheme: dark;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background: #000;
+            color: #fff;
+            font-family: 'Unbounded', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: env(safe-area-inset-top, 0) 20px env(safe-area-inset-bottom, 0);
+            background:
+                radial-gradient(circle at 20% 10%, rgba(255, 255, 255, 0.04) 0%, transparent 55%),
+                radial-gradient(circle at 80% 90%, rgba(255, 255, 255, 0.03) 0%, transparent 55%),
+                #000;
+            min-height: 100vh;
+            min-height: 100dvh;
+        }
+
+        .wrap {
+            text-align: center;
+            max-width: 440px;
+            width: 100%;
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .icon {
+            width: 72px;
+            height: 72px;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .icon svg {
+            width: 34px;
+            height: 34px;
+            opacity: 0.75;
+        }
+
+        .title {
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            margin: 0 0 10px;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            line-height: 1.55;
+            color: rgba(255, 255, 255, 0.62);
+            margin: 0 0 28px;
+            font-weight: 400;
+        }
+
+        .actions {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: stretch;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 13px 20px;
+            border-radius: 999px;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease;
+            text-decoration: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .btn:active {
+            transform: scale(0.98);
+        }
+
+        .btn-primary {
+            background: #ffffff;
+            color: #000000;
+        }
+
+        .btn-primary:hover {
+            background: #f0f0f0;
+        }
+
+        .btn-primary:disabled {
+            background: rgba(255, 255, 255, 0.35);
+            color: rgba(0, 0, 0, 0.55);
+            cursor: not-allowed;
+        }
+
+        .btn-ghost {
+            background: rgba(255, 255, 255, 0.04);
+            color: rgba(255, 255, 255, 0.88);
+            border-color: rgba(255, 255, 255, 0.12);
+        }
+
+        .btn-ghost:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.22);
+        }
+
+        .status {
+            margin-top: 22px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.35);
+            letter-spacing: 0.02em;
+        }
+
+        .dot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            margin-right: 6px;
+            vertical-align: middle;
+            background: #ef4444;
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+            }
+
+            50% {
+                box-shadow: 0 0 0 6px rgba(239, 68, 68, 0.05);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <main class="wrap" role="main">
+        <div class="icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                stroke-linejoin="round">
+                <path d="M1 1l22 22" />
+                <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" />
+                <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" />
+                <path d="M10.71 5.05A16 16 0 0 1 22.58 9" />
+                <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" />
+                <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+                <circle cx="12" cy="20" r="1" fill="currentColor" />
+            </svg>
+        </div>
+
+        <h1 class="title">Нет подключения к интернету</h1>
+        <p class="subtitle">
+            Проверьте соединение и попробуйте снова.
+            Скачанные заранее треки остаются доступными — они воспроизводятся без сети.
+        </p>
+
+        <div class="actions">
+            <button type="button" class="btn btn-primary" onclick="retry()">
+                Попробовать снова
+            </button>
+            <a class="btn btn-ghost" href="/">
+                Открыть скачанное
+            </a>
+        </div>
+
+        <div class="status">
+            <span class="dot" aria-hidden="true"></span>
+            Офлайн-режим
+        </div>
+    </main>
+
+    <script>
+        function retry() {
+            if (navigator.onLine) {
+                location.reload();
+                return;
+            }
+            const btn = document.querySelector('.btn-primary');
+            if (!btn) return;
+            const original = btn.textContent;
+            btn.textContent = 'Сеть недоступна';
+            btn.disabled = true;
+            setTimeout(function () {
+                btn.textContent = original;
+                btn.disabled = false;
+            }, 1500);
+        }
+        window.addEventListener('online', function () {
+            location.reload();
+        });
+    </script>
+</body>
+
+</html>

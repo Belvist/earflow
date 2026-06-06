@@ -1,0 +1,84 @@
+# PEND-SEC-001 — full-stack auth/PoP e2e overlay (server/CI only).
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.auth-e2e.yml up -d \
+#     postgres redis redis-auth database-service auth-service security-service \
+#     api-gateway frontend auth-e2e-edge
+#
+# See docs/AUTH_FULLSTACK_E2E_RUNBOOK.md
+
+services:
+  auth-e2e-edge:
+    image: nginx:1.27-alpine
+    container_name: music-auth-e2e-edge
+    ports:
+      - "${AUTH_E2E_HOST_PORT:-18080}:8080"
+    volumes:
+      - ./nginx/auth-e2e-edge.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    networks:
+      - music-network
+    healthcheck:
+      test: [ "CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/health" ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  api-gateway:
+    deploy:
+      replicas: 1
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      security-service:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redis-auth:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      # NODE_ENV=production defaults empty COOKIE_DOMAIN to .earflow.ru — use host-only for 127.0.0.1 e2e.
+      COOKIE_DOMAIN: host
+      COOKIE_SECURE: "false"
+      COOKIE_SAMESITE: "Lax"
+      ALLOWED_ORIGINS: ${AUTH_E2E_ALLOWED_ORIGINS:-http://127.0.0.1:18080,http://localhost:18080}
+      ALLOW_TUNNEL_ORIGINS: "false"
+      SECURITY_SERVICE_URL: http://security-service:3074
+
+  frontend:
+    environment:
+      EARFLOW_API_BASE_URL: ${AUTH_E2E_BASE_URL:-http://127.0.0.1:18080}
+
+  auth-e2e-playwright:
+    profiles: [ "auth-e2e-run" ]
+    image: mcr.microsoft.com/playwright:v1.48.2-jammy
+    working_dir: /work/frontend
+    volumes:
+      - ./frontend:/work/frontend
+      - ./artifacts/auth-e2e:/work/artifacts/auth-e2e
+    environment:
+      AUTH_E2E_BASE_URL: http://auth-e2e-edge:8080
+      AUTH_E2E_ORIGIN: http://auth-e2e-edge:8080
+      AUTH_E2E_EMAIL: ${AUTH_E2E_EMAIL}
+      AUTH_E2E_PASSWORD: ${AUTH_E2E_PASSWORD}
+      CI: "true"
+    depends_on:
+      auth-e2e-edge:
+        condition: service_healthy
+    networks:
+      - music-network
+    command:
+      - bash
+      - -lc
+      - |
+        set -euo pipefail
+        cd /work/frontend
+        npm ci --no-audit --no-fund
+        npx playwright test e2e/device-proof-fullstack.spec.js --config playwright.auth-fullstack.config.js
+        cp -r e2e/artifacts/auth-fullstack /work/artifacts/auth-e2e/report || true

@@ -1,0 +1,49 @@
+/**
+ * Early paint before React bundle — sync with App.js GlobalStyle play-control rules.
+ * dataset: document.documentElement[data-mini-play-style]
+ */
+
+[data-testid="mini-player-play"] {
+  background: transparent !important;
+  box-shadow: none !important;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+[data-testid="mini-player-play"]::before,
+[data-testid="mini-player-play"]::after {
+  display: none !important;
+  content: none !important;
+}
+
+[data-testid="mini-player-play"][data-play-style="adaptive"],
+[data-testid="mini-player-play"][data-play-style="metallic"] {
+  border: none !important;
+}
+
+:root[data-mini-play-style="adaptive"] [data-testid="mini-player-play"],
+[data-testid="mini-player-bar"][data-mini-play-style="adaptive"] [data-testid="mini-player-play"],
+[data-testid="mini-player-play"][data-play-style="adaptive"],
+.ef-mini-play--adaptive {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+:root[data-mini-play-style="metallic"] [data-testid="mini-player-play"],
+[data-testid="mini-player-bar"][data-mini-play-style="metallic"] [data-testid="mini-player-play"],
+[data-testid="mini-player-play"][data-play-style="metallic"],
+.ef-mini-play--metallic {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 50% !important;
+  box-shadow: none !important;
+}
+
+[data-testid="mini-player-play"] .ef-mini-play-adaptive-svg,
+[data-testid="mini-player-play"] .ef-mini-play-ios-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

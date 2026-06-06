@@ -1,0 +1,25 @@
+{
+  "mcpServers": {
+    "klm-runtime": {
+      "command": "pnpm",
+      "args": [
+        "--dir",
+        "D:\\Новая папка (2)\\klm-runtime\\apps\\mcp-server",
+        "dev"
+      ],
+      "env": {
+        "KLM_RUNTIME_ROOT": "D:\\Новая папка (2)\\klm-runtime",
+        "KLM_WORKSPACE_ROOT": "C:\\Users\\Heave\\Downloads\\music-platform",
+        "KLM_CODEBASE_ACTIVATION": "true",
+        "KLM_STORE_BACKEND": "postgres",
+        "DATABASE_URL": "postgresql://klm:klm@localhost:5432/klm",
+        "KLM_ORGANIZATION_ID": "00000000-0000-4000-8000-000000000001",
+        "KLM_WORKSPACE_ID": "00000000-0000-4000-8000-000000000002",
+        "KLM_USER_ID": "00000000-0000-4000-8000-000000000004",
+        "KLM_DEFAULT_PROVIDER": "openrouter",
+        "KLM_DEFAULT_MODEL": "openrouter/owl-alpha",
+        "OPENROUTER_API_KEY": "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"
+      }
+    }
+  }
+}
