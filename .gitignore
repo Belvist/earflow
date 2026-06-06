@@ -145,6 +145,21 @@ k8s/*-secrets.yaml
 # ────────────────────────────────────────────────────────────────
 # PROJECT SPECIFIC
 # ────────────────────────────────────────────────────────────────
+# VPS runtime / local-only (see /opt/music-platform layout — not in git)
+secrets/
+artifacts/*
+!artifacts/.gitkeep
+
+# Dev / AI tooling — not deployed on production VPS
+.cursor/
+.kiro/
+.windsurf/
+docs/
+reports/
+AGENTS.md
+"Scally Milano/"
+security-report.json
+
 # Nginx logs and SSL certs
 nginx/logs/*.log
 nginx/ssl/*.pem
