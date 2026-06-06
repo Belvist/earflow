@@ -54,14 +54,15 @@ else
 fi
 checks=$((checks + 1))
 
-section "Frontend bundle (index.html → main.*.js)"
-for label origin in "earflow.ru" "$LISTENER_ORIGIN" "auth.earflow.ru" "$AUTH_UI_ORIGIN"; do
-  [[ "$label" == http* ]] && continue
-  main_js="$(extract_main_js "$origin/")"
+check_frontend_bundle() {
+  local label="$1"
+  local origin="$2"
+  local main_js
   checks=$((checks + 1))
+  main_js="$(extract_main_js "${origin%/}/")"
   if [[ -z "$main_js" ]]; then
     fail "$label — could not find main.*.js in index HTML"
-    continue
+    return
   fi
   echo "      $label → $main_js"
   if [[ -n "$EXPECTED_MAIN_JS" && "$main_js" != "$EXPECTED_MAIN_JS" ]]; then
@@ -69,7 +70,11 @@ for label origin in "earflow.ru" "$LISTENER_ORIGIN" "auth.earflow.ru" "$AUTH_UI_
   else
     pass "$label bundle $main_js"
   fi
-done
+}
+
+section "Frontend bundle (index.html → main.*.js)"
+check_frontend_bundle "earflow.ru" "$LISTENER_ORIGIN"
+check_frontend_bundle "auth.earflow.ru" "$AUTH_UI_ORIGIN"
 
 LISTENER_MAIN="$(extract_main_js "${LISTENER_ORIGIN}/")"
 AUTH_MAIN="$(extract_main_js "${AUTH_UI_ORIGIN}/")"
