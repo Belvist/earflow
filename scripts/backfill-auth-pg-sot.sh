@@ -25,10 +25,9 @@ fi
 
 if [[ -z "${DATABASE_URL:-}" ]]; then
   if [[ -f "$ROOT/.env" ]]; then
-    # shellcheck disable=SC1091
-    set -a
-    source "$ROOT/.env"
-    set +a
+    # shellcheck source=scripts/load-dotenv.sh
+    source "$ROOT/scripts/load-dotenv.sh"
+    load_dotenv "$ROOT/.env"
     if [[ -n "${DB_USER:-}" && -n "${DB_PASSWORD:-}" && -n "${DB_NAME:-}" ]]; then
       export DATABASE_URL="postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST:-127.0.0.1}:${DB_PORT:-5432}/${DB_NAME}?sslmode=disable"
     fi

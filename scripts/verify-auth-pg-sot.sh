@@ -16,10 +16,9 @@ if [[ ! -f "$ROOT/.env" ]]; then
   exit 1
 fi
 
-# shellcheck disable=SC1091
-set -a
-source "$ROOT/.env"
-set +a
+# shellcheck source=scripts/load-dotenv.sh
+source "$ROOT/scripts/load-dotenv.sh"
+load_dotenv "$ROOT/.env"
 
 : "${DB_USER:?DB_USER}"
 : "${DB_NAME:?DB_NAME}"
