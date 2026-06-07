@@ -155,6 +155,7 @@ artifacts/*
 .kiro/
 .windsurf/
 docs/
+!docs/AUTH_ROLLOUT_GATES.md
 reports/
 AGENTS.md
 "Scally Milano/"
