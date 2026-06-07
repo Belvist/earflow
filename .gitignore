@@ -154,7 +154,7 @@ artifacts/*
 .cursor/
 .kiro/
 .windsurf/
-docs/
+docs/*
 !docs/AUTH_ROLLOUT_GATES.md
 reports/
 AGENTS.md
