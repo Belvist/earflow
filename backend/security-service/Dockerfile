@@ -9,7 +9,9 @@ RUN go env -w GOPROXY=https://proxy.golang.org,direct \
 COPY . ./
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -trimpath -ldflags "-s -w" \
-    -o /out/security-service ./cmd/security-service
+    -o /out/security-service ./cmd/security-service \
+    && go build -trimpath -ldflags "-s -w" \
+    -o /out/auth-pg-backfill ./cmd/auth-pg-backfill
 
 FROM alpine:3.21
 RUN addgroup -S app \
@@ -20,6 +22,7 @@ RUN addgroup -S app \
 
 WORKDIR /app
 COPY --from=builder --chown=app:app /out/security-service /app/security-service
+COPY --from=builder --chown=app:app /out/auth-pg-backfill /app/auth-pg-backfill
 
 USER app
 EXPOSE 3074
