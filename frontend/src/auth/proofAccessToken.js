@@ -1,5 +1,5 @@
-import { getAuthDeviceHeaders, isDeviceProofEnforced, signDeviceProofRequest } from '../../../auth/authDeviceCrypto';
-import { getCsrfToken } from '../../../auth/cookieHelpers';
+import { getAuthDeviceHeaders, isDeviceProofEnforced, signDeviceProofRequest } from './authDeviceCrypto';
+import { getCsrfToken } from './cookieHelpers';
 
 const PROOF_ACCESS_TOKEN_ENABLED =
   String(process.env.REACT_APP_PROOF_ACCESS_TOKEN_ENABLED || '1').trim() !== '0';
