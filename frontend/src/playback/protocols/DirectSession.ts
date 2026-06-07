@@ -300,6 +300,71 @@ export class DirectSession implements PlaybackSession {
         this.lastProgressTimeSeconds = Number.isFinite(t) && t >= 0 ? t : null;
     }
 
+    private resolveRestoreSeconds(fallbackSeconds: number): number {
+        const seek = this.seekTargetSeconds;
+        if (seek != null && Number.isFinite(seek) && seek > 0) return seek;
+        const t = Number(fallbackSeconds);
+        return Number.isFinite(t) && t > 0 ? t : 0;
+    }
+
+    private async applyRestorePosition(seconds: number): Promise<void> {
+        const target = Number(seconds);
+        if (!Number.isFinite(target) || target <= 0) return;
+
+        const audio = this.audio;
+        const deadlineAt = Date.now() + 5000;
+
+        await new Promise<void>((resolve) => {
+            const tryApply = () => {
+                try {
+                    const d = Number(audio.duration);
+                    let clamped = target;
+                    if (Number.isFinite(d) && d > 0 && d !== Number.POSITIVE_INFINITY) {
+                        clamped = Math.min(target, Math.max(0, d - 0.1));
+                    }
+                    audio.currentTime = clamped;
+                    this.bus.emit('time', clamped);
+                    if (this.seekTargetSeconds != null && Math.abs(clamped - this.seekTargetSeconds) <= 0.5) {
+                        this.seekTargetSeconds = null;
+                        this.seekDeadlineAtMs = null;
+                    }
+                } catch {
+                }
+            };
+
+            const d0 = Number(audio.duration);
+            if (Number.isFinite(d0) && d0 > 0 && d0 !== Number.POSITIVE_INFINITY) {
+                tryApply();
+                resolve();
+                return;
+            }
+
+            let timeoutId: ReturnType<typeof setTimeout> | null = null;
+            const cleanup = () => {
+                if (timeoutId != null) {
+                    try { clearTimeout(timeoutId); } catch { }
+                    timeoutId = null;
+                }
+                try { audio.removeEventListener('loadedmetadata', onReady); } catch { }
+                try { audio.removeEventListener('durationchange', onReady); } catch { }
+            };
+
+            const onReady = () => {
+                cleanup();
+                tryApply();
+                resolve();
+            };
+
+            audio.addEventListener('loadedmetadata', onReady, { once: true });
+            audio.addEventListener('durationchange', onReady, { once: true });
+            timeoutId = setTimeout(() => {
+                cleanup();
+                tryApply();
+                resolve();
+            }, Math.max(500, deadlineAt - Date.now()));
+        });
+    }
+
     private emitBuffering(b: boolean): void {
         this.bus.emit('buffering', b);
     }
@@ -1163,8 +1228,6 @@ export class DirectSession implements PlaybackSession {
         }
 
         if (this.seekDeadlineAtMs != null && now > this.seekDeadlineAtMs) {
-            this.seekTargetSeconds = null;
-            this.seekDeadlineAtMs = null;
             await this.tryRecover();
             return;
         }
@@ -1216,7 +1279,7 @@ export class DirectSession implements PlaybackSession {
         this.lastRecoverAtMs = now;
         this.noteRecoveryAttempt(now);
         try {
-            const currentTime = Number(this.audio.currentTime);
+            const restoreSeconds = this.resolveRestoreSeconds(Number(this.audio.currentTime));
             const wasPlaying = !this.audio.paused;
 
             const oldUrl = this.activeStreamUrl || this.url;
@@ -1252,12 +1315,7 @@ export class DirectSession implements PlaybackSession {
                 this.audio.load();
             }
 
-            if (Number.isFinite(currentTime) && currentTime > 0) {
-                try {
-                    this.audio.currentTime = currentTime;
-                } catch {
-                }
-            }
+            await this.applyRestorePosition(restoreSeconds);
 
             if (wasPlaying) {
                 if (!this.isDocumentVisible()) {

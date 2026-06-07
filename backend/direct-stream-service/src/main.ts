@@ -269,10 +269,11 @@ function normalizeDeviceId(raw: unknown): string {
 }
 
 function readClientIp(req: Request): string {
-    const forwarded = String(req.headers.get('x-forwarded-for') || '').split(',')[0]?.trim() || '';
     const cf = String(req.headers.get('cf-connecting-ip') || '').trim();
+    if (cf) return cf;
+    const forwarded = String(req.headers.get('x-forwarded-for') || '').split(',')[0]?.trim() || '';
     const real = String(req.headers.get('x-real-ip') || '').trim();
-    return forwarded || cf || real || 'unknown';
+    return forwarded || real || 'unknown';
 }
 
 function hmacHex(label: string, value: string): string {
