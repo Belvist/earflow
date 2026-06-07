@@ -92,7 +92,7 @@ func revokeSessionHandler(d Deps) http.HandlerFunc {
 			return
 		}
 
-		if err := store.RevokeSessionViaSoT(r.Context(), d.AuthSoT, d.Redis, principal.UserID, targetSID, jti); err != nil {
+		if err := store.RevokeSessionViaSoT(r.Context(), d.AuthSoT, d.Redis, principal.UserID, targetSID, jti, store.RevokeReasonOne); err != nil {
 			d.Logger.Warn("sessions-revoke-one: revoke failed", "err", err, "sid", targetSID)
 			writeError(w, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Service temporarily unavailable")
 			return

@@ -55,7 +55,7 @@ func TestRevokeSession_BumpsEpochAndSetsRevoked(t *testing.T) {
 		t.Fatalf("read epoch: %v", err)
 	}
 
-	if err := store.RevokeSession(ctx, authpg.RevokeSessionParams{SID: sid, UserID: userID, JTI: jti}); err != nil {
+	if _, err := store.RevokeSession(ctx, authpg.RevokeSessionParams{SID: sid, UserID: userID, JTI: jti}); err != nil {
 		t.Fatalf("revoke: %v", err)
 	}
 
@@ -94,7 +94,7 @@ func TestListActiveSessionSIDs_FiltersRevoked(t *testing.T) {
 	if err := store.UpsertSession(ctx, authpg.SessionUpsertParams{SID: sidRevoked, UserID: userID, RefreshJTI: "jti-revoked"}); err != nil {
 		t.Fatalf("upsert revoked: %v", err)
 	}
-	if err := store.RevokeSession(ctx, authpg.RevokeSessionParams{SID: sidRevoked, UserID: userID, JTI: "jti-revoked"}); err != nil {
+	if _, err := store.RevokeSession(ctx, authpg.RevokeSessionParams{SID: sidRevoked, UserID: userID, JTI: "jti-revoked"}); err != nil {
 		t.Fatalf("revoke: %v", err)
 	}
 

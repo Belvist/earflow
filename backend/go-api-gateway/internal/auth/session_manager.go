@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/earflow/music-platform/go-api-gateway/internal/config"
@@ -53,6 +55,8 @@ type SessionManager struct {
 	hc                    http.Client
 	sf                    singleflight.Group
 	sot                   *SoTClient
+	revokeSubStarted      atomic.Bool
+	revokeMarks           *sync.Map
 }
 
 func altCookieName(primary string) string {
@@ -284,6 +288,14 @@ func (m *SessionManager) SessionAuthMiddleware() func(http.Handler) http.Handler
 
 			primarySID, altSID := m.getSIDCandidates(r)
 			if primarySID == "" && altSID == "" {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if m.isSessionLocallyRevoked(primarySID) || m.isSessionLocallyRevoked(altSID) {
+				if strings.HasPrefix(r.URL.Path, "/api") {
+					writeJSON(w, http.StatusUnauthorized, apiError{Error: "Authentication required", Code: authCodeSessionUnverified})
+					return
+				}
 				next.ServeHTTP(w, r)
 				return
 			}

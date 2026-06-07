@@ -211,29 +211,35 @@ func (s *Store) GetActiveSession(ctx context.Context, sid string) (*ActiveSessio
 }
 
 // RevokeSession marks session, devices, and refresh tokens revoked and bumps epochs (PG-first revoke).
-func (s *Store) RevokeSession(ctx context.Context, p RevokeSessionParams) error {
+// Returns the new session_epoch (0 when sid row absent).
+func (s *Store) RevokeSession(ctx context.Context, p RevokeSessionParams) (int64, error) {
 	if s == nil || s.pool == nil {
-		return errors.New("authpg store unavailable")
+		return 0, errors.New("authpg store unavailable")
 	}
 	sid := strings.TrimSpace(p.SID)
 	if sid == "" {
-		return nil
+		return 0, nil
 	}
 
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	var sessionEpoch int64
 	const qSession = `
 		UPDATE auth_sessions
 		SET revoked_at = COALESCE(revoked_at, NOW()),
 		    session_epoch = session_epoch + 1
 		WHERE sid = $1
+		RETURNING session_epoch
 	`
-	if _, err := tx.Exec(ctx, qSession, sid); err != nil {
-		return fmt.Errorf("revoke auth_sessions: %w", err)
+	err = tx.QueryRow(ctx, qSession, sid).Scan(&sessionEpoch)
+	if errors.Is(err, pgx.ErrNoRows) {
+		sessionEpoch = 0
+	} else if err != nil {
+		return 0, fmt.Errorf("revoke auth_sessions: %w", err)
 	}
 
 	const qDevices = `
@@ -243,7 +249,7 @@ func (s *Store) RevokeSession(ctx context.Context, p RevokeSessionParams) error 
 		WHERE sid = $1
 	`
 	if _, err := tx.Exec(ctx, qDevices, sid); err != nil {
-		return fmt.Errorf("revoke auth_devices: %w", err)
+		return 0, fmt.Errorf("revoke auth_devices: %w", err)
 	}
 
 	const qRefresh = `
@@ -253,7 +259,7 @@ func (s *Store) RevokeSession(ctx context.Context, p RevokeSessionParams) error 
 		WHERE sid = $1
 	`
 	if _, err := tx.Exec(ctx, qRefresh, sid); err != nil {
-		return fmt.Errorf("revoke refresh_tokens: %w", err)
+		return 0, fmt.Errorf("revoke refresh_tokens: %w", err)
 	}
 
 	if jti := strings.TrimSpace(p.JTI); jti != "" {
@@ -264,7 +270,7 @@ func (s *Store) RevokeSession(ctx context.Context, p RevokeSessionParams) error 
 			WHERE jti = $1
 		`
 		if _, err := tx.Exec(ctx, qJTI, jti); err != nil {
-			return fmt.Errorf("revoke refresh jti: %w", err)
+			return 0, fmt.Errorf("revoke refresh jti: %w", err)
 		}
 	}
 
@@ -273,9 +279,12 @@ func (s *Store) RevokeSession(ctx context.Context, p RevokeSessionParams) error 
 		payload["userId"] = p.UserID
 	}
 	if err := s.appendEventTx(ctx, tx, p.UserID, sid, "", EventSessionRevoked, payload); err != nil {
-		return err
+		return sessionEpoch, err
 	}
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return sessionEpoch, err
+	}
+	return sessionEpoch, nil
 }
 
 // AppendEvent inserts an audit row (append-only).

@@ -84,6 +84,7 @@ func NewServerFromEnv(ctx context.Context) (*http.Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	sessions.StartRevokeSubscriber(ctx)
 
 	limiter := ratelimit.NewLimiter(ratelimit.LimiterConfig{
 		Redis:               redisRateLimit,

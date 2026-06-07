@@ -12,8 +12,8 @@ import (
 
 type failingPG struct{}
 
-func (failingPG) RevokeSession(context.Context, authpg.RevokeSessionParams) error {
-	return errors.New("pg down")
+func (failingPG) RevokeSession(context.Context, authpg.RevokeSessionParams) (int64, error) {
+	return 0, errors.New("pg down")
 }
 
 // pgStoreStub wraps authpg.Store with failing revoke — minimal interface via embedding not possible; use nil PG with custom AuthSoT test via direct redis only.
@@ -35,7 +35,7 @@ func TestAuthSoT_RevokeSessionFull_RedisRunsWhenPGFails(t *testing.T) {
 
 	// PG nil but WritesEnabled — only tests redis path; PG fail covered in integration.
 	sot := &AuthSoT{PG: nil, Mode: authpg.ModeDualWrite}
-	if err := sot.RevokeSessionFull(context.Background(), rd, sid, 1, jti); err != nil {
+	if err := sot.RevokeSessionFull(context.Background(), rd, sid, 1, jti, RevokeReasonInternal); err != nil {
 		t.Fatalf("revoke: %v", err)
 	}
 	if mr.Exists(SIDKey(sid)) {
@@ -58,7 +58,7 @@ func TestAuthSoT_OffMode_SkipsPG(t *testing.T) {
 	mr.Set(SIDKey(sid), jti)
 
 	sot := &AuthSoT{PG: nil, Mode: authpg.ModeOff}
-	if err := sot.RevokeSessionFull(context.Background(), rd, sid, 1, jti); err != nil {
+	if err := sot.RevokeSessionFull(context.Background(), rd, sid, 1, jti, RevokeReasonInternal); err != nil {
 		t.Fatalf("revoke: %v", err)
 	}
 	if mr.Exists(SIDKey(sid)) {
