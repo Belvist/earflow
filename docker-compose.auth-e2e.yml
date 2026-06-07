@@ -50,6 +50,11 @@ services:
       ALLOWED_ORIGINS: ${AUTH_E2E_ALLOWED_ORIGINS:-http://127.0.0.1:18080,http://localhost:18080}
       ALLOW_TUNNEL_ORIGINS: "false"
       SECURITY_SERVICE_URL: http://security-service:3074
+      AUTH_PG_SOT_MODE: ${AUTH_PG_SOT_MODE:-dual_write}
+
+  security-service:
+    environment:
+      AUTH_PG_SOT_MODE: ${AUTH_PG_SOT_MODE:-dual_write}
 
   frontend:
     environment:
