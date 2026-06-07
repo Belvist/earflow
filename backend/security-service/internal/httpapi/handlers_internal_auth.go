@@ -34,6 +34,18 @@ type internalOKResponse struct {
 	OK bool `json:"ok"`
 }
 
+type internalEpochsLookupRequest struct {
+	SID          string `json:"sid"`
+	AuthDeviceID string `json:"authDeviceId"`
+}
+
+type internalEpochsLookupResponse struct {
+	SessionEpoch   int64 `json:"sessionEpoch"`
+	DeviceEpoch    int64 `json:"deviceEpoch"`
+	SessionRevoked bool  `json:"sessionRevoked"`
+	DeviceRevoked  bool  `json:"deviceRevoked"`
+}
+
 func internalSessionUpsertHandler(d Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if d.AuthSoT == nil || !d.AuthSoT.Mode.WritesEnabled() || d.AuthSoT.PG == nil {
@@ -85,6 +97,36 @@ func internalDeviceUpsertHandler(d Deps) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusOK, internalOKResponse{OK: true})
+	}
+}
+
+func internalEpochsLookupHandler(d Deps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if d.AuthSoT == nil || d.AuthSoT.PG == nil {
+			writeError(w, http.StatusServiceUnavailable, "PG_SOT_UNAVAILABLE", "Postgres SoT unavailable")
+			return
+		}
+		var req internalEpochsLookupRequest
+		if err := readJSON(r, d.Config.HTTP.MaxBodyBytes, &req); err != nil {
+			writeError(w, http.StatusBadRequest, "INVALID_JSON", "Invalid JSON")
+			return
+		}
+		if strings.TrimSpace(req.SID) == "" {
+			writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "sid required")
+			return
+		}
+		epochs, err := d.AuthSoT.PG.LookupProofEpochs(r.Context(), req.SID, req.AuthDeviceID)
+		if err != nil {
+			d.Logger.Warn("internal epochs lookup failed", "err", err, "sid", req.SID)
+			writeError(w, http.StatusServiceUnavailable, "PG_READ_FAILED", "Epoch lookup failed")
+			return
+		}
+		writeJSON(w, http.StatusOK, internalEpochsLookupResponse{
+			SessionEpoch:   epochs.SessionEpoch,
+			DeviceEpoch:    epochs.DeviceEpoch,
+			SessionRevoked: epochs.SessionRevoked,
+			DeviceRevoked:  epochs.DeviceRevoked,
+		})
 	}
 }
 

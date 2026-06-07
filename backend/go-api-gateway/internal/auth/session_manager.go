@@ -57,6 +57,7 @@ type SessionManager struct {
 	sot                   *SoTClient
 	revokeSubStarted      atomic.Bool
 	revokeMarks           *sync.Map
+	proofEpochs           *proofEpochCache
 }
 
 func altCookieName(primary string) string {
@@ -228,6 +229,7 @@ func NewSessionManager(cfg SessionManagerConfig) (*SessionManager, error) {
 			ServiceKey:      cfg.ServiceKeyGateway,
 			Mode:            parseSoTMode(),
 		}),
+		proofEpochs: newProofEpochCache(),
 	}, nil
 }
 

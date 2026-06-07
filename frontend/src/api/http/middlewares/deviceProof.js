@@ -1,3 +1,4 @@
+import { getHotPathProofHeaders, isProofAccessTokenEnabled } from '../../../auth/proofAccessToken';
 import { getAuthDeviceHeaders, isDeviceProofEnforced } from '../../../auth/authDeviceCrypto';
 
 const PROOF_SKIP_PATHS = new Set([
@@ -38,10 +39,11 @@ export const createDeviceProofMiddleware = (deps = {}) => {
     return next(ctx);
   }
 
-  let proofHeaders = await getAuthDeviceHeaders(ctx?.method, ctx?.url || path);
+  const proofFn = isProofAccessTokenEnabled() ? getHotPathProofHeaders : getAuthDeviceHeaders;
+  let proofHeaders = await proofFn(ctx?.method, ctx?.url || path);
   if ((!proofHeaders || Object.keys(proofHeaders).length === 0) && ensureRegistered) {
     await ensureRegistered().catch(() => undefined);
-    proofHeaders = await getAuthDeviceHeaders(ctx?.method, ctx?.url || path);
+    proofHeaders = await proofFn(ctx?.method, ctx?.url || path);
   }
   if (!proofHeaders || Object.keys(proofHeaders).length === 0) {
     return next(ctx);
