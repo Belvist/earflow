@@ -12,7 +12,10 @@ import {
   shouldCommitHorizontalSwipe,
 } from '../../utils/gestureIntent';
 import { PLAYER_SHEET } from '../../utils/playerSheetPhysics';
-import { isPointerInMiniPlayerGestureZone } from '../../gestures/miniPlayerGestureZone';
+import {
+  getMiniBarElement,
+  isPointerInMiniPlayerGestureZone,
+} from '../../gestures/miniPlayerGestureZone';
 import {
   isSheetDragging,
   isSheetModalVisible,
@@ -30,6 +33,16 @@ const TAP_SLOP_PX = 8;
 const SWIPE_COOLDOWN_MS = 160;
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+const TRACK_SWIPE_EXIT_EASE = [0.32, 0, 0.67, 0];
+
+function getTrackSwipeTravelPx() {
+  const bar = getMiniBarElement();
+  if (bar && typeof bar.getBoundingClientRect === 'function') {
+    return Math.max(260, Math.ceil(bar.getBoundingClientRect().width * 1.08));
+  }
+  return 300;
+}
 
 function isInteractiveMiniTarget(target) {
   return isInteractiveGestureTarget(target, ['[data-mini-no-drag]']);
@@ -131,7 +144,7 @@ export default function useMiniPlayerPan({ sheet, player }) {
     });
   }, []);
 
-  const runTrackSwipe = useCallback(async (direction) => {
+  const runTrackSwipe = useCallback(async (direction, startX = 0) => {
     cleanupTrackAnimation();
     const s = sheetRef.current;
     const p = playerRef.current;
@@ -145,12 +158,22 @@ export default function useMiniPlayerPan({ sheet, player }) {
     isAnimatingRef.current = true;
 
     try {
-      const exitX = direction < 0 ? -120 : 120;
+      const travel = getTrackSwipeTravelPx();
+      const exitX = direction < 0 ? -travel : travel;
+      const fromX = clamp(Number(startX) || 0, -travel * 0.45, travel * 0.45);
+      if (Math.abs(fromX) > 2) {
+        controls.set({
+          x: fromX,
+          y: 0,
+          opacity: clamp(1 - Math.abs(fromX) / travel, 0.55, 1),
+        });
+      }
+
       await withAnimationTimeout(controls.start({
         x: exitX,
         y: 0,
         opacity: 0,
-        transition: PLAYER_SHEET.trackSpring,
+        transition: { type: 'tween', duration: 0.26, ease: TRACK_SWIPE_EXIT_EASE },
       }));
       if (trackAnimIdRef.current !== animId) return;
 
@@ -358,8 +381,10 @@ export default function useMiniPlayerPan({ sheet, player }) {
 
       if (swipeDir !== 0
         && Date.now() - lastSwipeTimeRef.current >= SWIPE_COOLDOWN_MS) {
-        void runTrackSwipe(swipeDir);
-        void animateMiniHome();
+        const releaseX = intent === GESTURE_AXIS.HORIZONTAL
+          ? clamp(dx * 0.48, -82, 82)
+          : 0;
+        void runTrackSwipe(swipeDir, releaseX);
         return;
       }
 
