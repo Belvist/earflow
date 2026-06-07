@@ -37,9 +37,52 @@ git_sha() {
   fi
 }
 
+extract_main_js_from_html() {
+  grep -oE 'main\.[0-9a-zA-Z_-]+\.js' | head -1 || true
+}
+
+extract_main_js_via_curl() {
+  local url="$1"
+  local attempt html
+  local curl_flags=(-fsSL --max-time 20 --compressed)
+  if [[ "${CURL_INSECURE:-}" == "1" ]]; then
+    curl_flags+=(-k)
+  fi
+  for attempt in 1 2 3 4 5; do
+    html="$(curl "${curl_flags[@]}" "$url" 2>/dev/null || true)"
+    if [[ -n "$html" ]]; then
+      local main_js
+      main_js="$(printf '%s' "$html" | extract_main_js_from_html)"
+      if [[ -n "$main_js" ]]; then
+        printf '%s' "$main_js"
+        return 0
+      fi
+    fi
+    sleep 2
+  done
+  return 1
+}
+
+extract_main_js_via_docker() {
+  command -v docker >/dev/null 2>&1 || return 1
+  docker compose -f "$ROOT/docker-compose.yml" exec -T frontend sh -c \
+    "grep -oE 'main\\.[0-9a-zA-Z_-]+\\.js' /usr/share/nginx/html/index.html 2>/dev/null | head -1" 2>/dev/null || true
+}
+
 extract_main_js() {
   local url="$1"
-  curl -sS --max-time 20 "$url" 2>/dev/null | grep -oE 'main\.[a-f0-9]+\.js' | head -1 || true
+  local main_js
+  main_js="$(extract_main_js_via_curl "$url" || true)"
+  if [[ -n "$main_js" ]]; then
+    printf '%s' "$main_js"
+    return 0
+  fi
+  main_js="$(extract_main_js_via_docker || true)"
+  if [[ -n "$main_js" ]]; then
+    printf '%s' "$main_js"
+    return 0
+  fi
+  return 1
 }
 
 section "Git source of truth"
