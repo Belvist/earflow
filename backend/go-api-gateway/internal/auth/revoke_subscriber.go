@@ -30,6 +30,7 @@ func (m *SessionManager) StartRevokeSubscriber(ctx context.Context) {
 	}
 
 	go func() {
+		slog.Info("auth revoke subscriber started", "channel", revokePubSubChannel())
 		for {
 			if ctx.Err() != nil {
 				return
