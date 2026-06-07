@@ -135,8 +135,7 @@ func (r *RedisClient) RemoveUserSidFromIndex(ctx context.Context, userID int64, 
 	return r.c.SRem(ctx, UserSidsKey(userID), sid).Err()
 }
 
-// CleanupDeadSids removes all provided sids from the per-user index and
-// their metadata keys.
+// CleanupDeadSids removes stale index entries and orphaned gateway/auth keys.
 func (r *RedisClient) CleanupDeadSids(ctx context.Context, userID int64, sids []string) {
 	if len(sids) == 0 {
 		return
@@ -144,7 +143,18 @@ func (r *RedisClient) CleanupDeadSids(ctx context.Context, userID int64, sids []
 	_ = r.c.SRem(ctx, UserSidsKey(userID), toInterfaceSlice(sids)...).Err()
 	for _, sid := range sids {
 		_ = r.c.Del(ctx, SessionMetaKey(sid)).Err()
+		_ = r.c.Del(ctx, SIDKey(sid)).Err()
+		_ = r.c.Del(ctx, gatewaySessionKey(sid)).Err()
 	}
+}
+
+// GatewaySessionExists reports whether mp:sess (gateway blob) is still present.
+func (r *RedisClient) GatewaySessionExists(ctx context.Context, sid string) bool {
+	if r == nil || sid == "" {
+		return false
+	}
+	n, err := r.c.Exists(ctx, gatewaySessionKey(sid)).Result()
+	return err == nil && n > 0
 }
 
 func toInterfaceSlice(in []string) []interface{} {

@@ -213,33 +213,28 @@ func stepUpOK(d Deps, r *http.Request, principal authz.Principal) bool {
 
 // revokeAllSessionsExcept revokes every session for the user except `keep`.
 func (d Deps) revokeAllSessionsExcept(r *http.Request, userID int64, keepSID string) int {
-	sids, err := d.Redis.EnumerateUserSids(r.Context(), userID)
-	if err != nil {
-		d.Logger.Warn("revoke: enumerate failed", "err", err)
-	}
 	revoked := 0
 	seen := map[string]struct{}{}
-	for _, sid := range sids {
-		if sid == "" {
-			continue
-		}
-		if sid == keepSID {
+	for _, sid := range d.enumerateSessionSIDs(r, userID, keepSID) {
+		if sid == "" || sid == keepSID {
 			continue
 		}
 		if _, ok := seen[sid]; ok {
 			continue
 		}
 		seen[sid] = struct{}{}
+
+		jti := ""
 		info, err := d.Redis.ReadSessionInfo(r.Context(), sid)
 		if err != nil {
-			d.Logger.Warn("revoke: read failed", "err", err)
-			continue
+			d.Logger.Warn("revoke: read failed", "err", err, "sid", sid)
+		} else if info != nil {
+			jti = info.JTI
+		} else if pgRow := d.loadPGSessionOrNil(r, sid); pgRow != nil {
+			jti = pgRow.RefreshJTI
 		}
-		if info == nil {
-			_ = d.Redis.RemoveUserSidFromIndex(r.Context(), userID, sid)
-			continue
-		}
-		if err := store.RevokeSessionViaSoT(r.Context(), d.AuthSoT, d.Redis, userID, info.SID, info.JTI); err != nil {
+
+		if err := store.RevokeSessionViaSoT(r.Context(), d.AuthSoT, d.Redis, userID, sid, jti); err != nil {
 			d.Logger.Warn("revoke: failed", "err", err, "sid", sid)
 			continue
 		}

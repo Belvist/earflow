@@ -52,3 +52,28 @@ func TestSecurityRevokeSessionFullMatchesGatewayContract(t *testing.T) {
 		t.Fatal("sid still indexed for user")
 	}
 }
+
+func TestCleanupDeadSidsRemovesGatewaySession(t *testing.T) {
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mr.Close()
+
+	c := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	r := &RedisClient{c: c}
+
+	sid := "sid_dead_ghost_session01"
+	userID := int64(7)
+	mr.Set(gatewaySessionKey(sid), `{"accessToken":"a","refreshToken":"r"}`)
+	mr.SAdd(UserSidsKey(userID), sid)
+
+	r.CleanupDeadSids(context.Background(), userID, []string{sid})
+
+	if mr.Exists(gatewaySessionKey(sid)) {
+		t.Fatal("expected gateway session deleted")
+	}
+	if ok, _ := mr.SIsMember(UserSidsKey(userID), sid); ok {
+		t.Fatal("expected sid removed from user index")
+	}
+}
