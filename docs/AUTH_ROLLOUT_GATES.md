@@ -40,6 +40,8 @@ Or Playwright: `cd frontend && npm run test:e2e:auth-proof-token-dod`
 
 **Infra verify (does not close SEC-013):** `bash scripts/verify-auth-proof-token.sh`
 
+**VPS note:** Playwright runs in Docker (`auth-proof-token-dod-playwright`); host Node 18 is unsupported. Override: `AUTH_E2E_PLAYWRIGHT_HOST=1` only with Node >=22.
+
 ## Agent checklist
 
 Before marking SEC-013 closed:
