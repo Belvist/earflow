@@ -49,7 +49,9 @@ chmod +x scripts/platform-control.sh
 bash scripts/platform-control.sh build frontend
 ```
 
-## Сервер — только ветка frontend (альтернатива)
+## Сервер — только ветка frontend (DEV / стенд, не prod)
+
+> **Не использовать для earflow.ru prod.** Prod UI — только `main` (см. выше).
 
 ```bash
 cd /opt/music-platform
@@ -68,7 +70,9 @@ git pull origin frontend
 # правки в frontend/ ...
 git commit -am "fix(frontend): …"
 git push origin frontend
-# затем merge frontend → main перед prod (или PR)
+# merge frontend → main перед prod (обязательно)
+git switch main && git merge frontend && git push origin main
+git push origin main:frontend   # держим ветки на одном SHA
 ```
 
 Проверка на телефоне: `[data-testid="mini-player-bar"]` → `data-mini-bar-ui`.

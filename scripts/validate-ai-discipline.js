@@ -286,6 +286,7 @@ function main() {
     '.windsurf/rules/earflow-context-discipline.mdc',
     '.cursor/rules/earflow-context-discipline.mdc',
     '.cursor/rules/earflow-ui-client-prefs.mdc',
+    '.cursor/rules/earflow-frontend-branch.mdc',
     'docs/MOBILE_PLAYER_SHEET_DESIGN.md',
     '.cursor/skills/earflow-player-sheet/SKILL.md',
     '.cursor/rules/earflow-player-sheet.mdc',
@@ -298,6 +299,8 @@ function main() {
   assertContains('.windsurf/rules/earflow-context-discipline.mdc', 'alwaysApply: true', 'Windsurf discipline rule must always apply');
   assertContains('.cursor/rules/earflow-context-discipline.mdc', 'alwaysApply: true', 'Cursor discipline rule must always apply');
   assertContains('.cursor/rules/earflow-ui-client-prefs.mdc', 'alwaysApply: true', 'Cursor UI prefs / escape hatch rule must always apply');
+  assertContains('.cursor/rules/earflow-frontend-branch.mdc', 'alwaysApply: true', 'Cursor frontend branch rule must always apply');
+  assertContains('.cursor/rules/earflow-frontend-branch.mdc', 'git push origin main:frontend', 'Frontend branch rule must document main→frontend sync');
   assertContains('.windsurf/rules/earflow-ui-client-prefs.mdc', 'INV-ARCH-001', 'Windsurf UI prefs rule must reference INV-ARCH-001');
   assertContains('docs/ARCHITECTURE_INVARIANTS.md', 'INV-DS-001', 'DeviceSync backend-authority invariant is missing');
   assertContains('docs/ARCHITECTURE_INVARIANTS.md', 'INV-ARCH-001', 'Cross-cutting escape-hatch invariant is missing');
