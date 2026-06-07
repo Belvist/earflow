@@ -19,6 +19,7 @@ import {
   persistAuthDeviceRecord,
   signDeviceProofRequest,
 } from '../auth/authDeviceCrypto';
+import { clearProofAccessToken } from '../auth/proofAccessToken';
 
 const REAUTH_REQUIRED_REFRESH_CODES = new Set([
   'NO_SESSION',
@@ -505,6 +506,7 @@ class ApiClient {
       // ignore
     }
     void clearAuthDeviceState();
+    clearProofAccessToken();
   }
 
   async ensureAuthDeviceRegistered(options = {}) {

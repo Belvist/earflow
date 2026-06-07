@@ -80,6 +80,9 @@ func (m *SessionManager) handleRevokePubSubMessage(ctx context.Context, payload 
 		return
 	}
 	m.markSessionLocallyRevoked(ev.SID, ev.SessionEpoch, ev.Reason)
+	if m.proofEpochs != nil && ev.SessionEpoch > 0 {
+		m.proofEpochs.bumpSessionEpoch(ev.SID, ev.SessionEpoch)
+	}
 
 	prefix := m.gatewaySessionPrefix
 	if prefix == "" {

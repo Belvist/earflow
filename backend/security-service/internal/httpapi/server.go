@@ -41,6 +41,7 @@ func NewServer(d Deps) *http.Server {
 		r.Post("/internal/auth/v1/sessions/upsert", internalSessionUpsertHandler(d))
 		r.Post("/internal/auth/v1/devices/upsert", internalDeviceUpsertHandler(d))
 		r.Post("/internal/auth/v1/sessions/revoke", internalSessionRevokeHandler(d))
+		r.Post("/internal/auth/v1/epochs/lookup", internalEpochsLookupHandler(d))
 	})
 
 	r.Group(func(r chi.Router) {

@@ -59,9 +59,12 @@ func (m *SessionManager) deviceProofRequiredForRequest(r *http.Request) bool {
 	if !strings.HasPrefix(path, "/api") {
 		return false
 	}
-	// Refresh bypasses SessionAuth middleware but must not bypass PoP (cookie-only revive).
-	if path == "/api/auth/refresh" {
-		return IsValidSID(m.pickSIDFromRequest(r))
+	if path == "/api/auth/refresh" || deviceProofSensitivePath(path) {
+		if IsValidSID(m.pickSIDFromRequest(r)) {
+			return true
+		}
+		authenticatedSID, _ := r.Context().Value(ctxSID).(string)
+		return IsValidSID(authenticatedSID)
 	}
 	authenticatedSID, _ := r.Context().Value(ctxSID).(string)
 	return IsValidSID(authenticatedSID)
@@ -142,6 +145,26 @@ func (m *SessionManager) DeviceProofMiddleware() func(http.Handler) http.Handler
 				})
 				return
 			}
+
+			path := r.URL.Path
+			if proofAccessTokenEnabled() && !deviceProofSensitivePath(path) {
+				if token := strings.TrimSpace(r.Header.Get(headerProofAccessToken)); token != "" {
+					if err := m.validateProofAccessToken(r, sid); err != nil {
+						code := deviceProofErrorCode(err)
+						status := deviceProofHTTPStatus(code)
+						reauth := code == authCodeDeviceProofReq || code == authCodeDeviceRevoked
+						writeJSON(w, status, apiError{
+							Error:          "Device proof required",
+							Code:           code,
+							ReauthRequired: reauth,
+						})
+						return
+					}
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
+
 			if err := m.validateDeviceProof(r, sid); err != nil {
 				code := deviceProofErrorCode(err)
 				status := deviceProofHTTPStatus(code)

@@ -324,6 +324,54 @@ func appendSecurityEvent(ctx context.Context, exec interface {
 	return nil
 }
 
+// ProofEpochLookup holds epoch counters for proof access token issuance (PEND-SEC-013).
+type ProofEpochLookup struct {
+	SessionEpoch   int64
+	DeviceEpoch    int64
+	SessionRevoked bool
+	DeviceRevoked  bool
+}
+
+// LookupProofEpochs reads session/device epochs from Postgres SoT for proof token exchange.
+func (s *Store) LookupProofEpochs(ctx context.Context, sid, authDeviceID string) (ProofEpochLookup, error) {
+	if s == nil || s.pool == nil {
+		return ProofEpochLookup{}, errors.New("authpg store unavailable")
+	}
+	sid = strings.TrimSpace(sid)
+	authDeviceID = strings.TrimSpace(authDeviceID)
+	if sid == "" {
+		return ProofEpochLookup{}, errors.New("empty sid")
+	}
+
+	var out ProofEpochLookup
+	if authDeviceID == "" {
+		err := s.pool.QueryRow(ctx, `
+			SELECT session_epoch, revoked_at IS NOT NULL
+			FROM auth_sessions
+			WHERE sid = $1
+		`, sid).Scan(&out.SessionEpoch, &out.SessionRevoked)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ProofEpochLookup{}, nil
+		}
+		return out, err
+	}
+
+	err := s.pool.QueryRow(ctx, `
+		SELECT
+			s.session_epoch,
+			s.revoked_at IS NOT NULL,
+			COALESCE(d.device_epoch, 0),
+			COALESCE(d.revoked_at IS NOT NULL, false)
+		FROM auth_sessions s
+		LEFT JOIN auth_devices d ON d.sid = s.sid AND d.auth_device_id = $2
+		WHERE s.sid = $1
+	`, sid, authDeviceID).Scan(&out.SessionEpoch, &out.SessionRevoked, &out.DeviceEpoch, &out.DeviceRevoked)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ProofEpochLookup{}, nil
+	}
+	return out, err
+}
+
 // SessionEpoch returns current session_epoch for sid (read for admin/debug only, not hot path).
 func (s *Store) SessionEpoch(ctx context.Context, sid string) (int64, error) {
 	sid = strings.TrimSpace(sid)

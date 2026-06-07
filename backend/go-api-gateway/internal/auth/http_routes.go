@@ -55,6 +55,7 @@ func (m *SessionManager) MountRoutes(r chi.Router) {
 	r.Post("/api/auth/refresh", m.handleRefresh())
 	r.Post("/api/auth/logout", m.handleLogout())
 	r.Post("/api/auth/device/register", m.handleDeviceRegister())
+	r.Post("/api/auth/proof/token", m.handleProofToken())
 	r.Post("/api/log/error", m.handleClientErrorLog())
 	r.Get("/api/profile", m.handleProfile())
 	r.Get("/api/auth/profile", m.handleProfile())

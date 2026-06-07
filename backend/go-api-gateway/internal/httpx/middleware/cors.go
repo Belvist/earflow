@@ -25,7 +25,7 @@ func CORS(cfg CORSConfig) func(http.Handler) http.Handler {
 					w.Header().Set("Access-Control-Allow-Credentials", "true")
 					w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,PATCH,OPTIONS")
 					// PoP headers (PEND-SEC-001): required for cross-origin API (auth.earflow.ru → api.earflow.ru).
-					w.Header().Set("Access-Control-Allow-Headers", "Content-Type,Authorization,X-CSRF-Token,X-Correlation-ID,Cache-Control,Pragma,Range,If-Range,X-Auth-Device-Id,X-Auth-Device-Proof,X-Auth-Device-Proof-Ts,X-Auth-Device-Proof-Nonce")
+					w.Header().Set("Access-Control-Allow-Headers", "Content-Type,Authorization,X-CSRF-Token,X-Correlation-ID,Cache-Control,Pragma,Range,If-Range,X-Auth-Device-Id,X-Auth-Device-Proof,X-Auth-Device-Proof-Ts,X-Auth-Device-Proof-Nonce,X-Auth-Proof-Access-Token")
 					w.Header().Set("Access-Control-Expose-Headers", "X-Correlation-Id,Content-Length,Content-Range")
 					w.Header().Set("Access-Control-Max-Age", "600")
 				}
