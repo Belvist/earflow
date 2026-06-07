@@ -12,7 +12,10 @@ import {
   shouldCommitHorizontalSwipe,
 } from '../../utils/gestureIntent';
 import { PLAYER_SHEET } from '../../utils/playerSheetPhysics';
-import { isPointerInMiniPlayerGestureZone } from '../../gestures/miniPlayerGestureZone';
+import {
+  getMiniBarElement,
+  isPointerInMiniPlayerGestureZone,
+} from '../../gestures/miniPlayerGestureZone';
 import {
   isSheetDragging,
   isSheetModalVisible,
@@ -30,6 +33,20 @@ const TAP_SLOP_PX = 8;
 const SWIPE_COOLDOWN_MS = 160;
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+const TRACK_SWIPE_EXIT_EASE = [0.32, 0, 0.67, 0];
+
+function getTrackSwipeTravelPx() {
+  const bar = getMiniBarElement();
+  if (bar && typeof bar.getBoundingClientRect === 'function') {
+    return Math.max(260, Math.ceil(bar.getBoundingClientRect().width * 1.08));
+  }
+  return 300;
+}
+
+function travelPreviewCap() {
+  return Math.min(140, Math.round(getTrackSwipeTravelPx() * 0.42));
+}
 
 function isInteractiveMiniTarget(target) {
   return isInteractiveGestureTarget(target, ['[data-mini-no-drag]']);
@@ -55,11 +72,12 @@ export default function useMiniPlayerPan({ sheet, player }) {
   }, [sheet, player]);
 
   const resetTrackVisual = useCallback(() => {
-    if (!isAnimatingRef.current) {
-      controls.set({ x: 0, y: 0, opacity: 1 });
-    }
+    if (isAnimatingRef.current) return;
+    controls.set({ x: 0, y: 0, opacity: 1 });
     sheetRef.current?.resetOnTrackChange?.();
   }, [controls]);
+
+  const isTrackSwipeAnimating = useCallback(() => isAnimatingRef.current, []);
 
   const clearMiniPanSession = useCallback((reason = 'clear') => {
     const session = sessionRef.current;
@@ -131,26 +149,38 @@ export default function useMiniPlayerPan({ sheet, player }) {
     });
   }, []);
 
-  const runTrackSwipe = useCallback(async (direction) => {
-    cleanupTrackAnimation();
+  const runTrackSwipe = useCallback(async (direction, startX = 0) => {
+    // Never controls.stop() here — it snaps x back to 0 before exit (visible "bounce").
+    trackAnimIdRef.current += 1;
+    const animId = trackAnimIdRef.current;
+    isAnimatingRef.current = true;
+
     const s = sheetRef.current;
     const p = playerRef.current;
-    if (!s || !p) return;
+    if (!s || !p) {
+      isAnimatingRef.current = false;
+      return;
+    }
 
     if (!isSheetOpen(s.phaseRef.current)) {
       s.finishClosed();
     }
 
-    const animId = ++trackAnimIdRef.current;
-    isAnimatingRef.current = true;
-
     try {
-      const exitX = direction < 0 ? -120 : 120;
+      const travel = getTrackSwipeTravelPx();
+      const exitX = direction < 0 ? -travel : travel;
+      const fromX = clamp(Number(startX) || 0, -travel * 0.55, travel * 0.55);
+      controls.set({
+        x: fromX,
+        y: 0,
+        opacity: clamp(1 - Math.abs(fromX) / travel, 0.45, 1),
+      });
+
       await withAnimationTimeout(controls.start({
         x: exitX,
         y: 0,
         opacity: 0,
-        transition: PLAYER_SHEET.trackSpring,
+        transition: { type: 'tween', duration: 0.22, ease: TRACK_SWIPE_EXIT_EASE },
       }));
       if (trackAnimIdRef.current !== animId) return;
 
@@ -163,7 +193,7 @@ export default function useMiniPlayerPan({ sheet, player }) {
         x: 0,
         y: 0,
         opacity: 1,
-        transition: PLAYER_SHEET.trackSpring,
+        transition: { type: 'tween', duration: 0.24, ease: [0.22, 1, 0.36, 1] },
       }));
     } catch {
       forceUnlock('track-swipe-error');
@@ -174,7 +204,7 @@ export default function useMiniPlayerPan({ sheet, player }) {
         lastSwipeTimeRef.current = Date.now();
       }
     }
-  }, [controls, cleanupTrackAnimation, forceUnlock]);
+  }, [controls, forceUnlock]);
 
   useEffect(() => {
     if (typeof document === 'undefined') return undefined;
@@ -275,9 +305,9 @@ export default function useMiniPlayerPan({ sheet, player }) {
 
         if (!isAnimatingRef.current && horizontalDominant) {
           controls.set({
-            x: clamp(dx * 0.48, -82, 82),
+            x: clamp(dx * 0.92, -travelPreviewCap(), travelPreviewCap()),
             y: 0,
-            opacity: clamp(1 - Math.abs(dx) / 260, 0.68, 1),
+            opacity: clamp(1 - Math.abs(dx) / (travelPreviewCap() * 2.2), 0.55, 1),
           });
         }
 
@@ -313,9 +343,9 @@ export default function useMiniPlayerPan({ sheet, player }) {
 
       if (session.intent === GESTURE_AXIS.HORIZONTAL && !isAnimatingRef.current) {
         controls.set({
-          x: clamp(dx * 0.48, -82, 82),
+          x: clamp(dx * 0.92, -travelPreviewCap(), travelPreviewCap()),
           y: 0,
-          opacity: clamp(1 - Math.abs(dx) / 260, 0.68, 1),
+          opacity: clamp(1 - Math.abs(dx) / (travelPreviewCap() * 2.2), 0.55, 1),
         });
       }
 
@@ -358,8 +388,19 @@ export default function useMiniPlayerPan({ sheet, player }) {
 
       if (swipeDir !== 0
         && Date.now() - lastSwipeTimeRef.current >= SWIPE_COOLDOWN_MS) {
-        void runTrackSwipe(swipeDir);
-        void animateMiniHome();
+        const cap = travelPreviewCap();
+        const releaseX = clamp(dx * 0.92, -cap, cap);
+        void runTrackSwipe(swipeDir, releaseX);
+        return;
+      }
+
+      if (intent === GESTURE_AXIS.HORIZONTAL && absX >= IOS_GESTURE.miniDirectionLockPx) {
+        void controls.start({
+          x: 0,
+          y: 0,
+          opacity: 1,
+          transition: { type: 'tween', duration: 0.16, ease: 'easeOut' },
+        });
         return;
       }
 
@@ -422,5 +463,6 @@ export default function useMiniPlayerPan({ sheet, player }) {
     clearMiniPanSession,
     forceUnlockGestures: forceUnlock,
     recoverGestures: forceUnlock,
+    isTrackSwipeAnimating,
   };
 }
