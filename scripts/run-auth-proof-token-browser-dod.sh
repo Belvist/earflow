@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # PEND-SEC-013 — browser DoD runner (8/8). Required to close SEC-013 phase.
 # See docs/AUTH_ROLLOUT_GATES.md
+#
+# Playwright runs in Docker by default (Node 22 + @playwright/test bundled).
+# Host fallback: AUTH_E2E_PLAYWRIGHT_HOST=1 (requires Node >=22).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -41,6 +44,24 @@ for f in "${REQUIRED_FILES[@]}"; do
   fi
 done
 
+run_playwright_docker() {
+  echo "      (Playwright via Docker — auth-proof-token-dod-playwright)"
+  "${COMPOSE[@]}" --profile auth-e2e-run run --rm auth-proof-token-dod-playwright
+}
+
+run_playwright_host() {
+  echo "      (Playwright on host — requires Node >=22 and local @playwright/test)"
+  cd "$ROOT/frontend"
+  npm ci --no-audit --no-fund
+  if [[ ! -x node_modules/.bin/playwright ]]; then
+    echo "FAIL: frontend/node_modules/.bin/playwright missing after npm ci" >&2
+    return 1
+  fi
+  node_modules/.bin/playwright install chromium --with-deps
+  node_modules/.bin/playwright test e2e/device-proof-access-token-dod.spec.js \
+    --config playwright.auth-proof-token-dod.config.js
+}
+
 echo "=== [1/7] Infra verify (does not close SEC-013 alone) ==="
 bash "$ROOT/scripts/verify-auth-proof-token.sh" || {
   echo "WARN: infra verify failed — continuing to browser DoD" >&2
@@ -56,14 +77,11 @@ echo "=== [4/7] Bootstrap test user ==="
 bash "$ROOT/scripts/auth-e2e-bootstrap.sh"
 
 echo "=== [5/7] Playwright SEC-013 browser DoD (8/8) ==="
-cd "$ROOT/frontend"
-if [[ ! -d node_modules ]]; then
-  npm ci --no-audit --no-fund
+if [[ "${AUTH_E2E_PLAYWRIGHT_HOST:-0}" == "1" ]]; then
+  run_playwright_host
+else
+  run_playwright_docker
 fi
-npx playwright install chromium --with-deps
-
-npx playwright test e2e/device-proof-access-token-dod.spec.js \
-  --config playwright.auth-proof-token-dod.config.js
 PLAY_EXIT=$?
 
 echo "=== [6/7] Collect logs ==="
