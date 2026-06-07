@@ -87,6 +87,7 @@ const MobilePlayerBar = ({ onOpenEq }) => {
     cleanupTrackAnimation,
     resetTrackVisual,
     forceUnlockGestures,
+    isTrackSwipeAnimating,
   } = useMiniPlayerGestureSession({ player });
 
   const handlePlayPause = useCallback((e) => {
@@ -116,8 +117,9 @@ const MobilePlayerBar = ({ onOpenEq }) => {
   }, [sheet]);
 
   useEffect(() => {
+    if (isTrackSwipeAnimating()) return;
     resetTrackVisual();
-  }, [currentTrack?.id, resetTrackVisual]);
+  }, [currentTrack?.id, isTrackSwipeAnimating, resetTrackVisual]);
 
   useEffect(() => {
     if (!accentSourceUrl) return undefined;
@@ -188,7 +190,7 @@ const MobilePlayerBar = ({ onOpenEq }) => {
         data-mini-gesture-zone="true"
         data-mini-bar-variant={variant}
         data-mini-play-style={playStyle}
-        data-mini-bar-ui="2026-06-v48-track-swipe-exit"
+        data-mini-bar-ui="2026-06-v49-track-swipe-no-bounce"
         $variant={variant}
         initial={false}
         animate={false}
