@@ -81,8 +81,8 @@ func (p *Postgres) GetUserByID(ctx context.Context, id int64) (*User, error) {
 	const q = `
 		SELECT
 			id,
-			username,
-			salt,
+			COALESCE(username, ''),
+			COALESCE(salt, ''),
 			password_hash,
 			COALESCE(mfa_enabled, FALSE),
 			mfa_enabled_at,
