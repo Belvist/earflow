@@ -71,7 +71,16 @@ export const useHlsPrefetch = ({
         const hasDirect = typeof api.getSongDirectSession === 'function';
         const hasHls = typeof api.getSongHlsSession === 'function';
 
-        const primaryFetch = preferDirect && hasDirect ? 'direct' : hasHls ? 'hls' : hasDirect ? 'direct' : null;
+        // Direct stream auth uses one mp_stream cookie bound to a single sessionId.
+        // Prefetching the next track's direct session overwrites that cookie and breaks
+        // range requests for the track that is still playing.
+        const primaryFetch = preferDirect
+            ? (hasHls ? 'hls' : null)
+            : hasHls
+                ? 'hls'
+                : hasDirect
+                    ? 'direct'
+                    : null;
         if (!primaryFetch) return;
 
         const id = setInterval(() => {
