@@ -135,6 +135,81 @@ func (s *Store) UpsertDevice(ctx context.Context, p DeviceUpsertParams) error {
 	return s.AppendEvent(ctx, p.UserID, sid, id, EventDeviceUpsert, map[string]any{"authDeviceId": id})
 }
 
+// ListActiveSessionSIDs returns non-revoked session ids for a user (PG SoT read for dual_write revoke/list).
+func (s *Store) ListActiveSessionSIDs(ctx context.Context, userID int64) ([]string, error) {
+	if s == nil || s.pool == nil || userID <= 0 {
+		return nil, errors.New("authpg store unavailable")
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT sid FROM auth_sessions
+		WHERE user_id = $1 AND revoked_at IS NULL
+		ORDER BY last_seen_at DESC NULLS LAST, created_at DESC
+	`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list auth_sessions: %w", err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var sid string
+		if err := rows.Scan(&sid); err != nil {
+			return nil, err
+		}
+		sid = strings.TrimSpace(sid)
+		if sid != "" {
+			out = append(out, sid)
+		}
+	}
+	return out, rows.Err()
+}
+
+// ActiveSessionRow is a minimal PG session row for list/revoke when Redis cache is stale.
+type ActiveSessionRow struct {
+	SID        string
+	RefreshJTI string
+	IP         string
+	UserAgent  string
+	CreatedAt  time.Time
+	LastSeenAt time.Time
+}
+
+// GetActiveSession loads a non-revoked session row by sid.
+func (s *Store) GetActiveSession(ctx context.Context, sid string) (*ActiveSessionRow, error) {
+	if s == nil || s.pool == nil {
+		return nil, errors.New("authpg store unavailable")
+	}
+	sid = strings.TrimSpace(sid)
+	if sid == "" {
+		return nil, nil
+	}
+	var row ActiveSessionRow
+	var jti, ip, ua *string
+	var createdAt, lastSeenAt time.Time
+	err := s.pool.QueryRow(ctx, `
+		SELECT sid, refresh_jti, ip::text, user_agent, created_at, last_seen_at
+		FROM auth_sessions
+		WHERE sid = $1 AND revoked_at IS NULL
+	`, sid).Scan(&row.SID, &jti, &ip, &ua, &createdAt, &lastSeenAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get auth_sessions: %w", err)
+	}
+	if jti != nil {
+		row.RefreshJTI = strings.TrimSpace(*jti)
+	}
+	if ip != nil {
+		row.IP = strings.TrimSpace(*ip)
+	}
+	if ua != nil {
+		row.UserAgent = strings.TrimSpace(*ua)
+	}
+	row.CreatedAt = createdAt
+	row.LastSeenAt = lastSeenAt
+	return &row, nil
+}
+
 // RevokeSession marks session, devices, and refresh tokens revoked and bumps epochs (PG-first revoke).
 func (s *Store) RevokeSession(ctx context.Context, p RevokeSessionParams) error {
 	if s == nil || s.pool == nil {

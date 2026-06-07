@@ -75,6 +75,38 @@ func TestRevokeSession_BumpsEpochAndSetsRevoked(t *testing.T) {
 	}
 }
 
+func TestListActiveSessionSIDs_FiltersRevoked(t *testing.T) {
+	pool := testPool(t)
+	defer pool.Close()
+
+	ctx := context.Background()
+	store := authpg.NewStore(pool)
+
+	userID := int64(999002)
+	sidKeep := "sid_test_pg_sot_list_keep01"
+	sidRevoked := "sid_test_pg_sot_list_revoked01"
+
+	_, _ = pool.Exec(ctx, `DELETE FROM auth_sessions WHERE sid = ANY($1)`, []string{sidKeep, sidRevoked})
+
+	if err := store.UpsertSession(ctx, authpg.SessionUpsertParams{SID: sidKeep, UserID: userID, RefreshJTI: "jti-keep"}); err != nil {
+		t.Fatalf("upsert keep: %v", err)
+	}
+	if err := store.UpsertSession(ctx, authpg.SessionUpsertParams{SID: sidRevoked, UserID: userID, RefreshJTI: "jti-revoked"}); err != nil {
+		t.Fatalf("upsert revoked: %v", err)
+	}
+	if err := store.RevokeSession(ctx, authpg.RevokeSessionParams{SID: sidRevoked, UserID: userID, JTI: "jti-revoked"}); err != nil {
+		t.Fatalf("revoke: %v", err)
+	}
+
+	sids, err := store.ListActiveSessionSIDs(ctx, userID)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(sids) != 1 || sids[0] != sidKeep {
+		t.Fatalf("active sids = %v, want [%s]", sids, sidKeep)
+	}
+}
+
 func TestParseMode_DefaultOff(t *testing.T) {
 	t.Setenv("AUTH_PG_SOT_MODE", "")
 	if authpg.ParseMode() != authpg.ModeOff {

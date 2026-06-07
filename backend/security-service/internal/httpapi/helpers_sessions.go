@@ -8,31 +8,55 @@ import (
 	"github.com/earflow/music-platform/security-service/internal/authz"
 	"github.com/earflow/music-platform/security-service/internal/domain"
 	"github.com/earflow/music-platform/security-service/internal/store"
+	"github.com/earflow/music-platform/security-service/internal/store/authpg"
 )
+
+// enumerateSessionSIDs merges Redis index, PG SoT (dual_write+), and the caller sid.
+func (d Deps) enumerateSessionSIDs(r *http.Request, userID int64, principalSID string) []string {
+	seen := map[string]struct{}{}
+	ordered := make([]string, 0, 8)
+	add := func(sid string) {
+		sid = strings.TrimSpace(sid)
+		if sid == "" {
+			return
+		}
+		if _, ok := seen[sid]; ok {
+			return
+		}
+		seen[sid] = struct{}{}
+		ordered = append(ordered, sid)
+	}
+
+	add(principalSID)
+	if sids, err := d.Redis.EnumerateUserSids(r.Context(), userID); err != nil {
+		d.Logger.Warn("sessions: enumerate failed", "err", err)
+	} else {
+		for _, sid := range sids {
+			add(sid)
+		}
+	}
+	if d.AuthSoT != nil && d.AuthSoT.Mode.WritesEnabled() && d.AuthSoT.PG != nil {
+		pgSids, err := d.AuthSoT.PG.ListActiveSessionSIDs(r.Context(), userID)
+		if err != nil {
+			d.Logger.Warn("sessions: pg enumerate failed", "err", err)
+		} else {
+			for _, sid := range pgSids {
+				add(sid)
+			}
+		}
+	}
+
+	max := d.Config.Security.MaxSessionsList
+	if max > 0 && len(ordered) > max {
+		return ordered[:max]
+	}
+	return ordered
+}
 
 // collectDecoratedSessions enumerates the user's sessions and decorates them
 // with UI-ready labels. Cleans up dead sids from the index as it iterates.
 func (d Deps) collectDecoratedSessions(r *http.Request, principal authz.Principal) []domain.SessionView {
-	sids, err := d.Redis.EnumerateUserSids(r.Context(), principal.UserID)
-	if err != nil {
-		d.Logger.Warn("sessions: enumerate failed", "err", err)
-	}
-
-	seen := map[string]struct{}{principal.SID: {}}
-	ordered := []string{principal.SID}
-	for _, sid := range sids {
-		if sid == "" {
-			continue
-		}
-		if _, ok := seen[sid]; ok {
-			continue
-		}
-		seen[sid] = struct{}{}
-		ordered = append(ordered, sid)
-		if len(ordered) >= d.Config.Security.MaxSessionsList {
-			break
-		}
-	}
+	ordered := d.enumerateSessionSIDs(r, principal.UserID, principal.SID)
 
 	now := time.Now().UTC()
 	views := make([]domain.SessionView, 0, len(ordered))
@@ -45,8 +69,41 @@ func (d Deps) collectDecoratedSessions(r *http.Request, principal authz.Principa
 			continue
 		}
 		if info == nil {
-			dead = append(dead, sid)
-			continue
+			if d.Redis.GatewaySessionExists(r.Context(), sid) {
+				info = &store.SessionInfo{SID: sid, MetaMissing: true}
+				if d.AuthSoT != nil && d.AuthSoT.PG != nil {
+					if pgRow, pgErr := d.AuthSoT.PG.GetActiveSession(r.Context(), sid); pgErr != nil {
+						d.Logger.Warn("sessions: pg read failed", "err", pgErr, "sid", sid)
+					} else if pgRow != nil {
+						info.JTI = pgRow.RefreshJTI
+						info.IP = pgRow.IP
+						info.UA = pgRow.UserAgent
+						if !pgRow.CreatedAt.IsZero() {
+							info.CreatedAt = pgRow.CreatedAt.UTC().Format(time.RFC3339)
+						}
+						if !pgRow.LastSeenAt.IsZero() {
+							info.LastSeenAt = pgRow.LastSeenAt.UTC().Format(time.RFC3339)
+						}
+					}
+				}
+			} else if pgRow := d.loadPGSessionOrNil(r, sid); pgRow != nil {
+				info = &store.SessionInfo{
+					SID:        sid,
+					JTI:        pgRow.RefreshJTI,
+					IP:         pgRow.IP,
+					UA:         pgRow.UserAgent,
+					MetaMissing: true,
+				}
+				if !pgRow.CreatedAt.IsZero() {
+					info.CreatedAt = pgRow.CreatedAt.UTC().Format(time.RFC3339)
+				}
+				if !pgRow.LastSeenAt.IsZero() {
+					info.LastSeenAt = pgRow.LastSeenAt.UTC().Format(time.RFC3339)
+				}
+			} else {
+				dead = append(dead, sid)
+				continue
+			}
 		}
 		view := domain.DecorateSession(
 			info.SID,
@@ -69,6 +126,18 @@ func (d Deps) collectDecoratedSessions(r *http.Request, principal authz.Principa
 	return views
 }
 
+func (d Deps) loadPGSessionOrNil(r *http.Request, sid string) *authpg.ActiveSessionRow {
+	if d.AuthSoT == nil || d.AuthSoT.PG == nil {
+		return nil
+	}
+	row, err := d.AuthSoT.PG.GetActiveSession(r.Context(), sid)
+	if err != nil {
+		d.Logger.Warn("sessions: pg read failed", "err", err, "sid", sid)
+		return nil
+	}
+	return row
+}
+
 // userMFAStepUpRequired loads MFA flag for session revoke. On transient Postgres errors
 // returns (false, false) so revoke can proceed; on missing user returns (_, true).
 func (d Deps) userMFAStepUpRequired(r *http.Request, userID int64) (mfaEnabled bool, abort bool) {
@@ -88,12 +157,8 @@ func (d Deps) sessionBelongsToUser(r *http.Request, userID int64, sid string) bo
 	if sid == "" || userID <= 0 {
 		return false
 	}
-	sids, err := d.Redis.EnumerateUserSids(r.Context(), userID)
-	if err != nil {
-		d.Logger.Warn("sessions: enumerate failed", "err", err)
-	}
-	for _, candidate := range sids {
-		if strings.TrimSpace(candidate) == sid {
+	for _, candidate := range d.enumerateSessionSIDs(r, userID, "") {
+		if candidate == sid {
 			return true
 		}
 	}

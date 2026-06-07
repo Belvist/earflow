@@ -81,13 +81,18 @@ func revokeSessionHandler(d Deps) http.HandlerFunc {
 			writeError(w, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Service temporarily unavailable")
 			return
 		}
-		if info == nil {
+		jti := ""
+		if info != nil {
+			jti = info.JTI
+		} else if pgRow := d.loadPGSessionOrNil(r, targetSID); pgRow != nil {
+			jti = pgRow.RefreshJTI
+		} else if !d.Redis.GatewaySessionExists(r.Context(), targetSID) {
 			_ = d.Redis.RemoveUserSidFromIndex(r.Context(), principal.UserID, targetSID)
 			writeJSON(w, http.StatusOK, revokeSessionResponse{Revoked: true})
 			return
 		}
 
-		if err := store.RevokeSessionViaSoT(r.Context(), d.AuthSoT, d.Redis, principal.UserID, info.SID, info.JTI); err != nil {
+		if err := store.RevokeSessionViaSoT(r.Context(), d.AuthSoT, d.Redis, principal.UserID, targetSID, jti); err != nil {
 			d.Logger.Warn("sessions-revoke-one: revoke failed", "err", err, "sid", targetSID)
 			writeError(w, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Service temporarily unavailable")
 			return
