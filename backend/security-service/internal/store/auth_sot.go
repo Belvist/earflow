@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"time"
 
 	"github.com/earflow/music-platform/security-service/internal/store/authpg"
 )
@@ -12,12 +13,13 @@ type AuthSoT struct {
 	Mode authpg.Mode
 }
 
-// RevokeSessionFull attempts Postgres revoke first (when enabled), then always clears Redis.
-// Returns Redis error if cleanup failed; otherwise may return PG error (session already dead in cache).
-func (a *AuthSoT) RevokeSessionFull(ctx context.Context, redis *RedisClient, sid string, userID int64, jti string) error {
+// RevokeSessionFull attempts Postgres revoke first (when enabled), then always clears Redis,
+// then publishes a revoke fan-out event (PEND-SEC-012, best-effort).
+func (a *AuthSoT) RevokeSessionFull(ctx context.Context, redis *RedisClient, sid string, userID int64, jti, reason string) error {
+	var sessionEpoch int64
 	var pgErr error
 	if a != nil && a.Mode.WritesEnabled() && a.PG != nil {
-		pgErr = a.PG.RevokeSession(ctx, authpg.RevokeSessionParams{
+		sessionEpoch, pgErr = a.PG.RevokeSession(ctx, authpg.RevokeSessionParams{
 			SID:    sid,
 			UserID: userID,
 			JTI:    jti,
@@ -29,6 +31,15 @@ func (a *AuthSoT) RevokeSessionFull(ctx context.Context, redis *RedisClient, sid
 	}
 	if redisErr != nil {
 		return redisErr
+	}
+	if redis != nil {
+		_ = redis.PublishRevokeEvent(ctx, RevokeEvent{
+			SID:          sid,
+			UserID:       userID,
+			SessionEpoch: sessionEpoch,
+			Reason:       reason,
+			IssuedAt:     time.Now().UTC().Format(time.RFC3339Nano),
+		})
 	}
 	// PG revoke is best-effort during dual_write rollout (PEND-SEC-011): Redis is user-visible SoT.
 	if pgErr != nil {

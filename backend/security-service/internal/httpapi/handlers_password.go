@@ -234,7 +234,7 @@ func (d Deps) revokeAllSessionsExcept(r *http.Request, userID int64, keepSID str
 			jti = pgRow.RefreshJTI
 		}
 
-		if err := store.RevokeSessionViaSoT(r.Context(), d.AuthSoT, d.Redis, userID, sid, jti); err != nil {
+		if err := store.RevokeSessionViaSoT(r.Context(), d.AuthSoT, d.Redis, userID, sid, jti, store.RevokeReasonOthers); err != nil {
 			d.Logger.Warn("revoke: failed", "err", err, "sid", sid)
 			continue
 		}

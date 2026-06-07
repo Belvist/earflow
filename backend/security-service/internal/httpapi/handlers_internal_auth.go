@@ -99,7 +99,7 @@ func internalSessionRevokeHandler(d Deps) http.HandlerFunc {
 			writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "sid required")
 			return
 		}
-		if err := store.RevokeSessionViaSoT(r.Context(), d.AuthSoT, d.Redis, req.UserID, req.SID, req.JTI); err != nil {
+		if err := store.RevokeSessionViaSoT(r.Context(), d.AuthSoT, d.Redis, req.UserID, req.SID, req.JTI, store.RevokeReasonInternal); err != nil {
 			d.Logger.Warn("internal session revoke failed", "err", err, "sid", req.SID)
 			writeError(w, http.StatusServiceUnavailable, "REVOKE_FAILED", "Session revoke failed")
 			return

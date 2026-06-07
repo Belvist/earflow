@@ -120,14 +120,23 @@ func (r *RedisClient) RevokeSession(ctx context.Context, userID int64, sid, jti 
 }
 
 // RevokeSessionViaSoT applies PG-first revoke when AuthSoT mode allows writes.
-func RevokeSessionViaSoT(ctx context.Context, sot *AuthSoT, redis *RedisClient, userID int64, sid, jti string) error {
+func RevokeSessionViaSoT(ctx context.Context, sot *AuthSoT, redis *RedisClient, userID int64, sid, jti, reason string) error {
 	if sot != nil {
-		return sot.RevokeSessionFull(ctx, redis, sid, userID, jti)
+		return sot.RevokeSessionFull(ctx, redis, sid, userID, jti, reason)
 	}
 	if redis == nil {
 		return nil
 	}
-	return redis.RevokeSessionFull(ctx, sid, userID, jti)
+	if err := redis.RevokeSessionFull(ctx, sid, userID, jti); err != nil {
+		return err
+	}
+	return redis.PublishRevokeEvent(ctx, RevokeEvent{
+		SID:          sid,
+		UserID:       userID,
+		SessionEpoch: 0,
+		Reason:       reason,
+		IssuedAt:     time.Now().UTC().Format(time.RFC3339Nano),
+	})
 }
 
 // RemoveUserSidFromIndex removes a single sid from the per-user set (cleanup).
