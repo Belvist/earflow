@@ -2,6 +2,12 @@ import type { Server } from 'bun';
 
 import { createHash, createHmac, randomBytes, timingSafeEqual as cryptoTse } from 'node:crypto';
 
+import {
+    buildHlsSegmentCacheUrl,
+    createHlsSegmentCacheSig,
+    hlsSegmentCacheExpSec,
+    verifyHlsSegmentCacheSig,
+} from './auth/hlsSegmentCache';
 import { loadConfig } from './config';
 import { json, gzipJson, text, empty } from './http/responses';
 import { createDb, getSongForStreaming, type QualityVariant } from './db/songs';
@@ -139,6 +145,13 @@ function noStoreHeaders(extra?: Record<string, string>): Record<string, string> 
         'Cache-Control': 'private, no-store',
         'Pragma': 'no-cache',
         'Expires': '0',
+        ...(extra || {}),
+    };
+}
+
+function publicImmutableCacheHeaders(extra?: Record<string, string>): Record<string, string> {
+    return {
+        'Cache-Control': 'public, max-age=31536000, immutable',
         ...(extra || {}),
     };
 }
@@ -1084,13 +1097,38 @@ function rewriteMasterPlaylist(body: string, trackRef: string): string {
     return `${out.join('\n').trim()}\n`;
 }
 
-function rewriteMediaPlaylist(body: string, trackRef: string, variant: string): string {
+function buildHlsSegmentUri(record: PlaybackSessionRecord, variant: string, asset: string): string {
+    if (!cfg.hlsSegmentCache.enabled) {
+        return `../segments/${variant}/${asset}`;
+    }
+
+    const expSec = hlsSegmentCacheExpSec(Date.now(), cfg.hlsSegmentCache.ttlSeconds);
+    const sig = createHlsSegmentCacheSig({
+        secrets: cfg.urlTokenSecrets,
+        trackId: record.trackId,
+        manifestHash8B64Url: record.manifestHash8B64Url,
+        variant,
+        asset,
+        expSec,
+    });
+    return buildHlsSegmentCacheUrl({
+        publicOrigin: cfg.publicStreamingOrigin,
+        trackId: record.trackId,
+        manifestHash8B64Url: record.manifestHash8B64Url,
+        variant,
+        asset,
+        expSec,
+        sig,
+    });
+}
+
+function rewriteMediaPlaylist(body: string, record: PlaybackSessionRecord, variant: string): string {
     const safeVariant = isSafeHlsVariant(variant) ? variant : 'aac_128';
     const rewriteUri = (uri: string): string => {
         const raw = String(uri || '').replace(/\\/g, '/').split('/').pop() || '';
-        if (raw === 'init.mp4') return `../segments/${safeVariant}/init.mp4`;
-        if (isSafeHlsSegmentName(raw)) return `../segments/${safeVariant}/${raw}`;
-        return `../segments/${safeVariant}/seg_00000.m4s`;
+        if (raw === 'init.mp4') return buildHlsSegmentUri(record, safeVariant, 'init.mp4');
+        if (isSafeHlsSegmentName(raw)) return buildHlsSegmentUri(record, safeVariant, raw);
+        return buildHlsSegmentUri(record, safeVariant, 'seg_00000.m4s');
     };
 
     const out: string[] = [];
@@ -1110,7 +1148,7 @@ function rewriteMediaPlaylist(body: string, trackRef: string, variant: string): 
         }
         out.push(rewriteUri(trimmed));
     }
-    void trackRef;
+    void record.trackRef;
     return `${out.join('\n').trim()}\n`;
 }
 
@@ -1130,7 +1168,7 @@ async function readHlsPlaylist(record: PlaybackSessionRecord, fileName: string):
     const raw = new TextDecoder().decode(obj.bytes);
     const body = fileName === 'master.m3u8'
         ? rewriteMasterPlaylist(raw, record.trackRef)
-        : rewriteMediaPlaylist(raw, record.trackRef, fileName.split('/')[0] || '');
+        : rewriteMediaPlaylist(raw, record, fileName.split('/')[0] || '');
 
     return text(200, body, {
         ...noStoreHeaders(),
@@ -1139,8 +1177,14 @@ async function readHlsPlaylist(record: PlaybackSessionRecord, fileName: string):
     });
 }
 
-async function accelHlsAsset(record: PlaybackSessionRecord, fileName: string, contentType: string): Promise<Response> {
-    const key = hlsObjectKey(record.trackId, record.manifestHash8B64Url, fileName);
+async function serveHlsAssetViaAccel(params: {
+    trackId: number;
+    manifestHash8B64Url: string;
+    fileName: string;
+    contentType: string;
+    cachePolicy: 'public' | 'private';
+}): Promise<Response> {
+    const key = hlsObjectKey(params.trackId, params.manifestHash8B64Url, params.fileName);
     if (!key) return empty(404, noStoreHeaders());
 
     const exists = await headObject({
@@ -1177,12 +1221,84 @@ async function accelHlsAsset(record: PlaybackSessionRecord, fileName: string, co
     const encodedObjectKey = isPathStyle ? u.pathname.slice(expectedPrefix.length) : u.pathname.replace(/^\/+/, '');
     if (!encodedObjectKey) return empty(503, noStoreHeaders({ 'Retry-After': '2' }));
 
-    const headers = new Headers(noStoreHeaders());
+    const cacheHeaders = params.cachePolicy === 'public'
+        ? publicImmutableCacheHeaders()
+        : noStoreHeaders();
+    const headers = new Headers(cacheHeaders);
     headers.set('X-Accel-Redirect', `/media/direct-hls/${encodedObjectKey}${u.search}`);
-    headers.set('Content-Type', contentType);
+    headers.set('Content-Type', params.contentType);
     headers.set('Accept-Ranges', 'bytes');
     headers.set('Cross-Origin-Resource-Policy', 'cross-origin');
     return new Response(null, { status: 200, headers });
+}
+
+async function accelHlsAsset(record: PlaybackSessionRecord, fileName: string, contentType: string): Promise<Response> {
+    return serveHlsAssetViaAccel({
+        trackId: record.trackId,
+        manifestHash8B64Url: record.manifestHash8B64Url,
+        fileName,
+        contentType,
+        cachePolicy: 'private',
+    });
+}
+
+async function handleHlsCacheSegment(req: Request, url: URL): Promise<Response | null> {
+    if (!cfg.hlsSegmentCache.enabled) return null;
+    if (req.method !== 'GET' && req.method !== 'HEAD') return null;
+
+    const parts = url.pathname.split('/').filter(Boolean);
+    if (parts.length !== 7 || parts[0] !== 'audio' || parts[1] !== 'v3' || parts[2] !== 'cache') {
+        return null;
+    }
+
+    const trackId = parsePositiveInt(parts[3]);
+    const manifestHash8B64Url = String(parts[4] || '').trim();
+    const variant = String(parts[5] || '').trim();
+    let asset = '';
+    try {
+        asset = decodeURIComponent(String(parts[6] || '').trim());
+    } catch {
+        return empty(400, streamFailureHeaders('HLS_CACHE_BAD_ASSET'));
+    }
+
+    if (!trackId || !/^[A-Za-z0-9_-]{8,64}$/.test(manifestHash8B64Url)) {
+        return empty(404, streamFailureHeaders('HLS_CACHE_NOT_FOUND'));
+    }
+    if (!isSafeHlsVariant(variant)) {
+        return empty(404, streamFailureHeaders('HLS_CACHE_NOT_FOUND'));
+    }
+    if (asset !== 'init.mp4' && !isSafeHlsSegmentName(asset)) {
+        return empty(404, streamFailureHeaders('HLS_CACHE_NOT_FOUND'));
+    }
+
+    const expSec = parsePositiveInt(url.searchParams.get('exp'));
+    const sig = String(url.searchParams.get('sig') || '').trim();
+    if (!expSec || !sig) {
+        return empty(403, streamFailureHeaders('HLS_CACHE_SIG_MISSING'));
+    }
+
+    const verified = verifyHlsSegmentCacheSig({
+        secrets: cfg.urlTokenSecrets,
+        trackId,
+        manifestHash8B64Url,
+        variant,
+        asset,
+        expSec,
+        sig,
+        nowMs: Date.now(),
+    });
+    if (!verified) {
+        return empty(403, streamFailureHeaders('HLS_CACHE_SIG_INVALID'));
+    }
+
+    const contentType = asset === 'init.mp4' ? 'video/mp4' : 'video/iso.segment';
+    return serveHlsAssetViaAccel({
+        trackId,
+        manifestHash8B64Url,
+        fileName: `${variant}/${asset}`,
+        contentType,
+        cachePolicy: 'public',
+    });
 }
 
 async function handlePlaybackMedia(req: Request, url: URL): Promise<Response | null> {
@@ -1316,6 +1432,9 @@ Bun.serve({
                     if (url.pathname === '/health') {
                         return text(200, 'ok');
                     }
+
+                    const cacheSegmentResponse = await handleHlsCacheSegment(req, url);
+                    if (cacheSegmentResponse) return cacheSegmentResponse;
 
                     const mediaResponse = await handlePlaybackMedia(req, url);
                     if (mediaResponse) return mediaResponse;

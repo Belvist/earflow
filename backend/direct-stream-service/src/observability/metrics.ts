@@ -36,6 +36,7 @@ export function routeName(pathname: string): string {
     if (path === '/api/stream/v2/share') return 'stream_share';
     if (path === '/api/stream/v3/session') return 'playback_session';
     if (path.startsWith('/api/stream/v3/session/')) return 'playback_session_refresh';
+    if (path.startsWith('/audio/v3/cache/')) return 'audio_v3_cache';
     if (path.startsWith('/audio/v3/')) return 'audio_v3';
     if (path.startsWith('/audio/v1/')) return 'audio_v1';
     if (path.startsWith('/api/stream/v2/crypt/')) return 'stream_crypt';

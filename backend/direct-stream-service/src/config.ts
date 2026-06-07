@@ -53,6 +53,10 @@ export type Config = {
         mediaRateLimitWindowSeconds: number;
         mediaRateLimitMaxRequests: number;
     };
+    hlsSegmentCache: {
+        enabled: boolean;
+        ttlSeconds: number;
+    };
 };
 
 const envSchema = z.object({
@@ -142,6 +146,13 @@ const envSchema = z.object({
     DIRECT_STREAM_PLAYBACK_MAX_ACTIVE_SESSIONS_PER_USER: z.coerce.number().int().positive().default(4),
     DIRECT_STREAM_PLAYBACK_MEDIA_RL_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
     DIRECT_STREAM_PLAYBACK_MEDIA_RL_MAX_REQUESTS: z.coerce.number().int().positive().default(900),
+
+    DIRECT_STREAM_HLS_SEGMENT_CACHE_ENABLED: z
+        .string()
+        .optional()
+        .default('true')
+        .transform((v: string) => ['1', 'true', 'yes', 'on'].includes(String(v).trim().toLowerCase())),
+    DIRECT_STREAM_HLS_SEGMENT_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(604800),
 });
 
 function deriveUrlTokenSecret(systemRootSecret: string): Uint8Array {
@@ -235,6 +246,10 @@ export function loadConfig(): Config {
             maxActiveSessionsPerUser: Math.max(1, Math.min(16, Math.trunc(env.DIRECT_STREAM_PLAYBACK_MAX_ACTIVE_SESSIONS_PER_USER))),
             mediaRateLimitWindowSeconds: Math.max(1, Math.min(300, Math.trunc(env.DIRECT_STREAM_PLAYBACK_MEDIA_RL_WINDOW_SECONDS))),
             mediaRateLimitMaxRequests: Math.max(60, Math.min(5000, Math.trunc(env.DIRECT_STREAM_PLAYBACK_MEDIA_RL_MAX_REQUESTS))),
+        },
+        hlsSegmentCache: {
+            enabled: env.DIRECT_STREAM_HLS_SEGMENT_CACHE_ENABLED,
+            ttlSeconds: Math.max(3600, Math.min(30 * 24 * 3600, Math.trunc(env.DIRECT_STREAM_HLS_SEGMENT_CACHE_TTL_SECONDS))),
         },
     };
 }
