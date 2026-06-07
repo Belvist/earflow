@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
-# Verify strmhaha HLS CDN cache path: origin health, cache URL shape, nginx cache headers.
+# Verify strmhaha HLS CDN cache path: health, signed cache route, playlist no-store.
+# Default: strmhaha direct (no CDN). When Timeweb CDN is on, set:
+#   STRMHAHA_ORIGIN=https://origin.strmhaha.earflow.ru  (A → VPS, CDN pull)
+#   STRMHAHA_PUBLIC=https://strmhaha.earflow.ru         (CNAME → CDN)
 set -euo pipefail
 
-ORIGIN="${STRMHAHA_ORIGIN:-https://origin.strmhaha.earflow.ru}"
+ORIGIN="${STRMHAHA_ORIGIN:-https://strmhaha.earflow.ru}"
 PUBLIC="${STRMHAHA_PUBLIC:-https://strmhaha.earflow.ru}"
 
-echo "== origin health =="
+echo "== origin health (${ORIGIN}) =="
 curl -fsS -o /dev/null -w "origin nginx-health: %{http_code}\n" "${ORIGIN}/nginx-health"
 
-echo "== public health (direct or via CDN) =="
+echo "== public health (${PUBLIC}) =="
 curl -fsS -o /dev/null -w "public nginx-health: %{http_code}\n" "${PUBLIC}/nginx-health" || \
   echo "WARN: public health failed (CDN/DNS not wired yet?)"
 
@@ -29,4 +32,4 @@ else
   echo "WARN: playlist did not return Cache-Control no-store (may be 401/404 without session)"
 fi
 
-echo "PASS: strmhaha CDN cache prerequisites look sane. Play a track and inspect segment URLs for /audio/v3/cache/ with exp&sig."
+echo "PASS: strmhaha cache route OK. Play a track; segment URLs should use /audio/v3/cache/ with exp&sig."
