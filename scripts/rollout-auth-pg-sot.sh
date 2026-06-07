@@ -61,16 +61,13 @@ run_backfill() {
   else
     unset AUTH_PG_BACKFILL_DRY_RUN
   fi
-  if docker compose -f docker-compose.yml images security-service 2>/dev/null | grep -q security-service; then
-    echo "Building security-service (auth-pg-backfill binary)..."
-    "${COMPOSE[@]}" build security-service
-    "${COMPOSE[@]}" run --rm --no-deps \
-      -e AUTH_PG_BACKFILL_DRY_RUN="${AUTH_PG_BACKFILL_DRY_RUN:-}" \
-      --entrypoint /app/auth-pg-backfill \
-      security-service
-    return
-  fi
-  bash "$ROOT/scripts/backfill-auth-pg-sot.sh"
+  echo "Building security-service (auth-pg-backfill binary)..."
+  "${COMPOSE[@]}" build security-service
+  echo "Running auth-pg-backfill via docker compose..."
+  "${COMPOSE[@]}" run --rm --no-deps \
+    -e AUTH_PG_BACKFILL_DRY_RUN="${AUTH_PG_BACKFILL_DRY_RUN:-}" \
+    --entrypoint /app/auth-pg-backfill \
+    security-service
 }
 
 phase_migrate() {
