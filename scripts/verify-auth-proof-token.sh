@@ -74,15 +74,13 @@ else
 fi
 
 echo ""
-echo "Manual (required for DoD):"
-echo "  1) Login in browser — DevTools Network: hot GETs send X-Auth-Proof-Access-Token"
-echo "  2) POST /api/auth/proof/token returns token + expiresIn (~90s)"
-echo "  3) Logout/revoke still requires full ECDSA proof (no token-only)"
-echo "  4) Revoke from device A → device B hot requests fail within ~2s (epoch invalidation)"
+echo "Browser DoD (required to close SEC-013):"
+echo "  bash scripts/run-auth-proof-token-browser-dod.sh"
+echo "  — 8/8 checks per docs/AUTH_ROLLOUT_GATES.md"
 
 if [[ "$failures" -eq 0 ]]; then
   echo ""
-  echo "PEND-SEC-013 verify: PASS (automated)"
+  echo "PEND-SEC-013 verify: PASS (automated infra only — SEC-013 phase stays PARTIAL until browser DoD)"
   exit 0
 fi
 echo ""

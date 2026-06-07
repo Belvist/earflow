@@ -29,6 +29,7 @@
     "test:e2e:security": "playwright test e2e/device-proof-cookie-transplant.spec.js",
     "test:e2e:pop-live": "playwright test e2e/device-proof-live-gateway.spec.js --config playwright.pop-live.config.js",
     "test:e2e:auth-fullstack": "playwright test e2e/device-proof-fullstack.spec.js --config playwright.auth-fullstack.config.js",
+    "test:e2e:auth-proof-token-dod": "playwright test e2e/device-proof-access-token-dod.spec.js --config playwright.auth-proof-token-dod.config.js",
     "test:e2e:homepage": "playwright test e2e/homepage-health.spec.js e2e/homepage-gestures.spec.js",
     "test:e2e:player": "playwright test e2e/gestures.spec.js e2e/gestures.freeze-regression.spec.js e2e/homepage-health.spec.js e2e/homepage-gestures.spec.js e2e/mini-bar-layout.spec.js e2e/modal-surfaces.spec.js e2e/player-gestures-contract.spec.js",
     "test:e2e:ci-player": "cross-env CI=true E2E_STRESS_ACTIONS=30 playwright test e2e/gestures.spec.js e2e/gestures.freeze-regression.spec.js e2e/gestures.stress.spec.js e2e/homepage-health.spec.js e2e/homepage-gestures.spec.js e2e/mini-bar-layout.spec.js e2e/modal-surfaces.spec.js",

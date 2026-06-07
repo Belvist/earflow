@@ -51,6 +51,8 @@ services:
       ALLOW_TUNNEL_ORIGINS: "false"
       SECURITY_SERVICE_URL: http://security-service:3074
       AUTH_PG_SOT_MODE: ${AUTH_PG_SOT_MODE:-dual_write}
+      PROOF_ACCESS_TOKEN_ENABLED: ${PROOF_ACCESS_TOKEN_ENABLED:-1}
+      PROOF_ACCESS_TOKEN_TTL_SECONDS: ${PROOF_ACCESS_TOKEN_TTL_SECONDS:-90}
 
   security-service:
     environment:
