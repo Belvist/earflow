@@ -30,10 +30,9 @@ if [[ ! -f "$ROOT/.env" ]]; then
   exit 1
 fi
 
-# shellcheck disable=SC1091
-set -a
-source "$ROOT/.env"
-set +a
+# shellcheck source=scripts/load-dotenv.sh
+source "$ROOT/scripts/load-dotenv.sh"
+load_dotenv "$ROOT/.env"
 
 : "${DB_USER:?DB_USER required in .env}"
 : "${DB_NAME:?DB_NAME required in .env}"
@@ -63,6 +62,8 @@ run_backfill() {
     unset AUTH_PG_BACKFILL_DRY_RUN
   fi
   if docker compose -f docker-compose.yml images security-service 2>/dev/null | grep -q security-service; then
+    echo "Building security-service (auth-pg-backfill binary)..."
+    "${COMPOSE[@]}" build security-service
     "${COMPOSE[@]}" run --rm --no-deps \
       -e AUTH_PG_BACKFILL_DRY_RUN="${AUTH_PG_BACKFILL_DRY_RUN:-}" \
       --entrypoint /app/auth-pg-backfill \
@@ -110,10 +111,7 @@ phase_enable() {
   else
     echo 'AUTH_PG_SOT_MODE=dual_write' >> "$ROOT/.env"
   fi
-  # shellcheck disable=SC1091
-  set -a
-  source "$ROOT/.env"
-  set +a
+  load_dotenv "$ROOT/.env"
   echo "Building security-service (includes auth-pg-backfill) + api-gateway..."
   "${COMPOSE[@]}" build --no-cache security-service api-gateway
   "${COMPOSE[@]}" up -d --force-recreate security-service api-gateway
