@@ -49,6 +49,9 @@ echo "      active auth_sessions=$sess_count auth_devices=$dev_count"
 if [[ "${sess_count:-0}" -ge 0 ]]; then
   pass "auth_sessions readable"
 fi
+if [[ "$mode" == "dual_write" && "${sess_count:-0}" -eq 0 ]]; then
+  fail "dual_write enabled but auth_sessions empty — run backfill-live after fixing UpsertSession SQL"
+fi
 
 if "${COMPOSE[@]}" ps security-service 2>/dev/null | grep -qE 'Up|running'; then
   pass "security-service running"

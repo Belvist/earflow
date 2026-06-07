@@ -75,7 +75,7 @@ func (s *Store) UpsertSession(ctx context.Context, p SessionUpsertParams) error 
 
 	const qSession = `
 		INSERT INTO auth_sessions (sid, user_id, refresh_jti, created_at, last_seen_at, ip, user_agent)
-		VALUES ($1, $2, NULLIF($3, ''), NOW(), NOW(), $4, NULLIF($5, '')
+		VALUES ($1, $2, NULLIF($3, ''), NOW(), NOW(), $4, NULLIF($5, ''))
 		ON CONFLICT (sid) DO UPDATE SET
 			user_id = EXCLUDED.user_id,
 			refresh_jti = COALESCE(NULLIF(EXCLUDED.refresh_jti, ''), auth_sessions.refresh_jti),

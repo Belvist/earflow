@@ -50,7 +50,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	var sessions, devices int
+	var sessionsSeen, sessionsWritten, sessionErrors, devicesSeen, devicesWritten, deviceErrors int
 	for _, userKey := range users {
 		userID, ok := parseUserIDKey(userKey)
 		if !ok {
@@ -77,15 +77,17 @@ func main() {
 				_ = json.Unmarshal([]byte(metaRaw), &meta)
 				ip, ua = meta.IP, meta.UA
 			}
+			sessionsSeen++
 			if !dryRun {
 				if err := authStore.UpsertSession(ctx, authpg.SessionUpsertParams{
 					SID: sid, UserID: userID, RefreshJTI: strings.TrimSpace(jti), IP: ip, UserAgent: ua,
 				}); err != nil {
+					sessionErrors++
 					log.Printf("session upsert sid=%s: %v", sid, err)
 					continue
 				}
+				sessionsWritten++
 			}
-			sessions++
 
 			devIDs, _ := rdb.SMembers(ctx, "auth:sid_devices:"+sid).Result()
 			for _, devID := range devIDs {
@@ -104,21 +106,35 @@ func main() {
 				if json.Unmarshal([]byte(raw), &rec) != nil || rec.PublicKeySPKI == "" {
 					continue
 				}
+				devicesSeen++
 				if !dryRun {
 					if err := authStore.UpsertDevice(ctx, authpg.DeviceUpsertParams{
 						AuthDeviceID: devID, SID: sid, UserID: userID,
 						PublicKeySPKI: rec.PublicKeySPKI, UserAgent: rec.UA,
 					}); err != nil {
+						deviceErrors++
 						log.Printf("device upsert %s: %v", devID, err)
 						continue
 					}
+					devicesWritten++
 				}
-				devices++
 			}
 		}
 	}
 
-	fmt.Printf("backfill done: sessions=%d devices=%d\n", sessions, devices)
+	if dryRun {
+		fmt.Printf("backfill done (dry): sessions=%d devices=%d\n", sessionsSeen, devicesSeen)
+		return
+	}
+
+	fmt.Printf("backfill done: sessions=%d written=%d errors=%d devices=%d written=%d errors=%d\n",
+		sessionsSeen, sessionsWritten, sessionErrors, devicesSeen, devicesWritten, deviceErrors)
+	if sessionsSeen > 0 && sessionsWritten == 0 {
+		log.Fatal("backfill failed: 0 sessions written")
+	}
+	if sessionErrors > 0 {
+		log.Fatalf("backfill failed: %d session upsert errors", sessionErrors)
+	}
 }
 
 func parseUserIDKey(key string) (int64, bool) {
