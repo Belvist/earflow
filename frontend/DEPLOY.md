@@ -1,27 +1,74 @@
-# Earflow listener UI — деплой (ветка `frontend`)
+# Earflow listener UI — деплой
 
-## Git
+## Важно: две ветки
 
-- **`frontend`** — все коммиты UI (`frontend/`, `artist-frontend/`)
-- **`main`** — backend/gateway/ops (без правок SPA)
+| Ветка | Содержимое |
+|-------|------------|
+| **`main`** | всё (backend + UI). **На VPS деплой UI — из `main`** (после merge UI). |
+| **`frontend`** | только UI-коммиты (разработка). Периодически мержится в `main`. |
 
-```bash
-git checkout frontend
-git pull origin frontend
-git push origin frontend
+После merge UI в `main` на сервере **не нужно** `git checkout frontend`.
+
+## Git: конфликт имени `frontend`
+
+В репозитории есть папка `frontend/`. Команда `git checkout frontend` может упасть:
+
+```text
+fatal: 'frontend' could be both a local file and a tracking branch
 ```
 
-## Сервер (VPS)
+**Используй:**
+
+```bash
+git switch frontend          # предпочтительно
+# или на main просто:
+git pull origin main         # UI уже в main после merge
+```
+
+## Сервер (VPS) — UI из main (рекомендуется)
 
 ```bash
 cd /opt/music-platform
 git fetch origin
-git checkout frontend
-git pull origin frontend
-./scripts/platform-control.sh build frontend
-docker compose up -d frontend
+git checkout main
+git pull origin main
+git rev-parse --short HEAD   # запомни SHA
+
+docker compose build --no-cache frontend
+docker compose up -d --force-recreate frontend
+
+# проверка build hint (v49+ после merge UI)
+curl -sS https://earflow.ru/ | grep -o 'data-mini-bar-ui="[^"]*"' | head -1
+# ожидаем: data-mini-bar-ui="2026-06-v49-track-swipe-no-bounce"
 ```
 
-Проверка: `data-mini-bar-ui` на `[data-testid="mini-player-bar"]` (DevTools).
+Если `platform-control.sh: Permission denied`:
 
-Cursor rule (локально у разработчика): `.cursor/rules/earflow-frontend-branch.mdc`
+```bash
+chmod +x scripts/platform-control.sh
+bash scripts/platform-control.sh build frontend
+```
+
+## Сервер — только ветка frontend (альтернатива)
+
+```bash
+cd /opt/music-platform
+git fetch origin
+git switch frontend || git switch -c frontend origin/frontend
+git pull origin frontend
+docker compose build --no-cache frontend
+docker compose up -d --force-recreate frontend
+```
+
+## Локально (разработка UI)
+
+```bash
+git switch frontend
+git pull origin frontend
+# правки в frontend/ ...
+git commit -am "fix(frontend): …"
+git push origin frontend
+# затем merge frontend → main перед prod (или PR)
+```
+
+Проверка на телефоне: `[data-testid="mini-player-bar"]` → `data-mini-bar-ui`.
