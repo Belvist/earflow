@@ -5,6 +5,7 @@
 #   migrate      — apply 003_auth_postgres_sot.sql
 #   backfill-dry — count Redis sessions/devices (no PG writes)
 #   backfill     — copy Redis → Postgres (AUTH_PG_SOT_MODE must stay off)
+#   backfill-live — same as backfill when dual_write already enabled (recovery)
 #   enable       — set AUTH_PG_SOT_MODE=dual_write + recreate gateway/security
 #   verify       — scripts/verify-auth-pg-sot.sh
 #   all          — migrate → backfill-dry → backfill → enable → verify
@@ -95,6 +96,11 @@ phase_backfill() {
   run_backfill 0
 }
 
+phase_backfill_live() {
+  echo "=== Backfill (live — AUTH_PG_SOT_MODE may be dual_write) ==="
+  run_backfill 0
+}
+
 phase_enable() {
   echo "=== Enable AUTH_PG_SOT_MODE=dual_write ==="
   if grep -q '^AUTH_PG_SOT_MODE=' "$ROOT/.env"; then
@@ -127,6 +133,7 @@ run_phase() {
     migrate) phase_migrate ;;
     backfill-dry) phase_backfill_dry ;;
     backfill) phase_backfill ;;
+    backfill-live) phase_backfill_live ;;
     enable) phase_enable ;;
     verify) phase_verify ;;
     all)
@@ -145,7 +152,7 @@ run_phase() {
       ;;
     *)
       echo "Unknown phase: $1" >&2
-      echo "Usage: bash scripts/rollout-auth-pg-sot.sh {migrate|backfill-dry|backfill|enable|verify|all}" >&2
+      echo "Usage: bash scripts/rollout-auth-pg-sot.sh {migrate|backfill-dry|backfill|backfill-live|enable|verify|all}" >&2
       exit 1
       ;;
   esac
