@@ -42,5 +42,6 @@ export default function useMiniPlayerGestureSession({ player } = {}) {
     recoverGestures: pan.forceUnlockGestures,
     forceUnlockGestures: pan.forceUnlockGestures,
     resetTrackVisual: pan.resetTrackVisual,
+    isTrackSwipeAnimating: pan.isTrackSwipeAnimating,
   };
 }
