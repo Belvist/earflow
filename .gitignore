@@ -158,6 +158,7 @@ docs/*
 !docs/AUTH_ROLLOUT_GATES.md
 !docs/PENDING.md
 !docs/DECISIONS.md
+!docs/SEC-005_WS_STREAM_TICKETS_DESIGN.md
 reports/*
 !reports/auth-capacity-*.md
 AGENTS.md
