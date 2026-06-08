@@ -156,7 +156,10 @@ artifacts/*
 .windsurf/
 docs/*
 !docs/AUTH_ROLLOUT_GATES.md
-reports/
+!docs/PENDING.md
+!docs/DECISIONS.md
+reports/*
+!reports/auth-capacity-*.md
 AGENTS.md
 "Scally Milano/"
 security-report.json
