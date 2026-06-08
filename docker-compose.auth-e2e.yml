@@ -65,21 +65,18 @@ services:
   auth-e2e-playwright:
     profiles: [ "auth-e2e-run" ]
     image: mcr.microsoft.com/playwright:v1.48.2-jammy
+    # Host network: browser must use http://127.0.0.1 (secure context for Web Crypto / ECDSA keys).
+    network_mode: host
     working_dir: /work/frontend
     volumes:
       - ./frontend:/work/frontend
       - ./artifacts/auth-e2e:/work/artifacts/auth-e2e
     environment:
-      AUTH_E2E_BASE_URL: http://auth-e2e-edge:8080
-      AUTH_E2E_ORIGIN: http://auth-e2e-edge:8080
+      AUTH_E2E_BASE_URL: http://127.0.0.1:${AUTH_E2E_HOST_PORT:-18080}
+      AUTH_E2E_ORIGIN: http://127.0.0.1:${AUTH_E2E_HOST_PORT:-18080}
       AUTH_E2E_EMAIL: ${AUTH_E2E_EMAIL}
       AUTH_E2E_PASSWORD: ${AUTH_E2E_PASSWORD}
       CI: "true"
-    depends_on:
-      auth-e2e-edge:
-        condition: service_healthy
-    networks:
-      - music-network
     command:
       - bash
       - -lc
@@ -93,24 +90,21 @@ services:
   auth-proof-token-dod-playwright:
     profiles: [ "auth-e2e-run" ]
     image: mcr.microsoft.com/playwright:v1.60.0-jammy
+    # Host network: crypto.subtle requires secure context (127.0.0.1, not auth-e2e-edge hostname).
+    network_mode: host
     working_dir: /work/frontend
     volumes:
       - ./frontend:/work/frontend
       - ./artifacts/auth-proof-token-dod:/work/artifacts/auth-proof-token-dod
     environment:
-      AUTH_E2E_BASE_URL: http://auth-e2e-edge:8080
-      AUTH_E2E_ORIGIN: http://auth-e2e-edge:8080
+      AUTH_E2E_BASE_URL: http://127.0.0.1:${AUTH_E2E_HOST_PORT:-18080}
+      AUTH_E2E_ORIGIN: http://127.0.0.1:${AUTH_E2E_HOST_PORT:-18080}
       AUTH_E2E_EMAIL: ${AUTH_E2E_EMAIL}
       AUTH_E2E_PASSWORD: ${AUTH_E2E_PASSWORD}
       AUTH_E2E_PROOF_TTL_MIN: ${AUTH_E2E_PROOF_TTL_MIN:-30}
       AUTH_E2E_PROOF_TTL_MAX: ${AUTH_E2E_PROOF_TTL_MAX:-95}
       AUTH_E2E_PROOF_TTL_WAIT_MS: ${AUTH_E2E_PROOF_TTL_WAIT_MS:-32000}
       CI: "true"
-    depends_on:
-      auth-e2e-edge:
-        condition: service_healthy
-    networks:
-      - music-network
     command:
       - bash
       - -lc
