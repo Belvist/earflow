@@ -40,7 +40,7 @@ Or Playwright: `cd frontend && npm run test:e2e:auth-proof-token-dod`
 
 **Infra verify (does not close SEC-013):** `bash scripts/verify-auth-proof-token.sh`
 
-**VPS note:** Playwright runs in Docker with `network_mode: host` and `http://127.0.0.1:18080`. Full runner: `bash scripts/run-auth-proof-token-browser-dod.sh` (needs `git pull` for latest script). Fast re-run: `AUTH_DOD_SKIP_STACK=1 bash scripts/run-auth-proof-token-browser-dod.sh`.
+**VPS note:** After DoD, run `bash scripts/restore-prod-after-auth-e2e.sh` — e2e overlay sets `EARFLOW_API_BASE_URL=http://127.0.0.1:18080` on prod frontend until restored.
 
 ## Agent checklist
 
