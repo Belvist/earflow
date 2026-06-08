@@ -49,7 +49,7 @@ disabled_code="$(curl -sS -o /dev/null -w "%{http_code}" \
   -H "Content-Type: application/json" \
   -d '{"kind":"media","scope":{"sessionId":"x","trackId":"y"},"client":"web"}' 2>/dev/null || echo "000")"
 if [[ "$disabled_code" == "404" ]]; then
-  pass "prod POST /api/auth/stream-ticket → 404 (STREAM_TICKET_ENABLED=0 norm)"
+  pass "prod gate: POST /api/auth/stream-ticket → 404 (STREAM_TICKET_ENABLED=0 norm)"
 elif [[ "$disabled_code" == "401" || "$disabled_code" == "403" ]]; then
   pass "prod POST /api/auth/stream-ticket → ${disabled_code} (endpoint may be enabled — check STREAM_TICKET_ENABLED)"
 else
@@ -68,7 +68,8 @@ if command -v docker >/dev/null 2>&1; then
     echo "  with STREAM_TICKET_ENABLED=1, then re-run this script."
     if [[ "$failures" -eq 0 ]]; then
       echo ""
-      echo "STREAM TICKET VERIFY: PASS (static + prod disabled)"
+      echo "STREAM TICKET VERIFY: PASS (prod gate only — e2e gate skipped)"
+      echo "Report: prod verify:stream-ticket=PASS | auth-e2e verify:stream-ticket=SKIPPED"
       exit 0
     fi
     echo ""
@@ -110,7 +111,9 @@ fi
 section "Summary"
 if [[ "$failures" -eq 0 ]]; then
   echo ""
-  echo "STREAM TICKET VERIFY: PASS"
+  echo "STREAM TICKET VERIFY: PASS (prod + auth-e2e gates)"
+  echo "Report: prod verify:stream-ticket=PASS | auth-e2e verify:stream-ticket=PASS"
+  echo "Next: confirm logs (stream_ticket_mint, no ticket body) + prod playback unchanged"
   exit 0
 fi
 echo ""

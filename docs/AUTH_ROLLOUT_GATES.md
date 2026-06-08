@@ -66,6 +66,22 @@ npm run verify:stream-ticket
 **Prod:** `STREAM_TICKET_ENABLED=0` → `POST /api/auth/stream-ticket` → **404**.  
 **Auth-e2e:** overlay sets `STREAM_TICKET_ENABLED=1`; script runs `mint-observe.mjs` (media, stream_session, ws mint).
 
+**Status (honest):** Phase 2 is **committed/prepared** after `9f8eeff`, **not closed** until both gates PASS on VPS:
+
+| Gate | Command context | Expect |
+|------|-----------------|--------|
+| Prod | prod compose, flag off | verify → PASS (404 on mint) |
+| Auth-e2e | `docker compose … auth-e2e.yml up api-gateway auth-e2e-edge` | verify → PASS (mint 200) |
+
+After both PASS, update `PENDING.md` Phase 2 → done. **Do not start Phase 3 ACCEPT** before that.
+
+**VPS log check (e2e):**
+
+```bash
+docker compose logs api-gateway --tail=100 | grep -i stream_ticket_mint
+# expect: kind/ticketType/transport — no full ticket value
+```
+
 ## Agent checklist
 
 Before marking SEC-013 closed:
