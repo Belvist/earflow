@@ -206,15 +206,6 @@ Real stack: gateway + Redis + security-service + auth login + frontend + `auth-e
 
 **Not claimed:** millions-ready / prod soak / horizontal multi-generator load — separate gate if needed.
 
-### PEND-SEC-005 — WS/stream tickets (scoped, no cookie-only bypass)
-
-**Priority:** high  
-**Status:** **design drafted (2026-06-08)** — pending architecture review. See `docs/SEC-005_WS_STREAM_TICKETS_DESIGN.md`. **No code until accepted.**
-
-**Target:** `POST /api/auth/stream-ticket` with PoP or proof access token → short-lived epoch-aware scoped ticket; playback/WS consume validates ticket, not bare `mp_sid` cookie-only.
-
-**Do not start** implementation until plan accepted and recorded in `DECISIONS.md`.
-
 ### PEND-SEC-002 — Sessions/devices control (revoke-all + UI)
 
 **Priority:** high  
@@ -238,86 +229,61 @@ Revoke/password/email/delete — modal при `MFA_STEP_UP_REQUIRED`, не raw e
 
 **Observed prod (2026-06):** `POST /api/auth/sessions/revoke-others` → **403** без step-up UI выглядит как поломка. **Must:** parse response body `code`; if `MFA_STEP_UP_REQUIRED` → step-up flow (reuse existing MFA verify endpoint), then retry revoke. Distinguish from `CSRF_*` / `DEVICE_PROOF_*` (client/nginx bug).
 
-### PEND-SEC-014 — CORS/PoP nginx preflight matrix (deploy gate)
+### PEND-SEC-014 — CORS/PoP nginx preflight matrix
 
 **Priority:** critical  
-**Status:** in progress (script + maps in repo; **not prod-green**)
+**Status:** **closed (2026-06-08)** — superseded by SEC-013 browser DoD + deploy script (not open debt)
 
-**Why:** PoP добавил `X-Auth-Device-*` на широкий `/api/*`, но nginx имеет **много отдельных `location`** с ручным `Access-Control-Allow-Headers`. Точечные фиксы (`stream/v3`, потом `ebap-hls`) — симптом; нужен **обязательный gate** перед каждым auth/nginx deploy.
+**Why it looked open:** status «not prod-green» conflicted with SEC-013 closed + capacity closed.
 
-**Script:** `scripts/verify-cors-pop-preflight.sh` → `npm run verify:cors-pop`
+**Evidence for closure:**
+- SEC-013 browser DoD 8/8 PASS on auth-e2e (`device-proof-access-token-dod.spec.js`, 2026-06-08) — cross-origin calls to proof/token, refresh, profile, revoke **require** working CORS on those routes; DoD would fail otherwise.
+- `scripts/verify-cors-pop-preflight.sh` (`npm run verify:cors-pop`) remains **mandatory pre-deploy gate** — see `docs/AUTH_ROLLOUT_GATES.md`, `scripts/verify-prod-auth-gate.sh`. Not tracked as open PEND.
 
-**On VPS when public 443 is down:** `API_BASE=https://127.0.0.1:8443 CURL_INSECURE=1 npm run verify:cors-pop` (tests nginx CORS without public DNS). **curl (7) on all routes = nginx not listening**, not missing Allow-Headers.
-
-**Matrix (minimum):**
-
-| Route | OPTIONS must allow |
-|-------|-------------------|
-| `/api/stream/v3/session` | PoP + CSRF + Content-Type |
-| `/api/stream/v2/session` | PoP + CSRF |
-| `/api/ebap-hls/v1/session` | PoP + CSRF + X-Lyrics-Key |
-| `/api/stream/v2/crypt/*` | PoP (+ Range where applicable) |
-| `/api/auth/refresh` | PoP + CSRF |
-| `/api/auth/sessions/revoke` | PoP + CSRF |
-| `/api/auth/sessions/revoke-others` | PoP + CSRF |
-| `/api/profile`, `/api/artists/*` | PoP + CSRF (general `/api/` location) |
-
-**Also before deploy:** `docker compose run --rm --no-deps nginx nginx -t` (catches invalid maps like `$unused`).
-
-**Remaining hardcoded CORS (audit):** `auth.earflow.ru` artist-portal blocks, legacy `/api/ebap/v3/*` (410), `strmhaha` audio-only Range headers — PoP not required there today; document when adding auth to those surfaces.
-
-**DoD:** script exits 0 on staging/prod; CI job optional follow-up; no new nginx OPTIONS block without `$earflow_cors_auth_*` or explicit exemption in this PEND.
+**Residual (non-blocker):** CI job for cors-pop optional; artist-portal/strmhaha hardcoded CORS audit when those surfaces gain PoP.
 
 ### PEND-SEC-016 — PoP canonicalization matrix (client ↔ gateway contract)
 
 **Priority:** critical  
-**Status:** in progress (unit tests in repo; **not prod-validated**)
+**Status:** **closed (2026-06-08)** — superseded by SEC-013 browser DoD + unit contract tests (not open debt)
 
-**Why:** CORS green ≠ auth green. PoP fails on real URLs when client canonical string ≠ gateway `buildCanonicalProofString(method, r.URL.Path, r.URL.Query(), ...)`.
+**Evidence for closure:**
+- FE/Go sync tests in repo: `authDeviceCrypto.test.js`, `device_proof_canonical_test.go` — profile, `Charli%20XCX`, `A%24AP%20Rocky`, unicode, query params.
+- SEC-013 browser DoD check #2–3 validates hot `/api/profile` with proof access token in real browser.
+- Recovery: `deviceProofRecovery.test.js` + `middlewareStackOrder.test.js` (max 1 retry).
 
-**Contract tests (keep in sync):**
+**Residual (non-blocker, not open PEND):** full artist `%20/%24` browser matrix — manual section in `scripts/verify-prod-auth-gate.sh`; run on prod deploy. Dedicated `_resolveDeviceProofHeaders` unit test — optional follow-up.
 
-| Case | FE test | Go test |
-|------|---------|---------|
-| `/api/profile` | `authDeviceCrypto.test.js` | `device_proof_canonical_test.go` |
-| `Charli%20XCX` meta/tracks + query | same | same |
-| `A%24AP%20Rocky` | same | same |
-| Unicode artist | same | same |
-
-**Recovery:** `deviceProofRecovery.test.js` + `middlewareStackOrder.test.js` — max **1** retry; **must be innermost before `throwApiErrors`** (otherwise recovery never sees 401 body).
-
-**Prod gate (browser):** artists meta/tracks with `%20/%24`, refresh 204, stale sidHash → register → single retry → 200.
-
-**Not closed until:** frontend redeploy + browser matrix green; no infinite register loop in DevTools.
-
-### PEND-SEC-015 — Refresh + client PoP contract (deploy gate)
+### PEND-SEC-015 — Refresh + client PoP contract
 
 **Priority:** critical  
-**Status:** partial
+**Status:** **closed (2026-06-08)** — SEC-013 browser DoD check #4
 
-**Backend (done):** `device_proof_test.go` — refresh without proof → 401 `DEVICE_PROOF_REQUIRED`; e2e `device-proof-fullstack.spec.js` / live gateway spec.
+**Evidence:**
+- Playwright DoD: `POST /api/auth/refresh` with full ECDSA → **204**; proof-access-token-only → **401** (`device-proof-access-token-dod.spec.js`).
+- Gateway unit: `device_proof_test.go` — refresh without proof → 401 `DEVICE_PROOF_REQUIRED`.
 
-**Frontend (prepared, not prod-validated):** `_refreshSessionCore` must attach PoP; `deviceProof` middleware must auto `device/register` when key missing. **Gap:** no dedicated unit test on `_resolveDeviceProofHeaders` / refresh fetch headers.
-
-**Gate:** after login, `POST /api/auth/refresh` → **204** (not 401); cookie-only refresh without proof → 401 (gateway test). Re-login only acceptable for **one-time migration**, not per release.
+**Residual (non-blocker):** dedicated unit test on `_resolveDeviceProofHeaders` — optional follow-up, not deploy blocker.
 
 ### PEND-SEC-005 — WS/HLS scoped tickets (device-bound stream auth)
 
 **Priority:** critical  
-**Status:** design drafted (rev. 2) — **not accepted**; no code until architecture accepted
+**Status:** **design accepted (rev. 2, 2026-06-08)** — implementation in progress; **Phase 1 gateway mint only**
 
 **Goal:** bind WS upgrade and playback bytes to epoch-aware scoped tickets; remove cookie-only sufficient auth on consume paths.
 
-**Design:** `docs/SEC-005_WS_STREAM_TICKETS_DESIGN.md` (rev. 2, 2026-06-08).
+**Design:** `docs/SEC-005_WS_STREAM_TICKETS_DESIGN.md` — accepted in `DECISIONS.md` 2026-06-08.
 
-**Blockers addressed in rev. 2:**
-- Transport split (header vs opaque query vs signed URL) — not header-only for media
-- No `epochs/lookup` per segment — local cache + pub/sub at consume
-- Secret model: asymmetric JWT for header tickets; opaque Redis for query/WS
+**Implementation phases (gated):**
 
-**v1 scope:** listener web SPA only. iOS/artist — contract documented, separate milestones.
+| Phase | Scope | Status |
+|-------|-------|--------|
+| 1 | Gateway `POST /api/auth/stream-ticket` mint + unit tests; `STREAM_TICKET_ENABLED=0` default | in progress |
+| 2+ | OBSERVE, direct-stream/ebap-hls ACCEPT, frontend, ENFORCE | **blocked** until Phase 1 reviewed |
 
-**Next:** reviewer accept rev. 2 → `DECISIONS.md` entry → `klm_verify_plan` → implementation.
+**Forbidden until later phases:** direct-stream/ebap-hls consume changes, ENFORCE, cookie fallback removal, WS unify, iOS/artist implementation.
+
+**v1 scope:** listener web SPA only.
 
 ### PEND-SEC-006 — WebAuthn/passkey step-up
 
