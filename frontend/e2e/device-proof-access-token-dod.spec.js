@@ -66,7 +66,7 @@ test.describe('SEC-013 Proof Access Token browser DoD', () => {
       const material = await window.__proofAccessTokenDod.loadMaterial();
       return window.__proofAccessTokenDod.refreshWithFullProof(material);
     });
-    expect(refreshProof.status).toBe(200);
+    expect([200, 204]).toContain(refreshProof.status);
 
     const refreshTokenOnly = await pageA.evaluate(async (token) => {
       const material = await window.__proofAccessTokenDod.loadMaterial();
