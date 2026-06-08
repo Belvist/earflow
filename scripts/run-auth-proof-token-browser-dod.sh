@@ -117,6 +117,8 @@ fi
 
 echo ""
 echo "SEC-013 browser DoD: PASS (8/8)"
-echo "Next: update docs/PENDING.md to closed only after prod DevTools confirmation if needed"
+echo ""
+echo "WARNING: e2e overlay may have changed prod frontend/gateway env (127.0.0.1:18080)."
+echo "Before earflow.ru traffic: bash scripts/restore-prod-after-auth-e2e.sh"
 echo "Report: $ARTIFACT_DIR/report/report/index.html (if generated)"
 exit 0
