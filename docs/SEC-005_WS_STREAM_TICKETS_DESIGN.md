@@ -19,8 +19,9 @@ SEC-005 status:
 ✅ goal correct
 ✅ design accepted (rev. 2, 2026-06-08)
 ✅ Phase 1 gateway mint committed
-✅ Phase 2 OBSERVE closed (VPS 2026-06-08)
-⏭️ Phase 3 ACCEPT — next, not started
+✅ Phase 2 OBSERVE validated (VPS e2e 2026-06-08)
+⚠️ restore prod required before Phase 2 final close
+⏭️ Phase 3 ACCEPT — design/checklist first, no code yet
 ❌ ENFORCE / stream-service consume not started
 ```
 

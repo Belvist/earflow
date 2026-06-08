@@ -268,7 +268,7 @@ Revoke/password/email/delete — modal при `MFA_STEP_UP_REQUIRED`, не raw e
 ### PEND-SEC-005 — WS/HLS scoped tickets (device-bound stream auth)
 
 **Priority:** critical  
-**Status:** **Phase 2 OBSERVE closed (2026-06-08, VPS `ru-vmv2-mini`)** — Phase 3 ACCEPT not started
+**Status:** **Phase 2 OBSERVE validated on VPS (2026-06-08); final close after `restore-prod-after-auth-e2e.sh` PASS** — Phase 3 not started
 
 **Goal:** bind WS upgrade and playback bytes to epoch-aware scoped tickets; remove cookie-only sufficient auth on consume paths.
 
@@ -279,22 +279,28 @@ Revoke/password/email/delete — modal при `MFA_STEP_UP_REQUIRED`, не raw e
 | Phase | Scope | Status |
 |-------|-------|--------|
 | 1 | Gateway `POST /api/auth/stream-ticket` mint + unit tests; `STREAM_TICKET_ENABLED=0` default | done |
-| 2 | OBSERVE — mint on auth-e2e overlay; `verify-stream-ticket.sh`; structured mint logs | **done (VPS validated 2026-06-08)** |
-| 3 | ACCEPT — direct-stream/ebap-hls dual-mode verify | **next — not started** |
+| 2 | OBSERVE — mint on auth-e2e overlay; `verify-stream-ticket.sh`; structured mint logs | **validated (e2e PASS); closed after restore prod** |
+| 3 | ACCEPT — direct-stream/ebap-hls dual-mode verify | **next — not started (design/checklist first)** |
 | 4+ | Frontend mint, ENFORCE | blocked until Phase 3 |
 
-**VPS validation report (`ru-vmv2-mini`, git `319156c`):**
+**VPS validation report (`ru-vmv2-mini`, auth-e2e run):**
 
 ```text
-prod verify:stream-ticket:     PASS (STREAM_TICKET_ENABLED off → POST mint 404)
 auth-e2e verify:stream-ticket: PASS (media/stream_session/ws mint 200; ws token-only 401)
-logs ticket leakage:           not captured in run — grep stream_ticket_mint recommended
-playback unchanged:            assumed PASS (no consume code in Phase 2)
+prod verify (pre-e2e):           PASS (404 when STREAM_TICKET_ENABLED off)
+logs ticket leakage:           pending grep stream_ticket_mint after restore
 ```
 
-**Note:** During auth-e2e run, public `api.earflow.ru` mint probe returned **403** (gateway had `STREAM_TICKET_ENABLED=1` from overlay — expected). **After e2e testing:** `bash scripts/restore-prod-after-auth-e2e.sh` to reset prod gateway/frontend.
+**Mandatory after auth-e2e / capacity / SEC-005 OBSERVE test:**
 
-**Forbidden until Phase 3 reviewed:** ENFORCE, cookie fallback removal, WS unify, iOS/artist implementation.
+```bash
+bash scripts/restore-prod-after-auth-e2e.sh   # includes verify:stream-ticket + verify:frontend-api-base
+docker compose exec api-gateway sh -lc 'env | grep STREAM_TICKET'  # empty or 0
+```
+
+**Dangerous interim state:** auth-e2e overlay leaves `STREAM_TICKET_ENABLED=1` on gateway — **not prod-safe** until restore.
+
+**Forbidden until Phase 3 plan accepted:** direct-stream/ebap-hls consume, frontend mint, ENFORCE.
 
 **v1 scope:** listener web SPA only.
 
