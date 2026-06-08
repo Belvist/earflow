@@ -209,11 +209,11 @@ Real stack: gateway + Redis + security-service + auth login + frontend + `auth-e
 ### PEND-SEC-005 — WS/stream tickets (scoped, no cookie-only bypass)
 
 **Priority:** high  
-**Status:** not started — **next gate** (SEC-013 + capacity closed 2026-06-08). **Plan before code** (`klm_analyze_impact` + design).
+**Status:** **design drafted (2026-06-08)** — pending architecture review. See `docs/SEC-005_WS_STREAM_TICKETS_DESIGN.md`. **No code until accepted.**
 
-**Target:** `POST /api/auth/stream-ticket` (and WS ticket) with full PoP or proof access token → short-lived scoped ticket; WS/HLS/segment fetch validate ticket, not bare `mp_sid` cookie-only.
+**Target:** `POST /api/auth/stream-ticket` with PoP or proof access token → short-lived epoch-aware scoped ticket; playback/WS consume validates ticket, not bare `mp_sid` cookie-only.
 
-**Do not start** implementation until impact + design plan reviewed.
+**Do not start** implementation until plan accepted and recorded in `DECISIONS.md`.
 
 ### PEND-SEC-002 — Sessions/devices control (revoke-all + UI)
 
@@ -300,6 +300,24 @@ Revoke/password/email/delete — modal при `MFA_STEP_UP_REQUIRED`, не raw e
 **Frontend (prepared, not prod-validated):** `_refreshSessionCore` must attach PoP; `deviceProof` middleware must auto `device/register` when key missing. **Gap:** no dedicated unit test on `_resolveDeviceProofHeaders` / refresh fetch headers.
 
 **Gate:** after login, `POST /api/auth/refresh` → **204** (not 401); cookie-only refresh without proof → 401 (gateway test). Re-login only acceptable for **one-time migration**, not per release.
+
+### PEND-SEC-005 — WS/HLS scoped tickets (device-bound stream auth)
+
+**Priority:** critical  
+**Status:** design drafted (rev. 2) — **not accepted**; no code until architecture accepted
+
+**Goal:** bind WS upgrade and playback bytes to epoch-aware scoped tickets; remove cookie-only sufficient auth on consume paths.
+
+**Design:** `docs/SEC-005_WS_STREAM_TICKETS_DESIGN.md` (rev. 2, 2026-06-08).
+
+**Blockers addressed in rev. 2:**
+- Transport split (header vs opaque query vs signed URL) — not header-only for media
+- No `epochs/lookup` per segment — local cache + pub/sub at consume
+- Secret model: asymmetric JWT for header tickets; opaque Redis for query/WS
+
+**v1 scope:** listener web SPA only. iOS/artist — contract documented, separate milestones.
+
+**Next:** reviewer accept rev. 2 → `DECISIONS.md` entry → `klm_verify_plan` → implementation.
 
 ### PEND-SEC-006 — WebAuthn/passkey step-up
 
