@@ -138,6 +138,17 @@ else
   echo "SKIP  docker not available — run nginx -t on VPS manually"
 fi
 
+section "Frontend API base (no e2e overlay leak)"
+if [[ -f "$ROOT/scripts/verify-frontend-api-base.sh" ]]; then
+  if bash "$ROOT/scripts/verify-frontend-api-base.sh"; then
+    pass "verify-frontend-api-base.sh"
+  else
+    fail "verify-frontend-api-base.sh — e2e API base leak; run restore-prod-after-auth-e2e.sh"
+  fi
+else
+  fail "missing scripts/verify-frontend-api-base.sh"
+fi
+
 section "CORS / PoP preflight matrix"
 if [[ -x "$ROOT/scripts/verify-cors-pop-preflight.sh" ]] || [[ -f "$ROOT/scripts/verify-cors-pop-preflight.sh" ]]; then
   if bash "$ROOT/scripts/verify-cors-pop-preflight.sh"; then

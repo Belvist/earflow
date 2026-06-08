@@ -63,5 +63,8 @@ log "nginx config test"
 log "smoke: verify-auth-proof-token.sh (infra)"
 bash "$ROOT/scripts/verify-auth-proof-token.sh" || true
 
+log "verify frontend API base guard"
+bash "$ROOT/scripts/verify-frontend-api-base.sh"
+
 log "done — hard refresh browser (Ctrl+Shift+R) on earflow.ru / auth.earflow.ru"
 log "DevTools: hot GET /api/profile should use https://api.earflow.ru or same-origin, NOT 127.0.0.1:18080"
