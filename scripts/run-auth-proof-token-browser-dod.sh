@@ -73,7 +73,10 @@ auth_e2e_ensure_docker_origin
 echo "      AUTH_E2E_ALLOWED_ORIGINS=${AUTH_E2E_ALLOWED_ORIGINS}"
 
 echo "=== [2/7] Start auth-e2e stack (PROOF_ACCESS_TOKEN_TTL_SECONDS=${PROOF_ACCESS_TOKEN_TTL_SECONDS}) ==="
-"${COMPOSE[@]}" build --no-deps api-gateway
+if [[ "${AUTH_DOD_SKIP_GATEWAY_BUILD:-0}" != "1" ]]; then
+  # Rebuild gateway when Go auth code changed. (Skip: AUTH_DOD_SKIP_GATEWAY_BUILD=1)
+  "${COMPOSE[@]}" build api-gateway
+fi
 "${COMPOSE[@]}" up -d --force-recreate "${SERVICES[@]}"
 
 echo "=== [3/7] Wait for edge health ==="
