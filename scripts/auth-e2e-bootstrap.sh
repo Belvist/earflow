@@ -12,21 +12,38 @@ payload=$(printf '{"email":"%s","password":"%s","username":"%s"}' "$EMAIL" "$PAS
 
 echo "[auth-e2e-bootstrap] register $EMAIL (ignore if exists)"
 
-reg_code=$(curl -sS -o /tmp/auth-e2e-register.json -w "%{http_code}" \
-  -X POST "$BASE/api/auth/email/register" \
-  -H "Content-Type: application/json" \
-  -H "Origin: $ORIGIN" \
-  -d "$payload" || echo "000")
+reg_wait="${AUTH_E2E_REGISTER_WAIT_SECONDS:-60}"
+reg_deadline=$((SECONDS + reg_wait))
+reg_code="000"
 
-if [[ "$reg_code" == "200" || "$reg_code" == "201" ]]; then
-  echo "[auth-e2e-bootstrap] registered"
-elif [[ "$reg_code" == "409" || "$reg_code" == "400" ]]; then
-  echo "[auth-e2e-bootstrap] register skipped (likely exists): HTTP $reg_code"
-else
-  echo "[auth-e2e-bootstrap] register HTTP $reg_code:" >&2
-  cat /tmp/auth-e2e-register.json >&2 || true
-  echo >&2
-fi
+while (( SECONDS < reg_deadline )); do
+  reg_code=$(curl -sS -o /tmp/auth-e2e-register.json -w "%{http_code}" \
+    -X POST "$BASE/api/auth/email/register" \
+    -H "Content-Type: application/json" \
+    -H "Origin: $ORIGIN" \
+    -d "$payload" || echo "000")
+
+  if [[ "$reg_code" == "200" || "$reg_code" == "201" ]]; then
+    echo "[auth-e2e-bootstrap] registered"
+    break
+  fi
+  if [[ "$reg_code" == "409" || "$reg_code" == "400" ]]; then
+    echo "[auth-e2e-bootstrap] register skipped (likely exists): HTTP $reg_code"
+    break
+  fi
+  case "$reg_code" in
+    502|503|504|000)
+      echo "[auth-e2e-bootstrap] register HTTP $reg_code — retry..." >&2
+      sleep 3
+      ;;
+    *)
+      echo "[auth-e2e-bootstrap] register HTTP $reg_code:" >&2
+      cat /tmp/auth-e2e-register.json >&2 || true
+      echo >&2
+      break
+      ;;
+  esac
+done
 
 login_wait="${AUTH_E2E_LOGIN_WAIT_SECONDS:-180}"
 login_deadline=$((SECONDS + login_wait))
