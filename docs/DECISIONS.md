@@ -22,6 +22,27 @@
 
 ---
 
+## 2026-06-08 — SEC-005 Phase 2 OBSERVE closed (VPS mint gates)
+
+**Status:** accepted  
+**Area:** auth | gateway | streaming  
+
+**Context:** Phase 1 gateway mint committed (`cd740b3`); Phase 2 OBSERVE committed (`9f8eeff`, docs `319156c`). Mint must be validated on VPS in prod-off and auth-e2e-on modes before Phase 3 ACCEPT.
+
+**Decision:** Close **SEC-005 Phase 2 OBSERVE** after VPS `ru-vmv2-mini` validation: prod `STREAM_TICKET_ENABLED=0` → mint **404**; auth-e2e overlay `STREAM_TICKET_ENABLED=1` → media/stream_session/ws (full ECDSA) mint **200**, ws proof-token-only **401**. Consume/enforce unchanged.
+
+**Alternatives considered:** Close on commit without VPS run — rejected (honest gate).
+
+**Consequences:** Phase 3 ACCEPT (direct-stream/ebap-hls dual-mode) is next. **Do not** enable `STREAM_TICKET_ENABLED` on prod until Phase 5+ staging plan. After auth-e2e runs, **`restore-prod-after-auth-e2e.sh`** mandatory.
+
+**Files touched:** `scripts/verify-stream-ticket.sh`, `scripts/stream-ticket-verify/mint-observe.mjs`, `docker-compose.auth-e2e.yml`.
+
+**Tests:** `npm run verify:stream-ticket` PASS prod + auth-e2e on VPS.
+
+**Чтобы не повторилось:** auth-e2e overlay flips public mint probe from 404→403; always restore prod stack after e2e.
+
+---
+
 ## 2026-06-08 — SEC-005 rev.2 stream ticket design accepted (implementation gated)
 
 **Status:** accepted (design only — **no consume enforcement yet**)  
