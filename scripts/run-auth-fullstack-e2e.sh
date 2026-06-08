@@ -23,6 +23,10 @@ export AUTH_E2E_COOKIE_DOMAIN="host"
 export AUTH_E2E_COOKIE_SECURE="false"
 export AUTH_E2E_COOKIE_SAMESITE="Lax"
 
+# shellcheck source=scripts/auth-e2e-ensure-origins.sh
+source "$ROOT/scripts/auth-e2e-ensure-origins.sh"
+auth_e2e_ensure_docker_origin
+
 COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.auth-e2e.yml)
 SERVICES=(postgres redis redis-auth database-service auth-service security-service api-gateway frontend auth-e2e-edge)
 

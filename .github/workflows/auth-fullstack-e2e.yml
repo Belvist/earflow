@@ -33,7 +33,7 @@ jobs:
       AUTH_E2E_HOST_PORT: "18080"
       AUTH_E2E_EMAIL: ${{ github.event.inputs.auth_e2e_email }}
       AUTH_E2E_PASSWORD: ${{ github.event.inputs.auth_e2e_password }}
-      AUTH_E2E_ALLOWED_ORIGINS: http://127.0.0.1:18080,http://localhost:18080
+      AUTH_E2E_ALLOWED_ORIGINS: http://127.0.0.1:18080,http://localhost:18080,http://auth-e2e-edge:8080
       NODE_ENV: production
 
     steps:
