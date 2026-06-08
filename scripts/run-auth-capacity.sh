@@ -154,6 +154,8 @@ if [[ "${CAPACITY_SKIP_STACK:-0}" == "1" ]]; then
   echo "      (skip full stack — CAPACITY_SKIP_STACK=1)"
   echo "      recreate api-gateway with CAPACITY_LOAD_TEST_MODE=${CAPACITY_LOAD_TEST_MODE} multiplier=${CAPACITY_RATE_LIMIT_MULTIPLIER}"
   "${COMPOSE[@]}" up -d --no-deps --force-recreate --scale "api-gateway=${GATEWAY_REPLICAS}" api-gateway
+  echo "      restart auth-e2e-edge (refresh nginx → api-gateway upstream after recreate)"
+  "${COMPOSE[@]}" up -d --no-deps --force-recreate auth-e2e-edge
 else
   "${COMPOSE[@]}" up -d --scale "api-gateway=${GATEWAY_REPLICAS}" \
     postgres redis redis-auth database-service auth-service security-service \
