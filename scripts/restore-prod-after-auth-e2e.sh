@@ -4,6 +4,7 @@
 # The DoD runner uses docker-compose.auth-e2e.yml which temporarily sets:
 #   frontend.EARFLOW_API_BASE_URL → http://127.0.0.1:18080
 #   api-gateway COOKIE_DOMAIN/ALLOWED_ORIGINS → e2e values
+#   api-gateway STREAM_TICKET_ENABLED → 1 (SEC-005 OBSERVE on e2e only)
 #
 # Run this before serving earflow.ru / auth.earflow.ru again.
 #
@@ -57,6 +58,16 @@ if [[ "$COOKIE_DOMAIN" == "host" ]]; then
   exit 1
 fi
 
+STREAM_ENABLED="$("${COMPOSE_PROD[@]}" exec -T api-gateway printenv STREAM_TICKET_ENABLED 2>/dev/null | tr -d '\r' || true)"
+STREAM_OBSERVE="$("${COMPOSE_PROD[@]}" exec -T api-gateway printenv STREAM_TICKET_OBSERVE 2>/dev/null | tr -d '\r' || true)"
+log "api-gateway STREAM_TICKET_ENABLED='${STREAM_ENABLED:-<empty>}' (prod: empty or 0)"
+log "api-gateway STREAM_TICKET_OBSERVE='${STREAM_OBSERVE:-<empty>}' (prod: empty or 0)"
+
+if [[ "$STREAM_ENABLED" == "1" || "$STREAM_ENABLED" == "true" ]]; then
+  echo "FAIL: api-gateway STREAM_TICKET_ENABLED still on — force-recreate api-gateway with prod compose only" >&2
+  exit 1
+fi
+
 log "nginx config test"
 "${COMPOSE_PROD[@]}" exec -T nginx nginx -t
 
@@ -65,6 +76,9 @@ bash "$ROOT/scripts/verify-auth-proof-token.sh" || true
 
 log "verify frontend API base guard"
 bash "$ROOT/scripts/verify-frontend-api-base.sh"
+
+log "verify stream ticket prod gate (STREAM_TICKET_ENABLED off → 404)"
+bash "$ROOT/scripts/verify-stream-ticket.sh"
 
 log "done — hard refresh browser (Ctrl+Shift+R) on earflow.ru / auth.earflow.ru"
 log "DevTools: hot GET /api/profile should use https://api.earflow.ru or same-origin, NOT 127.0.0.1:18080"

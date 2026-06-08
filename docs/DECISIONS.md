@@ -29,9 +29,9 @@
 
 **Context:** Phase 1 gateway mint committed (`cd740b3`); Phase 2 OBSERVE committed (`9f8eeff`, docs `319156c`). Mint must be validated on VPS in prod-off and auth-e2e-on modes before Phase 3 ACCEPT.
 
-**Decision:** Close **SEC-005 Phase 2 OBSERVE** after VPS `ru-vmv2-mini` validation: prod `STREAM_TICKET_ENABLED=0` → mint **404**; auth-e2e overlay `STREAM_TICKET_ENABLED=1` → media/stream_session/ws (full ECDSA) mint **200**, ws proof-token-only **401**. Consume/enforce unchanged.
+**Decision:** **SEC-005 Phase 2 OBSERVE validated** on VPS `ru-vmv2-mini`: auth-e2e overlay `STREAM_TICKET_ENABLED=1` → media/stream_session/ws (full ECDSA) mint **200**, ws proof-token-only **401**. Prod-off gate (404) passed before e2e overlay. **Final close** only after `restore-prod-after-auth-e2e.sh` confirms `STREAM_TICKET_ENABLED` off + verify gates PASS.
 
-**Alternatives considered:** Close on commit without VPS run — rejected (honest gate).
+**Alternatives considered:** Mark closed immediately after e2e PASS — rejected; e2e overlay leaves prod gateway with mint enabled until restore.
 
 **Consequences:** Phase 3 ACCEPT (direct-stream/ebap-hls dual-mode) is next. **Do not** enable `STREAM_TICKET_ENABLED` on prod until Phase 5+ staging plan. After auth-e2e runs, **`restore-prod-after-auth-e2e.sh`** mandatory.
 
