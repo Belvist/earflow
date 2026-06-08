@@ -195,6 +195,54 @@ export async function exchangeProofAccessToken({ baseUrl, origin, jar, material 
   };
 }
 
+export async function mintStreamTicketWithProofToken({
+  baseUrl,
+  origin,
+  jar,
+  material,
+  proofToken,
+  kind,
+  scope = {},
+}) {
+  return apiFetch(baseUrl, origin, '/api/auth/stream-ticket', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Cookie: cookieHeader(jar),
+      'X-CSRF-Token': jar.mp_csrf || '',
+      'X-Auth-Device-Id': material.authDeviceId,
+      'X-Auth-Proof-Access-Token': proofToken,
+    },
+    body: JSON.stringify({ kind, scope, client: 'web' }),
+  });
+}
+
+export async function mintStreamTicketWithFullProof({
+  baseUrl,
+  origin,
+  jar,
+  material,
+  kind,
+  scope = {},
+}) {
+  const proofHeaders = await buildProofHeaders(
+    'POST',
+    '/api/auth/stream-ticket',
+    material.sidHash,
+    material,
+  );
+  return apiFetch(baseUrl, origin, '/api/auth/stream-ticket', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Cookie: cookieHeader(jar),
+      'X-CSRF-Token': jar.mp_csrf || '',
+      ...proofHeaders,
+    },
+    body: JSON.stringify({ kind, scope, client: 'web' }),
+  });
+}
+
 export async function hotProfile({ baseUrl, origin, jar, material, token }) {
   return apiFetch(baseUrl, origin, '/api/profile', {
     headers: {

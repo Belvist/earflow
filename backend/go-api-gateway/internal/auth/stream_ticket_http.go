@@ -74,6 +74,7 @@ func (m *SessionManager) handleStreamTicket() http.HandlerFunc {
 			}
 			return
 		}
+		logStreamTicketMint(req.Kind, resp.TicketType, resp.Transport, userID, resp.ExpiresIn)
 		writeJSONResponse(w, http.StatusOK, resp)
 	}
 }

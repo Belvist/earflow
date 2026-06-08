@@ -225,6 +225,17 @@ func TestStreamTicketWSWithFullProof(t *testing.T) {
 	}
 }
 
+func TestStreamTicketObserveEnabled(t *testing.T) {
+	t.Setenv(envStreamTicketObserve, "1")
+	if !streamTicketObserveEnabled() {
+		t.Fatal("expected observe enabled")
+	}
+	t.Setenv(envStreamTicketObserve, "0")
+	if streamTicketObserveEnabled() {
+		t.Fatal("expected observe disabled")
+	}
+}
+
 func TestValidateStreamTicketScopeRejectsMissingFields(t *testing.T) {
 	if err := validateStreamTicketScope(streamTicketKindMedia, streamTicketScope{}); err == nil {
 		t.Fatal("expected media scope error")
