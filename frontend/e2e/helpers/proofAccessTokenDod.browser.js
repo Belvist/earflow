@@ -309,6 +309,7 @@
     );
   }
 
+  // mp_sid is httpOnly — not visible in document.cookie; use Playwright context.cookies() in specs.
   async function readCurrentSid() {
     return readCookie('mp_sid') || '';
   }
