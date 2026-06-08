@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
@@ -16,8 +17,11 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+var streamTicketLogger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+
 const (
 	envStreamTicketEnabled      = "STREAM_TICKET_ENABLED"
+	envStreamTicketObserve      = "STREAM_TICKET_OBSERVE"
 	envStreamTicketSessionTTL   = "STREAM_TICKET_SESSION_TTL_SECONDS"
 	envStreamTicketMediaTTL     = "STREAM_TICKET_MEDIA_TTL_SECONDS"
 	envStreamTicketWSTTL        = "STREAM_TICKET_WS_TTL_SECONDS"
@@ -73,6 +77,28 @@ type opaqueStreamTicketRecord struct {
 func streamTicketEnabled() bool {
 	v := strings.TrimSpace(os.Getenv(envStreamTicketEnabled))
 	return v == "1" || strings.EqualFold(v, "true")
+}
+
+func streamTicketObserveEnabled() bool {
+	v := strings.TrimSpace(os.Getenv(envStreamTicketObserve))
+	return v == "1" || strings.EqualFold(v, "true")
+}
+
+func logStreamTicketMint(kind, ticketType, transport, userID string, expiresIn int64) {
+	if !streamTicketObserveEnabled() {
+		return
+	}
+	uid := strings.TrimSpace(userID)
+	if len(uid) > 12 {
+		uid = uid[:12] + "…"
+	}
+	streamTicketLogger.Info("stream_ticket_mint",
+		slog.String("kind", strings.TrimSpace(kind)),
+		slog.String("ticketType", strings.TrimSpace(ticketType)),
+		slog.String("transport", strings.TrimSpace(transport)),
+		slog.Int64("expiresIn", expiresIn),
+		slog.String("userId", uid),
+	)
 }
 
 func streamTicketTTLSeconds(envKey string, fallback time.Duration) time.Duration {

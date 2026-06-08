@@ -55,6 +55,17 @@ npm run verify:prod-auth-gate
 **Fails if** `runtime-config.js` or frontend container env contains `127.0.0.1`, `localhost`, `:18080`, or `auth-e2e` in `apiBaseUrl`.  
 **Prod norm:** `EARFLOW_API_BASE_URL` empty in `.env` and container → `apiBaseUrl: ""` in `/runtime-config.js`.
 
+## SEC-005 stream ticket OBSERVE (Phase 2)
+
+Mint only — no consume/enforce on prod.
+
+```bash
+npm run verify:stream-ticket
+```
+
+**Prod:** `STREAM_TICKET_ENABLED=0` → `POST /api/auth/stream-ticket` → **404**.  
+**Auth-e2e:** overlay sets `STREAM_TICKET_ENABLED=1`; script runs `mint-observe.mjs` (media, stream_session, ws mint).
+
 ## Agent checklist
 
 Before marking SEC-013 closed:
