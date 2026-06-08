@@ -18,6 +18,9 @@ export AUTH_E2E_ALLOWED_ORIGINS="${AUTH_E2E_ALLOWED_ORIGINS:-http://127.0.0.1:18
 export AUTH_E2E_COOKIE_DOMAIN="host"
 export AUTH_E2E_COOKIE_SECURE="false"
 export AUTH_E2E_COOKIE_SAMESITE="Lax"
+# shellcheck source=scripts/auth-e2e-ensure-origins.sh
+source "$ROOT/scripts/auth-e2e-ensure-origins.sh"
+auth_e2e_ensure_docker_origin
 # Short TTL for e2e (gateway min 30s)
 export PROOF_ACCESS_TOKEN_TTL_SECONDS="${PROOF_ACCESS_TOKEN_TTL_SECONDS:-30}"
 export AUTH_E2E_PROOF_TTL_MIN="${AUTH_E2E_PROOF_TTL_MIN:-30}"
@@ -66,6 +69,8 @@ echo "=== [1/7] Infra verify (does not close SEC-013 alone) ==="
 bash "$ROOT/scripts/verify-auth-proof-token.sh" || {
   echo "WARN: infra verify failed — continuing to browser DoD" >&2
 }
+auth_e2e_ensure_docker_origin
+echo "      AUTH_E2E_ALLOWED_ORIGINS=${AUTH_E2E_ALLOWED_ORIGINS}"
 
 echo "=== [2/7] Start auth-e2e stack (PROOF_ACCESS_TOKEN_TTL_SECONDS=${PROOF_ACCESS_TOKEN_TTL_SECONDS}) ==="
 "${COMPOSE[@]}" up -d --force-recreate "${SERVICES[@]}"
