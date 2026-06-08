@@ -28,15 +28,37 @@ else
   echo >&2
 fi
 
-login_code=$(curl -sS -D /tmp/auth-e2e-login-headers.txt -o /tmp/auth-e2e-login.json -w "%{http_code}" \
-  -X POST "$BASE/api/auth/email/login" \
-  -H "Content-Type: application/json" \
-  -H "Origin: $ORIGIN" \
-  -c /tmp/auth-e2e-cookies.txt \
-  -d "$(printf '{"email":"%s","password":"%s"}' "$EMAIL" "$PASSWORD")")
+login_wait="${AUTH_E2E_LOGIN_WAIT_SECONDS:-180}"
+login_deadline=$((SECONDS + login_wait))
+login_code="000"
+
+while (( SECONDS < login_deadline )); do
+  login_code=$(curl -sS -D /tmp/auth-e2e-login-headers.txt -o /tmp/auth-e2e-login.json -w "%{http_code}" \
+    -X POST "$BASE/api/auth/email/login" \
+    -H "Content-Type: application/json" \
+    -H "Origin: $ORIGIN" \
+    -c /tmp/auth-e2e-cookies.txt \
+    -d "$(printf '{"email":"%s","password":"%s"}' "$EMAIL" "$PASSWORD")" || echo "000")
+
+  if [[ "$login_code" == "200" ]]; then
+    break
+  fi
+
+  case "$login_code" in
+    502|503|504|000)
+      echo "[auth-e2e-bootstrap] login probe HTTP $login_code — retry..." >&2
+      sleep 3
+      ;;
+    *)
+      echo "[auth-e2e-bootstrap] login probe FAILED HTTP $login_code" >&2
+      cat /tmp/auth-e2e-login.json >&2 || true
+      exit 1
+      ;;
+  esac
+done
 
 if [[ "$login_code" != "200" ]]; then
-  echo "[auth-e2e-bootstrap] login probe FAILED HTTP $login_code" >&2
+  echo "[auth-e2e-bootstrap] login probe TIMEOUT after ${login_wait}s (last HTTP $login_code)" >&2
   cat /tmp/auth-e2e-login.json >&2 || true
   exit 1
 fi
