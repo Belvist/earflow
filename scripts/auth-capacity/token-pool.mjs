@@ -29,6 +29,9 @@ let state = { sessions: [], baseUrl, origin };
 const refreshing = new Set();
 
 function loadSessions() {
+  if (!fs.existsSync(sessionsFile)) {
+    throw new Error(`sessions file missing: ${sessionsFile} (run bootstrap-sessions.mjs first)`);
+  }
   const raw = fs.readFileSync(sessionsFile, 'utf8');
   const parsed = JSON.parse(raw);
   state = {
@@ -36,6 +39,9 @@ function loadSessions() {
     baseUrl: parsed.baseUrl || baseUrl,
     origin: parsed.origin || origin,
   };
+  if (!state.sessions.length) {
+    throw new Error(`sessions file has zero sessions: ${sessionsFile}`);
+  }
 }
 
 async function refreshSession(idx) {
@@ -107,7 +113,12 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-loadSessions();
+try {
+  loadSessions();
+} catch (err) {
+  console.error(`token-pool startup failed: ${err.message}`);
+  process.exit(1);
+}
 server.listen(port, '127.0.0.1', () => {
   console.log(`token-pool listening on http://127.0.0.1:${port} (${state.sessions.length} sessions)`);
 });
