@@ -80,7 +80,7 @@ echo "  — 8/8 checks per docs/AUTH_ROLLOUT_GATES.md"
 
 if [[ "$failures" -eq 0 ]]; then
   echo ""
-  echo "PEND-SEC-013 verify: PASS (automated infra only — SEC-013 phase stays PARTIAL until browser DoD)"
+  echo "PEND-SEC-013 verify: PASS (infra only — does not replace browser DoD 8/8)"
   exit 0
 fi
 echo ""
