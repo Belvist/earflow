@@ -10,6 +10,7 @@ import {
   loginRegisterDevice,
   exchangeProofAccessToken,
   hotProfile,
+  listSessionsWithProof,
   revokeSessionWithProof,
 } from './lib/deviceProof.mjs';
 
@@ -45,6 +46,19 @@ async function main() {
   const revoker = await createSession();
 
   console.log(`revoke victim sid=${victim.sid.slice(0, 12)}...`);
+  const list = await listSessionsWithProof({
+    baseUrl,
+    origin,
+    jar: revoker.jar,
+    material: revoker.material,
+  });
+  const listed = (list.data?.sessions || []).map((s) => s.sid).filter(Boolean);
+  if (!listed.includes(victim.sid)) {
+    throw new Error(
+      `victim_sid_not_listed (listed=${listed.length}) — run revoke before bootstrap pool or cleanup stale sessions`,
+    );
+  }
+
   const revokeStart = performance.now();
   const revoke = await revokeSessionWithProof({
     baseUrl,
@@ -54,7 +68,8 @@ async function main() {
     targetSid: victim.sid,
   });
   if (revoke.status !== 200 && revoke.status !== 204) {
-    throw new Error(`revoke_failed_${revoke.status}`);
+    const code = revoke.data?.code || revoke.data?.error || '';
+    throw new Error(`revoke_failed_${revoke.status}_${code}`);
   }
 
   const samples = [];

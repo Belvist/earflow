@@ -49,6 +49,9 @@ services:
       COOKIE_SAMESITE: "Lax"
       ALLOWED_ORIGINS: ${AUTH_E2E_ALLOWED_ORIGINS:-http://127.0.0.1:18080,http://localhost:18080,http://auth-e2e-edge:8080}
       ALLOW_TUNNEL_ORIGINS: "false"
+      # Capacity gate (PEND-SEC-CAPACITY-001): lift gateway RL on staging only — not prod edge.
+      LOAD_TEST_MODE: ${LOAD_TEST_MODE:-true}
+      GATEWAY_RATE_LIMIT_MULTIPLIER: ${GATEWAY_RATE_LIMIT_MULTIPLIER:-50}
       SECURITY_SERVICE_URL: http://security-service:3074
       AUTH_PG_SOT_MODE: ${AUTH_PG_SOT_MODE:-dual_write}
       PROOF_ACCESS_TOKEN_ENABLED: ${PROOF_ACCESS_TOKEN_ENABLED:-1}
