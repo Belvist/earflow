@@ -66,6 +66,25 @@ func (c *proofEpochCache) bumpDeviceEpoch(authDeviceID string, epoch int64) {
 	}
 }
 
+func (c *proofEpochCache) snapshot(sid, authDeviceID string) (sessionEpoch, deviceEpoch int64) {
+	if c == nil {
+		return 0, 0
+	}
+	sid = strings.TrimSpace(sid)
+	authDeviceID = strings.TrimSpace(authDeviceID)
+	if sid != "" {
+		if v, ok := c.sessions.Load(sid); ok {
+			sessionEpoch, _ = v.(int64)
+		}
+	}
+	if authDeviceID != "" {
+		if v, ok := c.devices.Load(authDeviceID); ok {
+			deviceEpoch, _ = v.(int64)
+		}
+	}
+	return sessionEpoch, deviceEpoch
+}
+
 func (c *proofEpochCache) remember(sid, authDeviceID string, sessionEpoch, deviceEpoch int64) {
 	if c == nil {
 		return

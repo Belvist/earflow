@@ -268,7 +268,7 @@ Revoke/password/email/delete — modal при `MFA_STEP_UP_REQUIRED`, не raw e
 ### PEND-SEC-005 — WS/HLS scoped tickets (device-bound stream auth)
 
 **Priority:** critical  
-**Status:** **design accepted (rev. 2, 2026-06-08)** — implementation in progress; **Phase 1 gateway mint only**
+**Status:** **design accepted (rev. 2, 2026-06-08)** — **Phase 1 gateway mint committed**; consume/enforce not started
 
 **Goal:** bind WS upgrade and playback bytes to epoch-aware scoped tickets; remove cookie-only sufficient auth on consume paths.
 
@@ -278,7 +278,7 @@ Revoke/password/email/delete — modal при `MFA_STEP_UP_REQUIRED`, не raw e
 
 | Phase | Scope | Status |
 |-------|-------|--------|
-| 1 | Gateway `POST /api/auth/stream-ticket` mint + unit tests; `STREAM_TICKET_ENABLED=0` default | in progress |
+| 1 | Gateway `POST /api/auth/stream-ticket` mint + unit tests; `STREAM_TICKET_ENABLED=0` default | done (Phase 1 committed) |
 | 2+ | OBSERVE, direct-stream/ebap-hls ACCEPT, frontend, ENFORCE | **blocked** until Phase 1 reviewed |
 
 **Forbidden until later phases:** direct-stream/ebap-hls consume changes, ENFORCE, cookie fallback removal, WS unify, iOS/artist implementation.
