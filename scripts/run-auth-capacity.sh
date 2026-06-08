@@ -26,8 +26,7 @@ export CAPACITY_HOT_DURATION="${CAPACITY_HOT_DURATION:-60s}"
 export CAPACITY_HOT_P95_MS="${CAPACITY_HOT_P95_MS:-50}"
 export CAPACITY_HOT_ERROR_RATE="${CAPACITY_HOT_ERROR_RATE:-0.001}"
 export CAPACITY_RATE_LIMIT_MULTIPLIER="${CAPACITY_RATE_LIMIT_MULTIPLIER:-50}"
-export LOAD_TEST_MODE="${LOAD_TEST_MODE:-true}"
-export GATEWAY_RATE_LIMIT_MULTIPLIER="${GATEWAY_RATE_LIMIT_MULTIPLIER:-$CAPACITY_RATE_LIMIT_MULTIPLIER}"
+export CAPACITY_LOAD_TEST_MODE="${CAPACITY_LOAD_TEST_MODE:-true}"
 export CAPACITY_TOKEN_POOL_PORT="${CAPACITY_TOKEN_POOL_PORT:-19876}"
 export CAPACITY_TOKEN_POOL_URL="http://127.0.0.1:${CAPACITY_TOKEN_POOL_PORT}"
 export CAPACITY_ARTIFACT_DIR="$ROOT/artifacts/auth-capacity"
@@ -153,20 +152,17 @@ fi
 echo "=== [1/9] Start auth-e2e stack (gateway replicas=${GATEWAY_REPLICAS}) ==="
 if [[ "${CAPACITY_SKIP_STACK:-0}" == "1" ]]; then
   echo "      (skip full stack — CAPACITY_SKIP_STACK=1)"
-  echo "      recreate api-gateway with LOAD_TEST_MODE=${LOAD_TEST_MODE} multiplier=${GATEWAY_RATE_LIMIT_MULTIPLIER}"
+  echo "      recreate api-gateway with CAPACITY_LOAD_TEST_MODE=${CAPACITY_LOAD_TEST_MODE} multiplier=${CAPACITY_RATE_LIMIT_MULTIPLIER}"
   "${COMPOSE[@]}" up -d --no-deps --force-recreate --scale "api-gateway=${GATEWAY_REPLICAS}" api-gateway
 else
   "${COMPOSE[@]}" up -d --scale "api-gateway=${GATEWAY_REPLICAS}" \
     postgres redis redis-auth database-service auth-service security-service \
     api-gateway frontend auth-e2e-edge
-  echo "      waiting for auth-e2e-edge..."
-  for _ in $(seq 1 60); do
-    if curl -sf "${CAPACITY_BASE_URL}/health" >/dev/null 2>&1; then
-      break
-    fi
-    sleep 2
-  done
 fi
+
+echo "=== [1b/9] Wait auth-e2e ready + login probe ==="
+bash "$ROOT/scripts/auth-e2e-wait-healthy.sh"
+bash "$ROOT/scripts/auth-e2e-bootstrap.sh" || abort "auth-e2e bootstrap/login probe — check auth-service and gateway logs"
 
 running_gateways="$("${COMPOSE[@]}" ps api-gateway 2>/dev/null | grep -cE 'Up|running' || true)"
 if [[ "${CAPACITY_SKIP_STACK:-0}" != "1" ]]; then

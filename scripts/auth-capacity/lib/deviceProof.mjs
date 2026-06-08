@@ -139,7 +139,9 @@ export async function loginRegisterDevice({
   });
   jar = { ...jar, ...login.cookies };
   if (!login.ok) {
-    throw new Error(`login_failed_${login.status}`);
+    const detail = login.data?.code || login.data?.error || login.data?.raw || '';
+    const snippet = String(detail).slice(0, 120);
+    throw new Error(`login_failed_${login.status}${snippet ? `_${snippet}` : ''}`);
   }
 
   const csrf = await apiFetch(baseUrl, origin, '/api/auth/csrf', {
