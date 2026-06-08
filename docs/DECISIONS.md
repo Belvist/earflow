@@ -22,6 +22,27 @@
 
 ---
 
+## 2026-06-08 — SEC-005 rev.2 stream ticket design accepted (implementation gated)
+
+**Status:** accepted (design only — **no consume enforcement yet**)  
+**Area:** auth | gateway | streaming | security  
+
+**Context:** SEC-013 + capacity closed. WS/stream consume paths still use cookie/token without `authDeviceId` + epoch binding. Rev. 1 design had three risks: header-only for media, per-segment epoch lookup, HS256 secret sprawl without explicit v1 debt.
+
+**Decision:** Accept **SEC-005 rev.2** (`docs/SEC-005_WS_STREAM_TICKETS_DESIGN.md`) as binding architecture for implementation. Three ticket types: `stream_session_ticket` (header JWT), `media_access_ticket` (opaque query/signed URL), `ws_connect_ticket` (opaque one-time query). Gateway mints via `POST /api/auth/stream-ticket`. Proof access token allowed for `stream_session` + `media` mint; `ws_connect` requires full ECDSA. Consume: local verify + local epoch/revoke cache + pub/sub — **no** `epochs/lookup` per segment. Migration: OBSERVE → ACCEPT → ENFORCE; ENFORCE rejects cookie-only. v1 implementation: listener web SPA only; iOS/artist contract-only.
+
+**Alternatives considered:** Header-only tickets for HLS — rejected. Per-segment PG lookup — rejected. Single universal ticket format — rejected. HS256 as final architecture — rejected (v1 temp only if used, must record removal milestone).
+
+**Consequences:** Phase 1 = gateway mint only (no direct-stream/ebap-hls/frontend enforce). `PEND-SEC-014/015/016` closed as superseded by SEC-013 browser DoD + unit tests — **not** claimed as separate full prod artist `%20/%24` browser artifact.
+
+**Files touched:** `docs/SEC-005_WS_STREAM_TICKETS_DESIGN.md`, `docs/PENDING.md`, `docs/DECISIONS.md`.
+
+**Tests:** design §17 checklist 8/8 PASS; implementation tests start Phase 1 gateway unit tests.
+
+**Чтобы не повторилось:** JWT in query forbidden; per-segment epoch lookup forbidden; ENFORCE without cookie fallback only after ACCEPT phase gates.
+
+---
+
 ## 2026-06-08 — Auth hot-path capacity gate closed (PEND-SEC-CAPACITY-001)
 
 **Status:** accepted  

@@ -1,6 +1,6 @@
 # SEC-005 — WS/HLS scoped tickets (impact + design plan)
 
-**Status:** draft — revised per architecture review 2026-06-08 (**not accepted** — no implementation until accepted)  
+**Status:** **accepted (rev. 2, 2026-06-08)** — design only; implementation Phase 1 gateway mint in progress  
 **Date:** 2026-06-08 (rev. 2)  
 **Prerequisites:** SEC-013 closed, PEND-SEC-CAPACITY-001 closed  
 **Goal:** remove **bare `mp_sid` cookie-only** as sufficient auth for WS upgrade and stream playback; bind stream/WS access to **device-bound, epoch-aware, short-lived scoped tickets**.
@@ -17,9 +17,9 @@
 SEC-005 status:
 ✅ impact correct
 ✅ goal correct
-⚠️ design drafted (rev. 2 — blockers addressed)
-❌ not accepted yet
-❌ code must not start
+✅ design accepted (rev. 2, 2026-06-08)
+⚠️ Phase 1 gateway mint only — no consume enforcement
+❌ ENFORCE / stream-service changes not started
 ```
 
 Three architectural risks from rev. 1 were corrected in this revision:
@@ -519,7 +519,33 @@ Playback reverts to `playbackToken` / `mp_stream` / `mp_hls`. Mint endpoint harm
 - [x] Three ticket types defined
 - [x] nginx query masking + active connection revoke behavior
 - [x] v1 scope: listener web only
-- [ ] **Reviewer accepts rev. 2 as architecture** → prepend `DECISIONS.md`
-- [ ] Then: `klm_verify_plan` → implementation PR
+- [x] **Reviewer accepts rev. 2 as architecture** → `DECISIONS.md` 2026-06-08
+- [x] `klm_verify_plan` → Phase 1 gateway mint
+- [ ] Phase 1 reviewed → Phase 2 OBSERVE
 
-**Until accepted:** no `POST /api/auth/stream-ticket` implementation, no playback auth changes.
+**Phase 1 allowed:** `POST /api/auth/stream-ticket` mint + unit tests only. **Forbidden:** consume enforcement, stream-service changes.
+
+---
+
+## 17. Reviewer acceptance checklist (8 conditions)
+
+Explicit mapping for architecture accept. All **PASS** in rev. 2 as of 2026-06-08.
+
+| # | Condition | PASS | Where in doc |
+|---|-----------|------|--------------|
+| 1 | **Not header-only** — API/stream session = header; WS = opaque query or subprotocol; HLS/media/direct = signed URL / opaque query / bridge; native = contract-only | ✅ | §3, §4, §10 |
+| 2 | **No JWT in query** — opaque random token only in URL | ✅ | §3.2, §3.3, §4, §9 |
+| 3 | **No `epochs/lookup` per segment** — mint once; consume = local verify + local epoch/revoked cache | ✅ | §6 (mint), §7, §8 |
+| 4 | **Revoke path** — pub/sub + local cache + short TTL; active WS closed / next segment fails ≤2s | ✅ | §3.3, §7, §8 |
+| 5 | **Secret model** — asymmetric JWT/JWKS preferred for header tickets; opaque Redis for query/WS; HS256 only as explicit v1 temp with DECISIONS debt | ✅ | §5 |
+| 6 | **Three ticket types** — `stream_session_ticket`, `media_access_ticket`, `ws_connect_ticket` (not one universal ticket) | ✅ | §3 |
+| 7 | **Migration** — OBSERVE → ACCEPT → ENFORCE; ENFORCE = no cookie-only fallback; rollback ENFORCE → ACCEPT → OFF | ✅ | §12 |
+| 8 | **v1 scope** — listener web implementation only; iOS/artist contract documented, not v1 code | ✅ | §1, §10, §13 #5 |
+
+**Prerequisites cleared (PENDING hygiene 2026-06-08):**
+
+- `PEND-SEC-014` — closed/superseded (SEC-013 browser DoD + `verify:cors-pop` deploy script)
+- `PEND-SEC-015` — closed (SEC-013 browser DoD check #4: refresh PoP)
+- `PEND-SEC-016` — closed/superseded (unit contract tests + SEC-013 profile hot path browser)
+
+**Accepted 2026-06-08.** Phase 1 gateway mint in progress; consume enforcement blocked until Phase 1 reviewed.
