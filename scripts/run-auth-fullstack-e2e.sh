@@ -17,7 +17,7 @@ export AUTH_E2E_ORIGIN="${AUTH_E2E_ORIGIN:-$AUTH_E2E_BASE_URL}"
 export AUTH_E2E_HOST_PORT="${AUTH_E2E_HOST_PORT:-18080}"
 export AUTH_E2E_EMAIL="${AUTH_E2E_EMAIL:-pop-e2e@earflow.test}"
 export AUTH_E2E_PASSWORD="${AUTH_E2E_PASSWORD:-PopE2eTest1}"
-export AUTH_E2E_ALLOWED_ORIGINS="${AUTH_E2E_ALLOWED_ORIGINS:-http://127.0.0.1:18080,http://localhost:18080}"
+export AUTH_E2E_ALLOWED_ORIGINS="${AUTH_E2E_ALLOWED_ORIGINS:-http://127.0.0.1:18080,http://localhost:18080,http://auth-e2e-edge:8080}"
 # Must match docker-compose.auth-e2e.yml (browser cannot store Secure cookies on http://127.0.0.1).
 export AUTH_E2E_COOKIE_DOMAIN="host"
 export AUTH_E2E_COOKIE_SECURE="false"
