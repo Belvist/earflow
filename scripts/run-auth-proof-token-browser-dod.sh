@@ -48,7 +48,7 @@ for f in "${REQUIRED_FILES[@]}"; do
 done
 
 run_playwright_docker() {
-  echo "      (Playwright via Docker — auth-proof-token-dod-playwright)"
+  echo "      (Playwright via Docker host network — base URL http://127.0.0.1:${AUTH_E2E_HOST_PORT} for Web Crypto)"
   "${COMPOSE[@]}" --profile auth-e2e-run run --rm auth-proof-token-dod-playwright
 }
 
