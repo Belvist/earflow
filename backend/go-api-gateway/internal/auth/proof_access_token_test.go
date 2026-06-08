@@ -128,10 +128,11 @@ func TestProofTokenHandlerRequiresFullProof(t *testing.T) {
 	manager.allowedOrigins = map[string]struct{}{"https://earflow.ru": {}}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/proof/token", nil)
-	req = req.WithContext(withTestCtxSID(req.Context(), sid))
+	req.AddCookie(&http.Cookie{Name: "mp_sid", Value: sid})
 	req.Header.Set("Origin", "https://earflow.ru")
 	w := httptest.NewRecorder()
-	manager.handleProofToken().ServeHTTP(w, req)
+	chain := manager.SessionAuthMiddleware()(manager.DeviceProofMiddleware()(manager.handleProofToken()))
+	chain.ServeHTTP(w, req)
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("token exchange without proof = %d, want 401", w.Code)
 	}
@@ -159,14 +160,15 @@ func TestProofTokenHandlerIssuesToken(t *testing.T) {
 	proof := signCanonicalTest(t, priv, canonical)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/proof/token", nil)
-	req = req.WithContext(withTestCtxSID(req.Context(), sid))
+	req.AddCookie(&http.Cookie{Name: "mp_sid", Value: sid})
 	req.Header.Set("Origin", "https://earflow.ru")
 	req.Header.Set(headerAuthDeviceID, authDeviceID)
 	req.Header.Set(headerAuthDeviceProof, proof)
 	req.Header.Set(headerAuthDeviceTs, ts)
 	req.Header.Set(headerAuthDeviceNonce, nonce)
 	w := httptest.NewRecorder()
-	manager.handleProofToken().ServeHTTP(w, req)
+	chain := manager.SessionAuthMiddleware()(manager.DeviceProofMiddleware()(manager.handleProofToken()))
+	chain.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("exchange status = %d, want 200 body=%s", w.Code, w.Body.String())
 	}

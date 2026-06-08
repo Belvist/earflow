@@ -25,17 +25,7 @@ func (m *SessionManager) handleProofToken() http.HandlerFunc {
 			writeNoSessionJSON(w)
 			return
 		}
-		if err := m.validateDeviceProof(r, sid); err != nil {
-			code := deviceProofErrorCode(err)
-			status := deviceProofHTTPStatus(code)
-			reauth := code == authCodeDeviceProofReq || code == authCodeDeviceRevoked
-			writeJSON(w, status, apiError{
-				Error:          "Device proof required",
-				Code:           code,
-				ReauthRequired: reauth,
-			})
-			return
-		}
+		// Full ECDSA + nonce already enforced by DeviceProofMiddleware (sensitive path).
 
 		authDeviceID := strings.TrimSpace(r.Header.Get(headerAuthDeviceID))
 		epochs, err := m.lookupProofEpochs(r.Context(), sid, authDeviceID)

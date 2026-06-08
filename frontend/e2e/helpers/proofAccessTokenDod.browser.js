@@ -197,6 +197,7 @@
     const data = await resp.json().catch(() => ({}));
     return {
       status: resp.status,
+      code: data.code || null,
       expiresIn: data.expiresIn,
       token: data.token || '',
       hasToken: !!data.token,
