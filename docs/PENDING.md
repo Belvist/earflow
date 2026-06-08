@@ -268,7 +268,7 @@ Revoke/password/email/delete — modal при `MFA_STEP_UP_REQUIRED`, не raw e
 ### PEND-SEC-005 — WS/HLS scoped tickets (device-bound stream auth)
 
 **Priority:** critical  
-**Status:** **design accepted (rev. 2, 2026-06-08)** — **Phase 2 OBSERVE in progress** (mint on auth-e2e; consume/enforce not started)
+**Status:** **design accepted (rev. 2, 2026-06-08)** — **Phase 2 OBSERVE committed (`9f8eeff`); server validation required before close**
 
 **Goal:** bind WS upgrade and playback bytes to epoch-aware scoped tickets; remove cookie-only sufficient auth on consume paths.
 
@@ -279,8 +279,27 @@ Revoke/password/email/delete — modal при `MFA_STEP_UP_REQUIRED`, не raw e
 | Phase | Scope | Status |
 |-------|-------|--------|
 | 1 | Gateway `POST /api/auth/stream-ticket` mint + unit tests; `STREAM_TICKET_ENABLED=0` default | done |
-| 2 | OBSERVE — mint enabled on auth-e2e overlay; `verify-stream-ticket.sh`; structured mint logs | in progress |
-| 3+ | ACCEPT (direct-stream/ebap-hls), frontend, ENFORCE | **blocked** until Phase 2 gate green |
+| 2 | OBSERVE — mint on auth-e2e overlay; `verify-stream-ticket.sh`; structured mint logs | **committed — VPS validation required** |
+| 3+ | ACCEPT (direct-stream/ebap-hls), frontend, ENFORCE | **blocked** until Phase 2 gates green on VPS |
+
+**Phase 2 close criteria (both required on VPS):**
+
+1. **Prod gate:** `STREAM_TICKET_ENABLED=0` → `POST /api/auth/stream-ticket` → **404** (`npm run verify:stream-ticket`).
+2. **Auth-e2e gate:** overlay `STREAM_TICKET_ENABLED=1` → media + stream_session + ws (full ECDSA) mint → **200** (`npm run verify:stream-ticket` with e2e stack up).
+3. **Logs:** `stream_ticket_mint` events on e2e; **no** ticket body in logs.
+4. **Playback:** prod playback unchanged (no consume/enforce in this phase).
+
+**Validation report template (fill after VPS run):**
+
+```text
+git SHA: 9f8eeff (or later)
+prod verify:stream-ticket: PASS/FAIL
+auth-e2e verify:stream-ticket: PASS/FAIL
+logs ticket leakage: no/yes
+playback unchanged: PASS/FAIL
+```
+
+**Forbidden until Phase 2 closed:** Phase 3 ACCEPT, direct-stream/ebap-hls consume, frontend mint, ENFORCE, WS unify, iOS/artist implementation.
 
 **Forbidden until later phases:** direct-stream/ebap-hls consume changes, ENFORCE, cookie fallback removal, WS unify, iOS/artist implementation.
 

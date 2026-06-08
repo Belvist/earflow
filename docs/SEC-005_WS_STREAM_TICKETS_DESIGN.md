@@ -18,7 +18,9 @@ SEC-005 status:
 ✅ impact correct
 ✅ goal correct
 ✅ design accepted (rev. 2, 2026-06-08)
-⚠️ Phase 1 gateway mint only — no consume enforcement
+✅ Phase 1 gateway mint committed
+⚠️ Phase 2 OBSERVE committed (9f8eeff) — VPS validation required before close
+❌ Phase 3 ACCEPT not started
 ❌ ENFORCE / stream-service changes not started
 ```
 
