@@ -22,7 +22,7 @@
 
 ---
 
-## 2026-06-08 — SEC-005 Phase 2 OBSERVE closed (VPS mint gates)
+## 2026-06-08 — SEC-005 Phase 2 OBSERVE validated (restore prod before final close)
 
 **Status:** accepted  
 **Area:** auth | gateway | streaming  
