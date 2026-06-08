@@ -42,6 +42,19 @@ Or Playwright: `cd frontend && npm run test:e2e:auth-proof-token-dod`
 
 **VPS note:** After DoD, run `bash scripts/restore-prod-after-auth-e2e.sh` — e2e overlay sets `EARFLOW_API_BASE_URL=http://127.0.0.1:18080` on prod frontend until restored.
 
+## Frontend API base guard (prod)
+
+Run after auth-e2e/capacity and before declaring prod green:
+
+```bash
+npm run verify:frontend-api-base
+# or full gate:
+npm run verify:prod-auth-gate
+```
+
+**Fails if** `runtime-config.js` or frontend container env contains `127.0.0.1`, `localhost`, `:18080`, or `auth-e2e` in `apiBaseUrl`.  
+**Prod norm:** `EARFLOW_API_BASE_URL` empty in `.env` and container → `apiBaseUrl: ""` in `/runtime-config.js`.
+
 ## Agent checklist
 
 Before marking SEC-013 closed:
