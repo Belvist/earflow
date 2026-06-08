@@ -25,6 +25,9 @@ export CAPACITY_HOT_RPS="${CAPACITY_HOT_RPS:-500}"
 export CAPACITY_HOT_DURATION="${CAPACITY_HOT_DURATION:-60s}"
 export CAPACITY_HOT_P95_MS="${CAPACITY_HOT_P95_MS:-50}"
 export CAPACITY_HOT_ERROR_RATE="${CAPACITY_HOT_ERROR_RATE:-0.001}"
+export CAPACITY_RATE_LIMIT_MULTIPLIER="${CAPACITY_RATE_LIMIT_MULTIPLIER:-50}"
+export LOAD_TEST_MODE="${LOAD_TEST_MODE:-true}"
+export GATEWAY_RATE_LIMIT_MULTIPLIER="${GATEWAY_RATE_LIMIT_MULTIPLIER:-$CAPACITY_RATE_LIMIT_MULTIPLIER}"
 export CAPACITY_TOKEN_POOL_PORT="${CAPACITY_TOKEN_POOL_PORT:-19876}"
 export CAPACITY_TOKEN_POOL_URL="http://127.0.0.1:${CAPACITY_TOKEN_POOL_PORT}"
 export CAPACITY_ARTIFACT_DIR="$ROOT/artifacts/auth-capacity"
@@ -149,7 +152,9 @@ fi
 
 echo "=== [1/9] Start auth-e2e stack (gateway replicas=${GATEWAY_REPLICAS}) ==="
 if [[ "${CAPACITY_SKIP_STACK:-0}" == "1" ]]; then
-  echo "      (skip — CAPACITY_SKIP_STACK=1)"
+  echo "      (skip full stack — CAPACITY_SKIP_STACK=1)"
+  echo "      recreate api-gateway with LOAD_TEST_MODE=${LOAD_TEST_MODE} multiplier=${GATEWAY_RATE_LIMIT_MULTIPLIER}"
+  "${COMPOSE[@]}" up -d --no-deps --force-recreate --scale "api-gateway=${GATEWAY_REPLICAS}" api-gateway
 else
   "${COMPOSE[@]}" up -d --scale "api-gateway=${GATEWAY_REPLICAS}" \
     postgres redis redis-auth database-service auth-service security-service \
@@ -176,11 +181,18 @@ capture_docker_stats "pre-load"
 echo "=== [2/9] Infra verify (proof token enabled) ==="
 bash "$ROOT/scripts/verify-auth-proof-token.sh" || abort "infra verify — fix auth-e2e stack before load test"
 
-echo "=== [3/9] Bootstrap sessions ==="
+echo "=== [3/9] Revoke → 401 latency (isolated — before session pool) ==="
+if node "$ROOT/scripts/auth-capacity/revoke-latency.mjs"; then
+  pass "revoke latency ≤2s"
+else
+  fail "revoke latency"
+fi
+
+echo "=== [4/9] Bootstrap sessions ==="
 node "$ROOT/scripts/auth-capacity/bootstrap-sessions.mjs" || abort "bootstrap sessions — check Node 18+, auth-e2e health, test account"
 [[ -f "$CAPACITY_SESSIONS_FILE" ]] || abort "sessions file missing after bootstrap: $CAPACITY_SESSIONS_FILE"
 
-echo "=== [4/9] Token pool sidecar ==="
+echo "=== [5/9] Token pool sidecar ==="
 node "$ROOT/scripts/auth-capacity/token-pool.mjs" &
 TOKEN_POOL_PID=$!
 for _ in $(seq 1 30); do
@@ -194,7 +206,7 @@ for _ in $(seq 1 30); do
 done
 curl -sf "${CAPACITY_TOKEN_POOL_URL}/health" >/dev/null || abort "token pool health — sidecar not listening on ${CAPACITY_TOKEN_POOL_URL}"
 
-echo "=== [5/9] Hot path k6 (GET /api/profile + proof token) ==="
+echo "=== [6/9] Hot path k6 (GET /api/profile + proof token) ==="
 if run_k6 "$ROOT/scripts/auth-capacity/hot-profile.k6.js"; then
   pass "hot path k6 finished"
 else
@@ -202,18 +214,18 @@ else
 fi
 capture_docker_stats "post-hot"
 
-echo "=== [6/9] Cold path (proof/token + refresh full ECDSA) ==="
+if [[ -n "$TOKEN_POOL_PID" ]] && kill -0 "$TOKEN_POOL_PID" 2>/dev/null; then
+  echo "      stop token pool before cold path (avoid proof/token 429 contention)"
+  kill "$TOKEN_POOL_PID" 2>/dev/null || true
+  wait "$TOKEN_POOL_PID" 2>/dev/null || true
+  TOKEN_POOL_PID=""
+fi
+
+echo "=== [7/9] Cold path (proof/token + refresh full ECDSA) ==="
 if node "$ROOT/scripts/auth-capacity/cold-path-load.mjs"; then
   pass "cold path load"
 else
   fail "cold path load"
-fi
-
-echo "=== [7/9] Revoke → 401 latency ==="
-if node "$ROOT/scripts/auth-capacity/revoke-latency.mjs"; then
-  pass "revoke latency ≤2s"
-else
-  fail "revoke latency"
 fi
 capture_docker_stats "post-all"
 

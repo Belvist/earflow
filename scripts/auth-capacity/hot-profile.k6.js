@@ -24,6 +24,7 @@ const hotLatency = new Trend('hot_profile_latency', true);
 const hotErrors = new Rate('hot_profile_errors');
 const hot401 = new Counter('hot_profile_401');
 const hot403 = new Counter('hot_profile_403');
+const hot429 = new Counter('hot_profile_429');
 const hot5xx = new Counter('hot_profile_5xx');
 
 export const options = {
@@ -80,6 +81,7 @@ export default function hotProfile() {
     hotErrors.add(1);
     if (res.status === 401) hot401.add(1);
     if (res.status === 403) hot403.add(1);
+    if (res.status === 429) hot429.add(1);
     if (res.status >= 500) hot5xx.add(1);
   } else {
     hotErrors.add(0);
@@ -99,11 +101,15 @@ function textSummary(data) {
   const p95 = m.hot_profile_latency?.values?.['p(95)'];
   const err = m.hot_profile_errors?.values?.rate;
   const rps = m.http_reqs?.values?.rate;
+  const n401 = m.hot_profile_401?.values?.count;
+  const n429 = m.hot_profile_429?.values?.count;
   return [
     '=== hot profile k6 summary ===',
     `p95 latency: ${p95 != null ? p95.toFixed(2) : 'n/a'} ms`,
     `error rate: ${err != null ? (err * 100).toFixed(3) : 'n/a'} %`,
     `http RPS: ${rps != null ? rps.toFixed(1) : 'n/a'}`,
+    `401 count: ${n401 != null ? n401 : 'n/a'}`,
+    `429 count: ${n429 != null ? n429 : 'n/a'}`,
     '',
   ].join('\n');
 }
