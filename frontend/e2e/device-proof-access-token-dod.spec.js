@@ -17,6 +17,12 @@ const TTL_MIN = Number(process.env.AUTH_E2E_PROOF_TTL_MIN || 30);
 const TTL_MAX = Number(process.env.AUTH_E2E_PROOF_TTL_MAX || 95);
 const TTL_WAIT_MS = Number(process.env.AUTH_E2E_PROOF_TTL_WAIT_MS || (TTL_MIN + 2) * 1000);
 
+async function readMpSidFromContext(context) {
+  const cookies = await context.cookies();
+  const sid = cookies.find((c) => c.name === 'mp_sid');
+  return sid?.value || '';
+}
+
 test.describe('SEC-013 Proof Access Token browser DoD', () => {
   test.beforeAll(() => {
     if (!EMAIL || !PASSWORD) {
@@ -93,8 +99,8 @@ test.describe('SEC-013 Proof Access Token browser DoD', () => {
     );
     expect(setupB.ok, JSON.stringify(setupB)).toBe(true);
 
-    const sidB = await pageB.evaluate(() => window.__proofAccessTokenDod.readCurrentSid());
-    expect(sidB.length).toBeGreaterThan(10);
+    const sidB = await readMpSidFromContext(contextB);
+    expect(sidB.length, 'mp_sid is httpOnly — read via Playwright cookies, not document.cookie').toBeGreaterThan(10);
 
     const exchangeB = await pageB.evaluate(async () => {
       const material = await window.__proofAccessTokenDod.loadMaterial();

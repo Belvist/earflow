@@ -73,7 +73,7 @@ auth_e2e_ensure_docker_origin
 echo "      AUTH_E2E_ALLOWED_ORIGINS=${AUTH_E2E_ALLOWED_ORIGINS}"
 
 echo "=== [2/7] Start auth-e2e stack (PROOF_ACCESS_TOKEN_TTL_SECONDS=${PROOF_ACCESS_TOKEN_TTL_SECONDS}) ==="
-"${COMPOSE[@]}" build api-gateway
+"${COMPOSE[@]}" build --no-deps api-gateway
 "${COMPOSE[@]}" up -d --force-recreate "${SERVICES[@]}"
 
 echo "=== [3/7] Wait for edge health ==="
