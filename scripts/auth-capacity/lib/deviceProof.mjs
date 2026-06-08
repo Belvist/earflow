@@ -1,7 +1,11 @@
 /**
  * PEND-SEC-CAPACITY-001 — Node device proof helpers (mirrors browser PoP path).
- * Node 22+ (Web Crypto). No external deps.
+ * Node 18+ (Web Crypto via globalThis or node:crypto). No external deps.
  */
+import { webcrypto } from 'node:crypto';
+
+/** ESM has no bare `crypto` on Node 18 — use explicit Web Crypto binding. */
+const crypto = globalThis.crypto?.subtle ? globalThis.crypto : webcrypto;
 
 const CANONICAL_V1 = (method, path, query, ts, nonce, sidHash) =>
   ['v1', method, path, query, ts, nonce, sidHash].join('\n');

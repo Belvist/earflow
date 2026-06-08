@@ -73,6 +73,7 @@ capture_docker_stats() {
 
 pass() { echo "PASS  $*"; }
 fail() { echo "FAIL  $*"; failures=$((failures + 1)); }
+abort() { echo "ABORT $*"; exit 1; }
 
 cleanup() {
   if [[ -n "$TOKEN_POOL_PID" ]] && kill -0 "$TOKEN_POOL_PID" 2>/dev/null; then
@@ -84,11 +85,13 @@ trap cleanup EXIT
 
 require_node() {
   if ! command -v node >/dev/null 2>&1; then
-    echo "FAIL: node required (Node 22+)" >&2
-    exit 1
+    abort "node required (Node 18+)"
   fi
   local major
   major="$(node -p "process.versions.node.split('.')[0]")"
+  if [[ "$major" -lt 18 ]]; then
+    abort "Node >=18 required for Web Crypto (got $(node -v)); install Node 22 LTS"
+  fi
   if [[ "$major" -lt 22 ]]; then
     echo "WARN: Node >=22 recommended (got $(node -v))" >&2
   fi
@@ -171,10 +174,11 @@ fi
 capture_docker_stats "pre-load"
 
 echo "=== [2/9] Infra verify (proof token enabled) ==="
-bash "$ROOT/scripts/verify-auth-proof-token.sh" || fail "infra verify"
+bash "$ROOT/scripts/verify-auth-proof-token.sh" || abort "infra verify — fix auth-e2e stack before load test"
 
 echo "=== [3/9] Bootstrap sessions ==="
-node "$ROOT/scripts/auth-capacity/bootstrap-sessions.mjs" || fail "bootstrap sessions"
+node "$ROOT/scripts/auth-capacity/bootstrap-sessions.mjs" || abort "bootstrap sessions — check Node 18+, auth-e2e health, test account"
+[[ -f "$CAPACITY_SESSIONS_FILE" ]] || abort "sessions file missing after bootstrap: $CAPACITY_SESSIONS_FILE"
 
 echo "=== [4/9] Token pool sidecar ==="
 node "$ROOT/scripts/auth-capacity/token-pool.mjs" &
@@ -183,9 +187,12 @@ for _ in $(seq 1 30); do
   if curl -sf "${CAPACITY_TOKEN_POOL_URL}/health" >/dev/null 2>&1; then
     break
   fi
+  if ! kill -0 "$TOKEN_POOL_PID" 2>/dev/null; then
+    abort "token pool exited before health check — see bootstrap / sessions.json"
+  fi
   sleep 0.5
 done
-curl -sf "${CAPACITY_TOKEN_POOL_URL}/health" >/dev/null || fail "token pool health"
+curl -sf "${CAPACITY_TOKEN_POOL_URL}/health" >/dev/null || abort "token pool health — sidecar not listening on ${CAPACITY_TOKEN_POOL_URL}"
 
 echo "=== [5/9] Hot path k6 (GET /api/profile + proof token) ==="
 if run_k6 "$ROOT/scripts/auth-capacity/hot-profile.k6.js"; then
