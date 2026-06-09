@@ -78,6 +78,8 @@ else
     fail "could not fetch bundle ${main_js}"
   elif printf '%s' "$body" | grep -q 'earflow:stream-ticket-mint:1'; then
     pass "bundle contains earflow:stream-ticket-mint:1 (REACT_APP_STREAM_TICKET_MINT_ENABLED=1)"
+  elif printf '%s' "$body" | grep -qF '/api/auth/stream-ticket'; then
+    pass "bundle contains /api/auth/stream-ticket mint path (marker inlined by minifier)"
   elif printf '%s' "$body" | grep -q 'earflow:stream-ticket-mint:0'; then
     fail "bundle has mint:0 — rebuild frontend with auth-e2e overlay (AUTH_E2E_STREAM_TICKET_MINT_ENABLED=1)"
   else

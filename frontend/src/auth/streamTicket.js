@@ -19,6 +19,19 @@ export const STREAM_TICKET_MINT_BUILD_MARKER =
     ? 'earflow:stream-ticket-mint:1'
     : 'earflow:stream-ticket-mint:0';
 
+// Side effect: CRA must retain marker string in main bundle (verify-stream-ticket-phase4.sh).
+if (typeof window !== 'undefined') {
+  try {
+    Object.defineProperty(window, '__EARFLOW_STREAM_TICKET_MINT_BUILD__', {
+      value: STREAM_TICKET_MINT_BUILD_MARKER,
+      enumerable: false,
+      configurable: true,
+    });
+  } catch {
+    window.__EARFLOW_STREAM_TICKET_MINT_BUILD__ = STREAM_TICKET_MINT_BUILD_MARKER;
+  }
+}
+
 export function isStreamTicketMintEnabled() {
   const mintFlag = String(process.env.REACT_APP_STREAM_TICKET_MINT_ENABLED || '0').trim() === '1';
   return mintFlag && isProofAccessTokenEnabled() === true;
