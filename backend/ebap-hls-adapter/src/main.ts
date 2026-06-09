@@ -3,12 +3,16 @@ import { createS3Client, getObjectBytesCapped, headBucket, headObjectMeta } from
 import { parseCookies, serializeCookie } from './http/cookies';
 import { parseRangeHeader } from './http/range';
 import { badRequest, forbidden, jsonResponse, notFound, serverError, textResponse, unauthorized } from './http/responses';
+import { createClient } from 'redis';
 import { getRedis } from './redis/client';
 import { consumeTokenBucket } from './redis/rateLimit';
 import type { EbapManifest } from './ebap/manifest';
 import { parseEbapManifest } from './ebap/manifest';
 import { createHlsCookieValue, parseHlsCookieValue } from './auth/hlsCookie';
 import { createHlsUrlToken, parseHlsUrlToken } from './auth/hlsUrlToken';
+import { createStreamTicketVerifier } from './auth/streamTicket';
+import { StreamTicketEpochCache } from './auth/streamTicketEpochCache';
+import { startStreamTicketRevokeSubscriber } from './auth/streamTicketRevokeSubscriber';
 import { createServiceTokenManager } from './auth/serviceToken';
 import { hlsKeyForFile } from './hls/build';
 import { rewriteM3u8WithTokens } from './hls/m3u8Rewrite';
@@ -23,6 +27,60 @@ declare const Bun: {
 };
 
 const cfg = loadConfig();
+const streamTicketEpochCache = new StreamTicketEpochCache();
+if (cfg.streamTicket.accept) {
+    startStreamTicketRevokeSubscriber({
+        redisCfg: cfg.streamTicket.authRedis,
+        epochCache: streamTicketEpochCache,
+        channel: cfg.streamTicket.revokeChannel,
+    });
+}
+
+function logStreamTicketConsume(fields: Record<string, string | number>) {
+    console.log(JSON.stringify({ event: 'stream_ticket_consume', ...fields }));
+}
+
+let authTicketRedis: ReturnType<typeof createClient> | null = null;
+let authTicketRedisConnecting: Promise<ReturnType<typeof createClient>> | null = null;
+
+async function getAuthTicketRedis(): Promise<ReturnType<typeof createClient>> {
+    if (authTicketRedis) return authTicketRedis;
+    if (!authTicketRedisConnecting) {
+        const opts: Parameters<typeof createClient>[0] = {
+            socket: {
+                host: cfg.streamTicket.authRedis.host,
+                port: cfg.streamTicket.authRedis.port,
+            },
+        };
+        if (cfg.streamTicket.authRedis.password) {
+            opts.password = cfg.streamTicket.authRedis.password;
+        }
+        const client = createClient(opts);
+        authTicketRedisConnecting = client.connect().then(() => {
+            authTicketRedis = client;
+            return client;
+        });
+    }
+    return authTicketRedisConnecting;
+}
+
+const streamTicketVerifier = cfg.streamTicket.accept
+    ? createStreamTicketVerifier({
+        jwtSecret: cfg.streamTicket.jwtSecret,
+        redisGet: async (key) => {
+            const redis = await getAuthTicketRedis();
+            const raw = await redis.get(key);
+            return typeof raw === 'string' ? raw : null;
+        },
+        epochCache: streamTicketEpochCache,
+        metrics: {
+            incConsume: (result) => incCounter(`ebap_hls_stream_ticket_consume_total_${result}`, 1),
+            incEpochStale: () => incCounter('ebap_hls_stream_ticket_epoch_stale_total', 1),
+        },
+        logConsume: logStreamTicketConsume,
+    })
+    : null;
+
 const serviceTokenManager = createServiceTokenManager(cfg.serviceToken);
 const s3 = createS3Client({
     endpoint: cfg.minio.endpoint,
@@ -617,16 +675,33 @@ type HlsAccess = {
     userId: string;
     trackId: number;
     manifestHash8B64Url: string;
-    auth: 'token' | 'cookie';
+    auth: 'token' | 'cookie' | 'stream_ticket';
 };
 
-function authorizeHls(params: {
+async function authorizeHls(params: {
     req: Request;
     url: URL;
     trackId: number;
     manifestHash8FromUrl: string | null;
     fileName: string;
-}): HlsAccess | null {
+}): Promise<HlsAccess | null> {
+    if (streamTicketVerifier) {
+        const ticketTry = await streamTicketVerifier.tryVerify(params.req, params.url, {
+            trackId: String(params.trackId >>> 0),
+            recordTrackId: params.trackId >>> 0,
+        });
+        if (ticketTry.present) {
+            if (!ticketTry.ok) return null;
+            const manifestHash8B64Url = String(params.manifestHash8FromUrl || '').trim();
+            return {
+                userId: ticketTry.ticket.userId,
+                trackId: params.trackId >>> 0,
+                manifestHash8B64Url,
+                auth: 'stream_ticket',
+            };
+        }
+    }
+
     const nowMs = Date.now();
     const token = params.url.searchParams.get('token');
     const fileLower = String(params.fileName || '').toLowerCase();
@@ -647,6 +722,7 @@ function authorizeHls(params: {
             if (claims.trackId !== (params.trackId >>> 0)) return null;
             if (claims.fileName !== params.fileName) return null;
             if (params.manifestHash8FromUrl && claims.manifestHash8B64Url !== params.manifestHash8FromUrl) return null;
+            incCounter('ebap_hls_stream_ticket_consume_total_legacy', 1);
             return {
                 userId: claims.userId,
                 trackId: params.trackId >>> 0,
@@ -670,6 +746,7 @@ function authorizeHls(params: {
     if (!claims) return null;
     if (claims.trackId !== (params.trackId >>> 0)) return null;
     if (params.manifestHash8FromUrl && claims.manifestHash8B64Url !== params.manifestHash8FromUrl) return null;
+    incCounter('ebap_hls_stream_ticket_consume_total_legacy', 1);
     return {
         userId: claims.userId,
         trackId: params.trackId >>> 0,
@@ -926,7 +1003,7 @@ async function handleHlsAssetCookieOnly(req: Request, url: URL): Promise<Respons
     if (!Number.isInteger(trackId) || trackId <= 0) return notFound();
     if (!fileName) return notFound();
 
-    const access = authorizeHls({ req, url, trackId, manifestHash8FromUrl: null, fileName });
+    const access = await authorizeHls({ req, url, trackId, manifestHash8FromUrl: null, fileName });
     if (!access) return unauthorized();
 
     const fileLower = String(fileName || '').toLowerCase();
@@ -981,7 +1058,7 @@ async function handleHlsAsset(req: Request, url: URL): Promise<Response> {
     if (!manifestHash8B64Url) return notFound();
     if (!fileName) return notFound();
 
-    const access = authorizeHls({ req, url, trackId, manifestHash8FromUrl: manifestHash8B64Url, fileName });
+    const access = await authorizeHls({ req, url, trackId, manifestHash8FromUrl: manifestHash8B64Url, fileName });
     if (!access) return unauthorized();
 
     const fileLower = String(fileName || '').toLowerCase();

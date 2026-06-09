@@ -69,6 +69,24 @@ services:
     environment:
       EARFLOW_API_BASE_URL: ${AUTH_E2E_BASE_URL:-http://127.0.0.1:18080}
 
+  direct-stream-service:
+    ports:
+      - "127.0.0.1:3096:3096"
+    environment:
+      STREAM_TICKET_ACCEPT: ${STREAM_TICKET_ACCEPT:-1}
+      STREAM_TICKET_JWT_SECRET: ${JWT_SECRET}
+      STREAM_TICKET_AUTH_REDIS_HOST: redis-auth
+      STREAM_TICKET_AUTH_REDIS_PORT: 6379
+      STREAM_TICKET_AUTH_REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+
+  ebap-hls-adapter:
+    environment:
+      STREAM_TICKET_ACCEPT: ${STREAM_TICKET_ACCEPT:-1}
+      STREAM_TICKET_JWT_SECRET: ${JWT_SECRET}
+      STREAM_TICKET_AUTH_REDIS_HOST: redis-auth
+      STREAM_TICKET_AUTH_REDIS_PORT: 6379
+      STREAM_TICKET_AUTH_REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+
   auth-e2e-playwright:
     profiles: [ "auth-e2e-run" ]
     image: mcr.microsoft.com/playwright:v1.48.2-jammy
