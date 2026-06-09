@@ -930,6 +930,9 @@ async function authorizePlaybackMedia(req: Request, pathTrackRef: string, url: U
             }
             return finalizePlaybackAuthorization(record);
         }
+        if (cfg.streamTicket.enforce) {
+            return { ok: false, response: streamFailure(401, 'STREAM_TICKET_REQUIRED') };
+        }
     }
 
     const token = readBearerToken(req);
@@ -1026,6 +1029,9 @@ async function authorizeDirectStream(req: Request, sessionId: string, url: URL):
                 return { ok: false, response: streamFailure(403, 'PLAYBACK_TRACK_MISMATCH') };
             }
             return finalizePlaybackAuthorization(record);
+        }
+        if (cfg.streamTicket.enforce) {
+            return { ok: false, response: streamFailure(401, 'STREAM_TICKET_REQUIRED') };
         }
     }
 

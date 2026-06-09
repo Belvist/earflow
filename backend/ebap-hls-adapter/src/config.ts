@@ -68,6 +68,7 @@ export type Config = {
     };
     streamTicket: {
         accept: boolean;
+        enforce: boolean;
         jwtSecret: Uint8Array;
         authRedis: {
             host: string;
@@ -213,6 +214,11 @@ const envSchema = z.object({
     EBAP_HLS_ASSET_RL_WINDOW_SECONDS: z.coerce.number().int().positive().default(10),
 
     STREAM_TICKET_ACCEPT: z
+        .string()
+        .optional()
+        .default('false')
+        .transform((v: string) => ['1', 'true', 'yes', 'on'].includes(String(v).trim().toLowerCase())),
+    STREAM_TICKET_ENFORCE: z
         .string()
         .optional()
         .default('false')
@@ -427,6 +433,7 @@ export function loadConfig(): Config {
         },
         streamTicket: {
             accept: env.STREAM_TICKET_ACCEPT,
+            enforce: env.STREAM_TICKET_ENFORCE,
             jwtSecret: new TextEncoder().encode(
                 env.STREAM_TICKET_JWT_SECRET || String(process.env.JWT_SECRET || '').trim() || env.SYSTEM_ROOT_SECRET
             ),

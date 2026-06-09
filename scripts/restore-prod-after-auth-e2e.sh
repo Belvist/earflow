@@ -81,6 +81,19 @@ if [[ "$HLS_ACCEPT" == "1" || "$HLS_ACCEPT" == "true" ]]; then
   exit 1
 fi
 
+DS_ENFORCE="$("${COMPOSE_PROD[@]}" exec -T direct-stream-service printenv STREAM_TICKET_ENFORCE 2>/dev/null | tr -d '\r' || true)"
+HLS_ENFORCE="$("${COMPOSE_PROD[@]}" exec -T ebap-hls-adapter printenv STREAM_TICKET_ENFORCE 2>/dev/null | tr -d '\r' || true)"
+log "direct-stream STREAM_TICKET_ENFORCE='${DS_ENFORCE:-<empty>}' (prod: empty or 0)"
+log "ebap-hls STREAM_TICKET_ENFORCE='${HLS_ENFORCE:-<empty>}' (prod: empty or 0)"
+if [[ "$DS_ENFORCE" == "1" || "$DS_ENFORCE" == "true" ]]; then
+  echo "FAIL: direct-stream STREAM_TICKET_ENFORCE still on — recreate without auth-e2e overlay" >&2
+  exit 1
+fi
+if [[ "$HLS_ENFORCE" == "1" || "$HLS_ENFORCE" == "true" ]]; then
+  echo "FAIL: ebap-hls STREAM_TICKET_ENFORCE still on — recreate without auth-e2e overlay" >&2
+  exit 1
+fi
+
 log "nginx config test"
 "${COMPOSE_PROD[@]}" exec -T nginx nginx -t
 
