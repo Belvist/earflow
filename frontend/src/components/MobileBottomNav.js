@@ -20,7 +20,7 @@ const Nav = styled.nav`
   height: calc(${NAV_BAR_PX}px + env(safe-area-inset-bottom, 0px));
   padding-bottom: env(safe-area-inset-bottom, 0px);
   box-sizing: border-box;
-  background: #000000;
+  background: transparent;
   border-top: none;
   z-index: var(--z-bottom-nav, 9997);
   transform: translate3d(0, 0, 0);

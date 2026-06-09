@@ -37,9 +37,9 @@ git rev-parse --short HEAD   # запомни SHA
 docker compose build --no-cache frontend
 docker compose up -d --force-recreate frontend
 
-# проверка build hint (v53+ после merge UI)
+# проверка build hint (v54+ после merge UI)
 curl -sS https://earflow.ru/ | grep -o 'data-mini-bar-ui="[^"]*"' | head -1
-# ожидаем: data-mini-bar-ui="2026-06-v53-nav-white-icons"
+# ожидаем: data-mini-bar-ui="2026-06-v54-light-bar-progress-glow"
 ```
 
 Если `platform-control.sh: Permission denied`:

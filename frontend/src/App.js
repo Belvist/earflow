@@ -26,7 +26,10 @@ import ListenerUiPrefsSync from './preferences/ListenerUiPrefsSync';
 import PlayerChrome from './components/PlayerChrome';
 import { lazyWithRetry } from './utils/lazyWithRetry';
 import { HOME_SURFACE_HEX } from './styles/homeSurface';
-import { FLOATING_PROGRESS_INSET_X_PX } from './components/MobilePlayerBar/miniPlayButtonVisual';
+import {
+  FLOATING_PROGRESS_BOTTOM_PX,
+  FLOATING_PROGRESS_INSET_X_PX,
+} from './components/MobilePlayerBar/miniPlayButtonVisual';
 
 const SkinProviderWrapper = ({ children }) => {
   const skinValue = useSkinState();
@@ -72,7 +75,7 @@ const GlobalStyle = createGlobalStyle`
     --panel-rail-gap: 20px;
     --mobile-bottom-nav-height: 48px;
     --mobile-mini-player-height: 56px;
-    --mobile-mini-player-float-gap: 0px;
+    --mobile-mini-player-float-gap: 8px;
     --mobile-chrome-height: calc(var(--mobile-bottom-nav-height) + var(--mobile-mini-player-float-gap) + var(--mobile-mini-player-height));
     --z-bottom-nav: 9997;
     --z-mini-player: 9998;
@@ -99,7 +102,7 @@ const GlobalStyle = createGlobalStyle`
     right: max(10px, env(safe-area-inset-right, 0px)) !important;
     width: auto !important;
     max-width: calc(100vw - 20px) !important;
-    border-radius: 10px !important;
+    border-radius: 16px !important;
   }
 
   :root[data-mini-bar-variant="classic"] [data-testid="mini-player-bar"],
@@ -114,8 +117,24 @@ const GlobalStyle = createGlobalStyle`
   [data-testid="mini-player-bar"] .ef-mini-progress-fill {
     display: block !important;
     height: 100% !important;
-    background: #ffffff !important;
     width: var(--progress, 0%) !important;
+  }
+
+  :root:not([data-mini-bar-variant="classic"]) [data-testid="mini-player-bar"] .ef-mini-progress-fill,
+  [data-testid="mini-player-bar"][data-mini-bar-variant="floating"] .ef-mini-progress-fill {
+    background: #ffffff !important;
+    border-radius: 999px !important;
+    box-shadow:
+      0 0 4px rgba(255, 255, 255, 0.95),
+      0 2px 10px rgba(255, 255, 255, 0.72),
+      0 4px 14px rgba(255, 255, 255, 0.38) !important;
+  }
+
+  :root[data-mini-bar-variant="classic"] [data-testid="mini-player-bar"] .ef-mini-progress-fill,
+  [data-testid="mini-player-bar"][data-mini-bar-variant="classic"] .ef-mini-progress-fill {
+    background: #ffffff !important;
+    border-radius: inherit !important;
+    box-shadow: none !important;
   }
 
   [data-testid="mini-player-bar"] [data-testid="mini-player-progress"] {
@@ -134,9 +153,11 @@ const GlobalStyle = createGlobalStyle`
     left: ${FLOATING_PROGRESS_INSET_X_PX}px !important;
     right: ${FLOATING_PROGRESS_INSET_X_PX}px !important;
     width: auto !important;
-    bottom: 0 !important;
+    bottom: ${FLOATING_PROGRESS_BOTTOM_PX}px !important;
     pointer-events: none !important;
-    border-radius: 1px !important;
+    border-radius: 999px !important;
+    overflow: visible !important;
+    background: rgba(0, 0, 0, 0.07) !important;
   }
 
   :root[data-mini-bar-variant="classic"] [data-testid="mini-player-bar"] [data-testid="mini-player-progress"],
