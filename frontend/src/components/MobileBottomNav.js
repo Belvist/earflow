@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import styled from 'styled-components';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { FaHome, FaSearch, FaUser } from 'react-icons/fa';
+import { FaHome, FaSearch, FaUser, FaUsers } from 'react-icons/fa';
 import useAuth from '../hooks/useAuth';
 import { clearRecentLogout, redirectToAuth, sanitizeReturnTo } from '../utils/authRedirect';
 
@@ -39,7 +39,7 @@ const Nav = styled.nav`
 const Inner = styled.div`
   height: ${NAV_BAR_PX};
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   align-items: center;
   max-width: 520px;
   margin: 0 auto;
@@ -73,7 +73,7 @@ const Item = styled.button`
 `;
 
 const Label = styled.span`
-  font-size: 9px;
+  font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.01em;
   line-height: 1;
@@ -88,6 +88,7 @@ export default function MobileBottomNav() {
 
   const active = useMemo(() => {
     if (path === '/') return 'home';
+    if (path.startsWith('/social')) return 'social';
     if (path.startsWith('/search')) return 'search';
     if (path.startsWith('/artists')) return 'artists';
     if (path.startsWith('/artist/')) return 'artists';
@@ -105,8 +106,19 @@ export default function MobileBottomNav() {
           aria-label="Главная"
           onClick={() => navigate('/')}
         >
-          <FaHome size={15} />
+          <FaHome size={14} />
           <Label>Главная</Label>
+        </Item>
+
+        <Item
+          type="button"
+          $active={active === 'social'}
+          aria-current={active === 'social' ? 'page' : undefined}
+          aria-label="Соцсеть"
+          onClick={() => navigate('/social')}
+        >
+          <FaUsers size={14} />
+          <Label>Соцсеть</Label>
         </Item>
 
         <Item
@@ -116,7 +128,7 @@ export default function MobileBottomNav() {
           aria-label="Поиск"
           onClick={() => navigate('/search')}
         >
-          <FaSearch size={15} />
+          <FaSearch size={14} />
           <Label>Поиск</Label>
         </Item>
 
@@ -135,7 +147,7 @@ export default function MobileBottomNav() {
             redirectToAuth({ reason: 'login', returnTo: sanitizeReturnTo(href), replace: true });
           }}
         >
-          <FaUser size={15} />
+          <FaUser size={14} />
           <Label>Аккаунт</Label>
         </Item>
       </Inner>

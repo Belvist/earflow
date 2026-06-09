@@ -50,6 +50,7 @@ const AlbumPage = lazyWithRetry(() => import('./components/AlbumPage'), 'AlbumPa
 const AboutPage = lazyWithRetry(() => import('./components/AboutPage'), 'AboutPage');
 const PopularArtistsPage = lazyWithRetry(() => import('./components/PopularArtistsPage'), 'PopularArtistsPage');
 const SearchPage = lazyWithRetry(() => import('./components/SearchPage'), 'SearchPage');
+const SocialPage = lazyWithRetry(() => import('./components/SocialPage'), 'SocialPage');
 const LegalPage = lazyWithRetry(() => import('./components/LegalPage'), 'LegalPage');
 /**
  * Playground - изолированная страница для e2e тестов жестов мобильного плеера.
@@ -688,6 +689,7 @@ function AppLayout() {
                 <Route path="/" element={<MainApp />} />
                 <Route path="/playground/mobile-player" element={<MobilePlayerPlayground />} />
                 <Route path="/search" element={<SearchPage />} />
+                <Route path="/social" element={<SocialPage />} />
                 <Route path="/p/:slug" element={<PlaylistShareRoute />} />
                 <Route path="/mix/:token" element={<PublicSharePage />} />
                 <Route path="/playlist/:idOrToken" element={<PlaylistRoute />} />
