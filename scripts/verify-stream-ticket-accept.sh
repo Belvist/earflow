@@ -28,6 +28,32 @@ fail() { echo "FAIL  $*"; failures=$((failures + 1)); }
 skip() { echo "SKIP  $*"; }
 section() { echo ""; echo "=== $* ==="; }
 
+resolve_auth_e2e_track_id() {
+  if [[ -n "${AUTH_E2E_TRACK_ID:-}" ]]; then
+    pass "AUTH_E2E_TRACK_ID preset (${AUTH_E2E_TRACK_ID})"
+    return 0
+  fi
+  if ! command -v docker >/dev/null 2>&1; then
+    skip "docker unavailable — AUTH_E2E_TRACK_ID not resolved from postgres"
+    return 0
+  fi
+  local db_user db_name tid
+  db_user="${DB_USER:-}"
+  db_name="${DB_NAME:-}"
+  if [[ -z "$db_user" || -z "$db_name" ]]; then
+    skip "DB_USER/DB_NAME unset — accept-consume will probe via API"
+    return 0
+  fi
+  tid="$("${COMPOSE[@]}" exec -T postgres psql -U "$db_user" -d "$db_name" -tAc \
+    "SELECT id FROM songs WHERE file_path IS NOT NULL AND btrim(file_path) <> '' ORDER BY id ASC LIMIT 1;" 2>/dev/null | tr -d ' \r\n' || true)"
+  if [[ -n "$tid" && "$tid" =~ ^[0-9]+$ ]]; then
+    export AUTH_E2E_TRACK_ID="$tid"
+    pass "resolved AUTH_E2E_TRACK_ID=${tid} from postgres"
+  else
+    skip "no songs.file_path row in postgres — accept-consume will probe via recommendations API"
+  fi
+}
+
 section "SEC-005 stream ticket ACCEPT verify (Phase 3 consume)"
 
 if [[ ! -f "$ROOT/scripts/stream-ticket-verify/accept-consume.mjs" ]]; then
@@ -81,6 +107,7 @@ else
   else
     pass "auth-e2e STREAM_TICKET_ENABLED=${gw_enabled}"
     pass "auth-e2e direct-stream STREAM_TICKET_ACCEPT=${ds_accept_e2e}"
+    resolve_auth_e2e_track_id
     bash "$ROOT/scripts/auth-e2e-bootstrap.sh"
     if node "$ROOT/scripts/stream-ticket-verify/accept-consume.mjs"; then
       pass "accept-consume.mjs integration"
