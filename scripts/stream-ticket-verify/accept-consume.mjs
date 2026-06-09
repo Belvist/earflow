@@ -59,10 +59,16 @@ async function main() {
       'Content-Type': 'application/json',
       Cookie: cookieHeader(jar),
       'X-CSRF-Token': jar.mp_csrf || '',
+      'X-Auth-Device-Id': material.authDeviceId,
+      'X-Auth-Proof-Access-Token': token,
     },
     body: JSON.stringify({ trackId, mode: 'direct' }),
   });
-  assert(sessionRes.status === 200, `playback session HTTP ${sessionRes.status}`);
+  if (sessionRes.status !== 200) {
+    const code = sessionRes.data?.code || sessionRes.data?.error || '';
+    assert(false, `playback session HTTP ${sessionRes.status}${code ? ` (${code})` : ''}`);
+  }
+  assert(true, 'playback session HTTP 200');
   Object.assign(jar, sessionRes.cookies || {});
   const sessionId = String(sessionRes.data?.sessionId || '').trim();
   const scopeTrackId = String(sessionRes.data?.trackId || trackId).trim();
