@@ -289,12 +289,16 @@ function main() {
     '.cursor/rules/earflow-frontend-branch.mdc',
     'docs/MOBILE_PLAYER_SHEET_DESIGN.md',
     '.cursor/skills/earflow-player-sheet/SKILL.md',
+    '.cursor/skills/engineering-verification/SKILL.md',
+    'docs/ENGINEERING_VERIFICATION_PLAYBOOK.md',
     '.cursor/rules/earflow-player-sheet.mdc',
     '.windsurf/rules/earflow-ui-client-prefs.mdc',
     '.windsurf/rules/earflow-player-sheet.mdc',
   ].forEach(assertFile);
 
   assertContains('AGENTS.md', 'docs/DECISIONS.md', 'AGENTS.md must point agents to docs/DECISIONS.md');
+  assertContains('AGENTS.md', 'ENGINEERING_VERIFICATION_PLAYBOOK.md', 'AGENTS.md must point agents to engineering verification playbook');
+  assertContains('AGENTS.md', 'engineering-verification', 'AGENTS.md must reference engineering-verification skill');
   assertContains('AGENTS.md', 'earflow-ui-client-prefs.mdc', 'AGENTS.md must point agents to earflow-ui-client-prefs rule');
   assertContains('.windsurf/rules/earflow-context-discipline.mdc', 'alwaysApply: true', 'Windsurf discipline rule must always apply');
   assertContains('.cursor/rules/earflow-context-discipline.mdc', 'alwaysApply: true', 'Cursor discipline rule must always apply');

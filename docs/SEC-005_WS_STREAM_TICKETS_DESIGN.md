@@ -523,10 +523,11 @@ Playback reverts to `playbackToken` / `mp_stream` / `mp_hls`. Mint endpoint harm
 - [x] nginx query masking + active connection revoke behavior
 - [x] v1 scope: listener web only
 - [x] **Reviewer accepts rev. 2 as architecture** → `DECISIONS.md` 2026-06-08
-- [x] `klm_verify_plan` → Phase 1 gateway mint
-- [ ] Phase 1 reviewed → Phase 2 OBSERVE
+- [x] Phase 1 gateway mint — done
+- [x] Phase 2 OBSERVE — validated (e2e); **closed after restore prod**
+- [ ] Phase 3 ACCEPT checklist accepted → `docs/SEC-005_PHASE3_ACCEPT_CHECKLIST.md`
 
-**Phase 1 allowed:** `POST /api/auth/stream-ticket` mint + unit tests only. **Forbidden:** consume enforcement, stream-service changes.
+**Phase 3 allowed after checklist accept:** dual-mode consume in direct-stream + ebap-hls only. **Forbidden:** ENFORCE, frontend mint, per-segment epoch lookup.
 
 ---
 
