@@ -884,7 +884,10 @@ export class DirectSession implements PlaybackSession {
     private async refreshSession(signal: AbortSignal): Promise<void> {
         const canRefresh = this.playbackSessionId && typeof this.apiClient.refreshSongDirectSession === 'function';
         const res = canRefresh
-            ? await this.apiClient.refreshSongDirectSession!(this.playbackSessionId!, { signal })
+            ? await this.apiClient.refreshSongDirectSession!(this.playbackSessionId!, {
+                signal,
+                trackId: this.trackId,
+            })
             : await this.apiClient.getSongDirectSession(this.trackId, { signal });
         const url = res && typeof res.url === 'string' ? res.url : '';
         if (!url) {

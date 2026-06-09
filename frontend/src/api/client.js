@@ -20,6 +20,7 @@ import {
   signDeviceProofRequest,
 } from '../auth/authDeviceCrypto';
 import { clearProofAccessToken } from '../auth/proofAccessToken';
+import { attachMediaTicketToDirectSession, clearStreamTicketCache } from '../auth/streamTicket';
 
 const REAUTH_REQUIRED_REFRESH_CODES = new Set([
   'NO_SESSION',
@@ -507,6 +508,7 @@ class ApiClient {
     }
     void clearAuthDeviceState();
     clearProofAccessToken();
+    clearStreamTicketCache();
   }
 
   async ensureAuthDeviceRegistered(options = {}) {
@@ -966,6 +968,13 @@ class ApiClient {
     });
   }
 
+  async revokeAllAuthSessions() {
+    return await this.request('/api/auth/sessions/revoke-all', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  }
+
   async logClientError(payload = {}, options = {}) {
     const p = payload && typeof payload === 'object' ? payload : {};
     const code = typeof p.code === 'string' ? p.code.trim().slice(0, 80) : '';
@@ -1385,7 +1394,7 @@ class ApiClient {
           })
         : null;
 
-      const result = {
+      let result = {
         url: absoluteUrl,
         masterUrl: data && typeof data.masterUrl === 'string' ? resolveAbsoluteUrl(data.masterUrl) : undefined,
         manifestUrl: data && typeof data.manifestUrl === 'string' ? resolveAbsoluteUrl(data.manifestUrl) : undefined,
@@ -1397,6 +1406,11 @@ class ApiClient {
         mime,
         qualities,
       };
+      try {
+        result = await attachMediaTicketToDirectSession(result, trackId, options?.signal);
+      } catch {
+        // fail-open: legacy cookie/token path remains when mint unavailable
+      }
       try {
         this._directSessionCache?.set?.(cacheKey, result, 15_000);
       } catch {
@@ -1495,7 +1509,7 @@ class ApiClient {
     }
 
     const absoluteUrl = this._resolvePlaybackUrl(rawSessionUrl);
-    const result = {
+    let result = {
       url: absoluteUrl,
       masterUrl: data && typeof data.masterUrl === 'string' ? this._resolvePlaybackUrl(data.masterUrl) : undefined,
       manifestUrl: data && typeof data.manifestUrl === 'string' ? this._resolvePlaybackUrl(data.manifestUrl) : undefined,
@@ -1507,6 +1521,14 @@ class ApiClient {
       mime: data && typeof data.mime === 'string' ? data.mime : 'audio/mpeg',
       qualities: null,
     };
+    const trackIdForTicket = options?.trackId ?? data?.trackId;
+    if (trackIdForTicket != null && String(trackIdForTicket).trim() !== '') {
+      try {
+        result = await attachMediaTicketToDirectSession(result, trackIdForTicket, options?.signal);
+      } catch {
+        // fail-open on refresh mint errors
+      }
+    }
     return result;
   }
 

@@ -57,6 +57,7 @@ func NewServer(d Deps) *http.Server {
 		r.Get("/api/auth/sessions", listSessionsHandler(d))
 		r.Post("/api/auth/sessions/revoke", revokeSessionHandler(d))
 		r.Post("/api/auth/sessions/revoke-others", revokeOtherSessionsHandler(d))
+		r.Post("/api/auth/sessions/revoke-all", revokeAllSessionsHandler(d))
 
 		r.Post("/api/auth/2fa/recovery/regenerate", recoveryRegenerateHandler(d))
 	})

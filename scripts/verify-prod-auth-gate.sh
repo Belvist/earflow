@@ -188,7 +188,9 @@ Hard reload (Ctrl+Shift+R) after clearing site data / unregister SW if needed.
 | POST /api/ebap-hls/v1/session | no CORS block |
 | Stale PoP recovery | 401 DEVICE_PROOF_INVALID → register 200 → retry GET 200 |
 | Revoke one other session | 200; current profile still 200 |
-| Revoke others | 200 OR MFA_STEP_UP_REQUIRED (not silent logout) |
+| Revoke others | 200 OR MFA_STEP_UP_REQUIRED OR FRESH_LOGIN_REQUIRED (not silent logout) |
+| Revoke all (sessions UI) | 200; all sessions cleared; re-login required |
+| MFA step-up modal | completes → retry revoke succeeds |
 
 FAIL signals (do not declare green):
 - red ErrorBoundary screen

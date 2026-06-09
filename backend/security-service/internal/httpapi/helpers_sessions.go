@@ -126,6 +126,52 @@ func (d Deps) collectDecoratedSessions(r *http.Request, principal authz.Principa
 	return views
 }
 
+const freshLoginProtectionWindow = 24 * time.Hour
+
+func (d Deps) sessionCreatedAt(r *http.Request, sid string) (time.Time, bool) {
+	sid = strings.TrimSpace(sid)
+	if sid == "" {
+		return time.Time{}, false
+	}
+	if row := d.loadPGSessionOrNil(r, sid); row != nil && !row.CreatedAt.IsZero() {
+		return row.CreatedAt.UTC(), true
+	}
+	info, err := d.Redis.ReadSessionInfo(r.Context(), sid)
+	if err != nil || info == nil || strings.TrimSpace(info.CreatedAt) == "" {
+		return time.Time{}, false
+	}
+	t, err := time.Parse(time.RFC3339, strings.TrimSpace(info.CreatedAt))
+	if err != nil {
+		return time.Time{}, false
+	}
+	return t.UTC(), true
+}
+
+func (d Deps) isFreshLoginSession(r *http.Request, sid string) bool {
+	createdAt, ok := d.sessionCreatedAt(r, sid)
+	if !ok {
+		return false
+	}
+	return time.Since(createdAt) < freshLoginProtectionWindow
+}
+
+func (d Deps) requireStepUpForSensitiveSessionAction(w http.ResponseWriter, r *http.Request, principal authz.Principal, massRevoke bool) bool {
+	if massRevoke && d.isFreshLoginSession(r, principal.SID) && !stepUpOK(d, r, principal) {
+		writeError(w, http.StatusForbidden, "FRESH_LOGIN_REQUIRED", "Fresh session requires step-up before revoking other sessions")
+		return false
+	}
+	mfaRequired, abort := d.userMFAStepUpRequired(r, principal.UserID)
+	if abort {
+		writeError(w, http.StatusNotFound, "USER_NOT_FOUND", "User not found")
+		return false
+	}
+	if mfaRequired && !stepUpOK(d, r, principal) {
+		writeError(w, http.StatusForbidden, "MFA_STEP_UP_REQUIRED", "Step-up required")
+		return false
+	}
+	return true
+}
+
 func (d Deps) loadPGSessionOrNil(r *http.Request, sid string) *authpg.ActiveSessionRow {
 	if d.AuthSoT == nil || d.AuthSoT.PG == nil {
 		return nil

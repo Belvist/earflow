@@ -60,13 +60,7 @@ func revokeSessionHandler(d Deps) http.HandlerFunc {
 			return
 		}
 
-		mfaRequired, abort := d.userMFAStepUpRequired(r, principal.UserID)
-		if abort {
-			writeError(w, http.StatusNotFound, "USER_NOT_FOUND", "User not found")
-			return
-		}
-		if mfaRequired && !stepUpOK(d, r, principal) {
-			writeError(w, http.StatusForbidden, "MFA_STEP_UP_REQUIRED", "Step-up required")
+		if !d.requireStepUpForSensitiveSessionAction(w, r, principal, true) {
 			return
 		}
 
@@ -109,17 +103,28 @@ func revokeOtherSessionsHandler(d Deps) http.HandlerFunc {
 			return
 		}
 
-		mfaRequired, abort := d.userMFAStepUpRequired(r, principal.UserID)
-		if abort {
-			writeError(w, http.StatusNotFound, "USER_NOT_FOUND", "User not found")
-			return
-		}
-		if mfaRequired && !stepUpOK(d, r, principal) {
-			writeError(w, http.StatusForbidden, "MFA_STEP_UP_REQUIRED", "Step-up required")
+		if !d.requireStepUpForSensitiveSessionAction(w, r, principal, true) {
 			return
 		}
 
 		revoked := d.revokeAllSessionsExcept(r, principal.UserID, principal.SID)
+		writeJSON(w, http.StatusOK, revokeOthersResponse{Revoked: revoked})
+	}
+}
+
+func revokeAllSessionsHandler(d Deps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := authz.FromContext(r.Context())
+		if !ok {
+			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Authentication required")
+			return
+		}
+
+		if !d.requireStepUpForSensitiveSessionAction(w, r, principal, true) {
+			return
+		}
+
+		revoked := d.revokeAllSessionsIncludingCurrent(r, principal.UserID, principal.SID)
 		writeJSON(w, http.StatusOK, revokeOthersResponse{Revoked: revoked})
 	}
 }
