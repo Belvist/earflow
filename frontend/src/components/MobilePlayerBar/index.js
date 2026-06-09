@@ -204,7 +204,7 @@ const MobilePlayerBar = ({ onOpenEq }) => {
         data-mini-gesture-zone="true"
         data-mini-bar-variant={variant}
         data-mini-play-style={playStyle}
-        data-mini-bar-ui="2026-06-v56-nav-blur-progress-fix"
+        data-mini-bar-ui="2026-06-v57-nav-oval-pill"
         $variant={variant}
         initial={false}
         animate={false}
