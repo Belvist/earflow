@@ -13,6 +13,12 @@ const apiBaseUrl = () => {
   return '';
 };
 
+/** Grep prod/staging bundles in verify-stream-ticket-phase4.sh (CRA inlines at build). */
+export const STREAM_TICKET_MINT_BUILD_MARKER =
+  String(process.env.REACT_APP_STREAM_TICKET_MINT_ENABLED || '0').trim() === '1'
+    ? 'earflow:stream-ticket-mint:1'
+    : 'earflow:stream-ticket-mint:0';
+
 export function isStreamTicketMintEnabled() {
   const mintFlag = String(process.env.REACT_APP_STREAM_TICKET_MINT_ENABLED || '0').trim() === '1';
   return mintFlag && isProofAccessTokenEnabled() === true;

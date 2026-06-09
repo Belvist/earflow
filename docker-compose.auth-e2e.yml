@@ -66,6 +66,19 @@ services:
       AUTH_PG_SOT_MODE: ${AUTH_PG_SOT_MODE:-dual_write}
 
   frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: production
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-}
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        NO_PROXY: ${NO_PROXY:-}
+        # SEC-005 Phase 4 — mint in listener bundle on auth-e2e only (prod build arg stays 0 via restore-prod).
+        REACT_APP_STREAM_TICKET_MINT_ENABLED: ${AUTH_E2E_STREAM_TICKET_MINT_ENABLED:-1}
+        REACT_APP_PROOF_ACCESS_TOKEN_ENABLED: "1"
+        REACT_APP_DEVICE_PROOF_REQUIRED: "1"
     environment:
       EARFLOW_API_BASE_URL: ${AUTH_E2E_BASE_URL:-http://127.0.0.1:18080}
 
