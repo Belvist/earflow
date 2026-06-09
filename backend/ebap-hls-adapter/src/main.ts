@@ -700,6 +700,9 @@ async function authorizeHls(params: {
                 auth: 'stream_ticket',
             };
         }
+        if (cfg.streamTicket.enforce) {
+            return null;
+        }
     }
 
     const nowMs = Date.now();

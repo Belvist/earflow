@@ -22,6 +22,16 @@
 
 ---
 
+## 2026-06-09 — SEC-005 Phase 5 ENFORCE (stream services + staging gate)
+
+**Status:** accepted  
+**Area:** direct-stream | ebap-hls | auth-e2e  
+**Decision:** `STREAM_TICKET_ENFORCE=1` on stream services rejects legacy cookie/`mp_hls` fallback when no valid scoped ticket (`STREAM_TICKET_REQUIRED` 401). Auth-e2e gate: `npm run run:sec005-phase5-staging`. Prod stays ENFORCE off until Phase 6 ACCEPT soak.
+
+**Files touched:** `backend/direct-stream-service/src/{config,main}.ts`, `backend/ebap-hls-adapter/src/{config,main}.ts`, `scripts/run-sec005-phase5-staging.sh`, `scripts/verify-stream-ticket-phase5.sh`, `scripts/stream-ticket-verify/enforce-consume.mjs`.
+
+---
+
 ## 2026-06-09 — SEC-005 Phase 4 staging closed on VPS
 
 **Status:** accepted  

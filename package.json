@@ -27,6 +27,8 @@
     "verify:stream-ticket-accept": "bash scripts/verify-stream-ticket-accept.sh",
     "verify:stream-ticket-phase4": "bash scripts/verify-stream-ticket-phase4.sh",
     "run:sec005-phase4-staging": "bash scripts/run-sec005-phase4-staging.sh",
+    "verify:stream-ticket-phase5": "bash scripts/verify-stream-ticket-phase5.sh",
+    "run:sec005-phase5-staging": "bash scripts/run-sec005-phase5-staging.sh",
     "verify:auth-replay": "bash scripts/verify-auth-security-replay.sh",
     "verify:prod-auth-gate": "bash scripts/verify-prod-auth-gate.sh",
     "verify:auth-kit": "bash scripts/verify-auth-kit.sh",

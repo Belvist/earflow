@@ -115,6 +115,21 @@ Or manual: auth-e2e overlay **rebuilds frontend** with `REACT_APP_STREAM_TICKET_
 
 **Forbidden:** prod `STREAM_TICKET_ACCEPT=1` until Phase 4 + Phase 5 staging PASS.
 
+## SEC-005 Phase 5 — ENFORCE (staging)
+
+```bash
+npm run run:sec005-phase5-staging
+```
+
+| Check | Expect |
+|-------|--------|
+| `STREAM_TICKET_ENFORCE=1` | direct-stream + ebap-hls on auth-e2e |
+| Valid `?st=` ticket | HEAD 200/206 |
+| Legacy `mp_stream` cookie only | HEAD **401** `STREAM_TICKET_REQUIRED` |
+| Restore prod | `STREAM_TICKET_ENFORCE` empty |
+
+**Forbidden:** prod `STREAM_TICKET_ENFORCE=1` until Phase 6 prod ACCEPT soak.
+
 **Universal verify discipline:** `docs/ENGINEERING_VERIFICATION_PLAYBOOK.md` + skill `engineering-verification`.
 
 ## Agent checklist
