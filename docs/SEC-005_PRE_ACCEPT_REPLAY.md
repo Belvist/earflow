@@ -15,7 +15,9 @@ git pull origin main
 bash scripts/verify-auth-security-replay.sh
 ```
 
-Runs: `validate:ai`, frontend API base, stream ticket prod 404, proof token infra, prod auth gate, env sanity, log sample.
+Runs: frontend API base, stream ticket prod 404, proof token infra, prod auth gate, env sanity, log sample.
+
+**Note:** `validate:ai` **auto-skips** on VPS when `AGENTS.md` is absent (slim deploy checkout). That is **not** a prod security failure — dev discipline files are gitignored on VPS by design.
 
 **Expect:** `AUTH SECURITY REPLAY: PASS`
 
@@ -25,13 +27,17 @@ Runs: `validate:ai`, frontend API base, stream ticket prod 404, proof token infr
 
 ```bash
 cd /opt/music-platform
+git pull origin main
 FULL_E2E=1 bash scripts/verify-auth-security-replay.sh
 ```
 
-1. Layer A prod gates  
-2. auth-e2e bootstrap → `verify:stream-ticket` mint 200  
-3. grep `stream_ticket_mint` — **no ticket body / JWT**  
-4. **Mandatory** `restore-prod-after-auth-e2e.sh`  
+Uses defaults `AUTH_E2E_EMAIL=pop-e2e@earflow.test` (or values from `.env`).
+
+1. Layer A prod gates (validate:ai skipped on VPS)
+2. auth-e2e compose up + wait healthy + bootstrap
+3. `verify:stream-ticket` mint 200 on overlay
+4. grep `stream_ticket_mint` — **no ticket body / JWT**
+5. **Mandatory** `restore-prod-after-auth-e2e.sh`  
 5. Layer A implied safe again
 
 ---
