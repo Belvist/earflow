@@ -70,7 +70,7 @@ const GlobalStyle = createGlobalStyle`
     --right-rail-width: 0px;
     --panel-rail-width: 380px;
     --panel-rail-gap: 20px;
-    --mobile-bottom-nav-height: 48px;
+    --mobile-bottom-nav-height: 52px;
     --mobile-mini-player-height: 56px;
     --mobile-mini-player-float-gap: 0px;
     --mobile-chrome-height: calc(var(--mobile-bottom-nav-height) + var(--mobile-mini-player-float-gap) + var(--mobile-mini-player-height));

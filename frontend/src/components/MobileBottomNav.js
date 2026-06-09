@@ -10,20 +10,30 @@ import {
 import useAuth from '../hooks/useAuth';
 import { clearRecentLogout, redirectToAuth, sanitizeReturnTo } from '../utils/authRedirect';
 
-const NAV_BAR_PX = 48;
-/** Figma-style progressive backdrop blur: 0 at top → 20px at bottom */
-const NAV_BLUR_TOP_PX = 24;
+const NAV_SHELL_PX = 52;
+/** Gray ring around active pill — uniform gap (3–5px) */
+const ACTIVE_SHELL_INSET_PX = 4;
+const ICON_CHIP_H_PX = 28;
+const ICON_CHIP_MIN_W_PX = 36;
 
 const Nav = styled.nav`
   position: fixed;
   bottom: 0;
   left: 0;
   width: 100%;
-  height: calc(${NAV_BAR_PX}px + env(safe-area-inset-bottom, 0px));
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  height: calc(${NAV_SHELL_PX}px + env(safe-area-inset-bottom, 0px));
+  padding:
+    0
+    max(12px, env(safe-area-inset-right, 0px))
+    calc(8px + env(safe-area-inset-bottom, 0px))
+    max(12px, env(safe-area-inset-left, 0px));
   box-sizing: border-box;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
   background: transparent;
   border: none;
+  pointer-events: none;
   z-index: var(--z-bottom-nav, 9997);
   transform: translate3d(0, 0, 0);
   transition: opacity 0.16s ease, transform 0.16s ease;
@@ -40,48 +50,24 @@ const Nav = styled.nav`
   }
 `;
 
-const NavProgressiveBlur = styled.div`
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  top: -${NAV_BLUR_TOP_PX}px;
-  pointer-events: none;
-  z-index: 0;
-  background: transparent;
-  border: none;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  mask-image: linear-gradient(
-    to bottom,
-    rgba(0, 0, 0, 0) 0%,
-    rgba(0, 0, 0, 0.08) 28%,
-    rgba(0, 0, 0, 0.42) 58%,
-    rgba(0, 0, 0, 1) 100%
-  );
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    rgba(0, 0, 0, 0) 0%,
-    rgba(0, 0, 0, 0.08) 28%,
-    rgba(0, 0, 0, 0.42) 58%,
-    rgba(0, 0, 0, 1) 100%
-  );
-`;
-
-const Inner = styled.div`
-  position: relative;
-  z-index: 1;
-  height: ${NAV_BAR_PX}px;
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+/** Compact oval: 50% bg tint + blur inside, no border */
+const NavOval = styled.div`
+  pointer-events: auto;
+  display: inline-flex;
   align-items: center;
-  max-width: 520px;
-  margin: 0 auto;
-  padding: 0 max(10px, env(safe-area-inset-left, 0px)) 0 max(10px, env(safe-area-inset-right, 0px));
+  justify-content: center;
+  gap: 2px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(20px) saturate(1.15);
+  -webkit-backdrop-filter: blur(20px) saturate(1.15);
+  border: none;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.38);
 `;
 
 const TabButton = styled.button`
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   border: none;
@@ -92,7 +78,7 @@ const TabButton = styled.button`
   touch-action: manipulation;
 
   &:active {
-    opacity: 0.88;
+    opacity: 0.9;
   }
 
   &:focus-visible {
@@ -102,16 +88,28 @@ const TabButton = styled.button`
   }
 `;
 
+/** Gray ring — only on active tab, +4px around pill evenly */
+const TabShell = styled.span`
+  display: ${(p) => (p.$active ? 'inline-flex' : 'contents')};
+  align-items: center;
+  justify-content: center;
+  padding: ${(p) => (p.$active ? `${ACTIVE_SHELL_INSET_PX}px` : '0')};
+  border-radius: 999px;
+  background: ${(p) => (p.$active ? 'rgba(255, 255, 255, 0.1)' : 'transparent')};
+  transition: background 0.18s ease;
+`;
+
+/** Active highlight pill */
 const IconChip = styled.span`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 40px;
-  height: 30px;
-  padding: 0 12px;
+  min-width: ${ICON_CHIP_MIN_W_PX}px;
+  height: ${ICON_CHIP_H_PX}px;
+  padding: 0 10px;
   border-radius: 999px;
-  color: ${(p) => (p.$active ? 'rgba(255, 255, 255, 0.96)' : 'rgba(255, 255, 255, 0.5)')};
-  background: ${(p) => (p.$active ? 'rgba(255, 255, 255, 0.1)' : 'transparent')};
+  color: ${(p) => (p.$active ? 'rgba(255, 255, 255, 0.98)' : 'rgba(255, 255, 255, 0.52)')};
+  background: ${(p) => (p.$active ? 'rgba(255, 255, 255, 0.18)' : 'transparent')};
   transition: background 0.18s ease, color 0.18s ease;
 
   svg {
@@ -120,6 +118,23 @@ const IconChip = styled.span`
     flex-shrink: 0;
   }
 `;
+
+function NavTab({ active, label, onClick, children }) {
+  return (
+    <TabButton
+      type="button"
+      aria-current={active ? 'page' : undefined}
+      aria-label={label}
+      onClick={onClick}
+    >
+      <TabShell $active={active} aria-hidden="true">
+        <IconChip $active={active}>
+          {children}
+        </IconChip>
+      </TabShell>
+    </TabButton>
+  );
+}
 
 export default function MobileBottomNav() {
   const navigate = useNavigate();
@@ -150,52 +165,20 @@ export default function MobileBottomNav() {
 
   return (
     <Nav aria-label="Навигация" data-testid="mobile-bottom-nav">
-      <NavProgressiveBlur aria-hidden="true" data-testid="mobile-bottom-nav-blur" />
-      <Inner data-testid="mobile-bottom-nav-bar">
-        <TabButton
-          type="button"
-          aria-current={active === 'home' ? 'page' : undefined}
-          aria-label="Главная"
-          onClick={() => navigate('/')}
-        >
-          <IconChip $active={active === 'home'} aria-hidden="true">
-            <HiOutlineHome />
-          </IconChip>
-        </TabButton>
-
-        <TabButton
-          type="button"
-          aria-current={active === 'social' ? 'page' : undefined}
-          aria-label="Соцсеть"
-          onClick={() => navigate('/social')}
-        >
-          <IconChip $active={active === 'social'} aria-hidden="true">
-            <HiOutlineUserGroup />
-          </IconChip>
-        </TabButton>
-
-        <TabButton
-          type="button"
-          aria-current={active === 'search' ? 'page' : undefined}
-          aria-label="Поиск"
-          onClick={() => navigate('/search')}
-        >
-          <IconChip $active={active === 'search'} aria-hidden="true">
-            <HiOutlineMagnifyingGlass />
-          </IconChip>
-        </TabButton>
-
-        <TabButton
-          type="button"
-          aria-current={active === 'profile' ? 'page' : undefined}
-          aria-label="Аккаунт"
-          onClick={goProfile}
-        >
-          <IconChip $active={active === 'profile'} aria-hidden="true">
-            <HiOutlineUser />
-          </IconChip>
-        </TabButton>
-      </Inner>
+      <NavOval data-testid="mobile-bottom-nav-oval">
+        <NavTab active={active === 'home'} label="Главная" onClick={() => navigate('/')}>
+          <HiOutlineHome />
+        </NavTab>
+        <NavTab active={active === 'social'} label="Соцсеть" onClick={() => navigate('/social')}>
+          <HiOutlineUserGroup />
+        </NavTab>
+        <NavTab active={active === 'search'} label="Поиск" onClick={() => navigate('/search')}>
+          <HiOutlineMagnifyingGlass />
+        </NavTab>
+        <NavTab active={active === 'profile'} label="Аккаунт" onClick={goProfile}>
+          <HiOutlineUser />
+        </NavTab>
+      </NavOval>
     </Nav>
   );
 }
