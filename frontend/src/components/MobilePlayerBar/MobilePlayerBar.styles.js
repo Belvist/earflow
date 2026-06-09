@@ -125,12 +125,25 @@ export const MiniPlayerMainRow = styled.div`
   flex: 1;
   min-width: 0;
   min-height: 0;
-  gap: 10px;
+  gap: 6px;
   width: 100%;
   height: 100%;
 `;
 
-export const MiniLikeControl = styled(motion.button)`
+/** Layout-only — no pointer events; keeps swipe lane wide (INV-SHEET-010). */
+export const MiniLikeSlot = styled.div`
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 100%;
+  pointer-events: none;
+`;
+
+/** Tight 24×24 hit target — must not steal horizontal track swipes beside it. */
+export const MiniLikeHit = styled(motion.button)`
+  pointer-events: auto;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -139,14 +152,25 @@ export const MiniLikeControl = styled(motion.button)`
   background: transparent;
   cursor: pointer;
   padding: 0;
+  margin: 0;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   color: ${(p) => (p.$active ? '#ff4757' : 'rgba(255, 255, 255, 0.72)')};
-  font-size: ${(p) => (p.$variant === MINI_BAR_VARIANT.CLASSIC ? '17px' : '19px')};
-  width: ${(p) => (p.$variant === MINI_BAR_VARIANT.CLASSIC ? '30px' : '34px')};
-  height: ${(p) => (p.$variant === MINI_BAR_VARIANT.CLASSIC ? '30px' : '34px')};
-  min-width: ${(p) => (p.$variant === MINI_BAR_VARIANT.CLASSIC ? '30px' : '34px')};
-  min-height: ${(p) => (p.$variant === MINI_BAR_VARIANT.CLASSIC ? '30px' : '34px')};
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  max-width: 24px;
+  max-height: 24px;
+  border-radius: 50%;
+  overflow: hidden;
+
+  svg {
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+    pointer-events: none;
+  }
 
   &:active {
     transform: scale(0.9);
@@ -154,7 +178,7 @@ export const MiniLikeControl = styled(motion.button)`
 
   &:focus-visible {
     outline: 2px solid rgba(255, 255, 255, 0.35);
-    outline-offset: 2px;
+    outline-offset: 1px;
     border-radius: 50%;
   }
 `;
