@@ -18,6 +18,7 @@ cd "$ROOT"
 
 FULL_E2E="${FULL_E2E:-0}"
 RUN_BROWSER_DOD="${RUN_BROWSER_DOD:-0}"
+SKIP_VALIDATE_AI="${SKIP_VALIDATE_AI:-}"
 failures=0
 
 pass() { echo "PASS  $*"; }
@@ -35,6 +36,16 @@ run_step() {
   fi
 }
 
+should_skip_validate_ai() {
+  if [[ "$SKIP_VALIDATE_AI" == "1" ]]; then
+    return 0
+  fi
+  if [[ ! -f "$ROOT/AGENTS.md" ]]; then
+    return 0
+  fi
+  return 1
+}
+
 section "Auth security replay — git"
 if git rev-parse --short HEAD >/dev/null 2>&1; then
   echo "SHA: $(git rev-parse HEAD) ($(git rev-parse --short HEAD))"
@@ -44,7 +55,13 @@ else
 fi
 
 section "Layer A — prod gates (always)"
-run_step "validate:ai" npm run validate:ai
+if should_skip_validate_ai; then
+  echo "SKIP  validate:ai — VPS slim deploy (AGENTS.md / .cursor not in checkout; CI/dev only)"
+  echo "      Force run: SKIP_VALIDATE_AI=0 npm run validate:ai on full git clone"
+  pass "validate:ai skipped (VPS norm)"
+else
+  run_step "validate:ai" npm run validate:ai
+fi
 run_step "verify:frontend-api-base" bash "$ROOT/scripts/verify-frontend-api-base.sh"
 run_step "verify:stream-ticket (prod off)" bash "$ROOT/scripts/verify-stream-ticket.sh"
 run_step "verify-auth-proof-token (infra)" bash "$ROOT/scripts/verify-auth-proof-token.sh"
@@ -101,16 +118,28 @@ fi
 
 if [[ "$FULL_E2E" == "1" ]]; then
   section "Layer B — auth-e2e overlay (FULL_E2E=1)"
-  echo "Starting auth-e2e stack for mint OBSERVE replay…"
+  # shellcheck source=scripts/auth-e2e-export-env.sh
+  source "$ROOT/scripts/auth-e2e-export-env.sh"
+  auth_e2e_export_defaults "$ROOT"
+  echo "AUTH_E2E_EMAIL=$AUTH_E2E_EMAIL"
+  echo "Starting auth-e2e stack (STREAM_TICKET_ENABLED=1 from overlay)…"
 
-  if [[ -f "$ROOT/scripts/auth-e2e-bootstrap.sh" ]]; then
-    if bash "$ROOT/scripts/auth-e2e-bootstrap.sh"; then
-      pass "auth-e2e-bootstrap"
-    else
-      fail "auth-e2e-bootstrap"
-    fi
+  if auth_e2e_compose_up "$ROOT"; then
+    pass "auth-e2e compose up"
   else
-    fail "missing auth-e2e-bootstrap.sh"
+    fail "auth-e2e compose up"
+  fi
+
+  if bash "$ROOT/scripts/auth-e2e-wait-healthy.sh"; then
+    pass "auth-e2e-wait-healthy"
+  else
+    fail "auth-e2e-wait-healthy"
+  fi
+
+  if bash "$ROOT/scripts/auth-e2e-bootstrap.sh"; then
+    pass "auth-e2e-bootstrap"
+  else
+    fail "auth-e2e-bootstrap"
   fi
 
   run_step "verify:stream-ticket (e2e mint)" bash "$ROOT/scripts/verify-stream-ticket.sh"
@@ -166,14 +195,19 @@ Optional capacity replay:
 EOF
 
 section "Summary"
+echo ""
 if [[ "$failures" -eq 0 ]]; then
-  echo ""
   echo "AUTH SECURITY REPLAY: PASS"
   echo "Phase 3 checklist: NOT accepted until you explicitly accept docs/SEC-005_PHASE3_ACCEPT_CHECKLIST.md"
   exit 0
 fi
 
-echo ""
+# Prod-only false fail: validate:ai on VPS slim checkout is not a security regression
+if should_skip_validate_ai && [[ "$FULL_E2E" != "1" ]]; then
+  echo "NOTE: If only validate:ai failed — prod security gates above may still be PASS."
+  echo "      Re-run after git pull; validate:ai auto-skips on VPS without AGENTS.md."
+fi
+
 echo "AUTH SECURITY REPLAY: FAIL ($failures failure(s))"
 echo "Fix failures before accepting Phase 3 or declaring auth green."
 exit 1
