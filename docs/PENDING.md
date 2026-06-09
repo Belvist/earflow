@@ -280,7 +280,7 @@ Revoke/password/email/delete — modal при `MFA_STEP_UP_REQUIRED`, не raw e
 |-------|-------|--------|
 | 1 | Gateway `POST /api/auth/stream-ticket` mint + unit tests; `STREAM_TICKET_ENABLED=0` default | done |
 | 2 | OBSERVE — mint on auth-e2e overlay; `verify-stream-ticket.sh`; structured mint logs | **validated (e2e PASS); closed after restore prod** |
-| 3 | ACCEPT — direct-stream/ebap-hls dual-mode verify | **next — not started (design/checklist first)** |
+| 3 | ACCEPT — direct-stream/ebap-hls dual-mode verify | **checklist ready** → `docs/SEC-005_PHASE3_ACCEPT_CHECKLIST.md` (accept before code) |
 | 4+ | Frontend mint, ENFORCE | blocked until Phase 3 |
 
 **VPS validation report (`ru-vmv2-mini`, auth-e2e run):**

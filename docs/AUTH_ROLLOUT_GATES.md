@@ -66,14 +66,15 @@ npm run verify:stream-ticket
 **Prod:** `STREAM_TICKET_ENABLED=0` → `POST /api/auth/stream-ticket` → **404**.  
 **Auth-e2e:** overlay sets `STREAM_TICKET_ENABLED=1`; script runs `mint-observe.mjs` (media, stream_session, ws mint).
 
-**Status (honest):** Phase 2 is **committed/prepared** after `9f8eeff`, **not closed** until both gates PASS on VPS:
+**Status (honest):** Phase 2 **validated** when auth-e2e mint gate PASS; **closed** only after **restore prod** PASS:
 
 | Gate | Command context | Expect |
 |------|-----------------|--------|
-| Prod | prod compose, flag off | verify → PASS (404 on mint) |
-| Auth-e2e | `docker compose … auth-e2e.yml up api-gateway auth-e2e-edge` | verify → PASS (mint 200) |
+| Auth-e2e mint | overlay `STREAM_TICKET_ENABLED=1` | verify → PASS (mint 200) |
+| Restore prod | `bash scripts/restore-prod-after-auth-e2e.sh` | exit 0; `STREAM_TICKET_ENABLED` off |
+| Prod after restore | prod compose | verify → PASS (404 on mint); `verify:frontend-api-base` PASS |
 
-After both PASS, update `PENDING.md` Phase 2 → done. **Do not start Phase 3 ACCEPT** before that.
+After restore PASS, update `PENDING.md` Phase 2 → **done**. **Do not start Phase 3 code** until `docs/SEC-005_PHASE3_ACCEPT_CHECKLIST.md` accepted.
 
 **VPS log check (e2e):**
 
@@ -81,6 +82,22 @@ After both PASS, update `PENDING.md` Phase 2 → done. **Do not start Phase 3 AC
 docker compose logs api-gateway --tail=100 | grep -i stream_ticket_mint
 # expect: kind/ticketType/transport — no full ticket value
 ```
+
+## SEC-005 Phase 3 ACCEPT (consume dual-mode)
+
+**Plan only until checklist accepted:** `docs/SEC-005_PHASE3_ACCEPT_CHECKLIST.md`
+
+| Prerequisite | Required |
+|--------------|----------|
+| Phase 2 closed | restore prod PASS |
+| Checklist accepted | DECISIONS entry |
+| Code allowed | `STREAM_TICKET_ACCEPT` on stream services (e2e first) |
+
+**Forbidden in Phase 3:** `STREAM_TICKET_ENFORCE=1`, frontend mint, cookie fallback removal.
+
+**Close Phase 3 when:** `verify-stream-ticket-accept.sh` PASS on auth-e2e + manual playback smoke + restore prod.
+
+**Universal verify discipline:** `docs/ENGINEERING_VERIFICATION_PLAYBOOK.md` + skill `engineering-verification`.
 
 ## Agent checklist
 
