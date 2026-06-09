@@ -6,8 +6,10 @@ import {
 } from '../../styles/mediaCover';
 
 import {
+  FLOATING_PROGRESS_BOTTOM_PX,
   FLOATING_PROGRESS_HEIGHT_PX,
   FLOATING_PROGRESS_INSET_X_PX,
+  FLOATING_SHELL_RADIUS_PX,
 } from './miniPlayButtonVisual';
 
 const CLASSIC_COVER_HEIGHT_PX = 38;
@@ -40,12 +42,20 @@ export const MobilePartyBadge = styled(motion.div)`
 export const MiniPlayerShell = styled(motion.div)`
   position: fixed;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow: ${(p) => (p.$variant === MINI_BAR_VARIANT.CLASSIC ? 'hidden' : 'visible')};
   display: flex;
   flex-direction: column;
-  background: ${(p) => p.$accentBg || 'rgba(18, 12, 14, 0.96)'};
-  border: none;
-  box-shadow: none;
+  background: ${(p) => (
+    p.$variant === MINI_BAR_VARIANT.CLASSIC
+      ? (p.$accentBg || 'rgba(18, 12, 14, 0.96)')
+      : 'rgba(255, 255, 255, 0.94)'
+  )};
+  backdrop-filter: ${(p) => (p.$variant === MINI_BAR_VARIANT.CLASSIC ? 'none' : 'blur(20px) saturate(1.2)')};
+  -webkit-backdrop-filter: ${(p) => (p.$variant === MINI_BAR_VARIANT.CLASSIC ? 'none' : 'blur(20px) saturate(1.2)')};
+  border: ${(p) => (p.$variant === MINI_BAR_VARIANT.CLASSIC ? 'none' : '0.5px solid rgba(0, 0, 0, 0.06)')};
+  box-shadow: ${(p) => (p.$variant === MINI_BAR_VARIANT.CLASSIC
+    ? 'none'
+    : '0 8px 28px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.08)')};
   outline: none;
   z-index: 9998;
   cursor: pointer;
@@ -81,7 +91,7 @@ export const MiniPlayerShell = styled(motion.div)`
       + var(--mobile-mini-player-float-gap, 0px)
       + env(safe-area-inset-bottom, 0px)
     );
-    border-radius: 10px;
+    border-radius: ${FLOATING_SHELL_RADIUS_PX}px;
   `)}
 
   html.keyboard-open & {
@@ -97,6 +107,8 @@ export const MiniPlayerShell = styled(motion.div)`
 `;
 
 export const MiniPlayerContent = styled.div`
+  overflow: hidden;
+  border-radius: inherit;
   display: flex;
   align-items: center;
   flex: 1;
@@ -155,7 +167,7 @@ export const MiniLikeHit = styled(motion.button)`
   margin: 0;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
-  color: ${(p) => (p.$active ? '#ff4757' : 'rgba(255, 255, 255, 0.72)')};
+  color: ${(p) => (p.$active ? '#ff4757' : (p.$lightShell ? 'rgba(18, 18, 18, 0.52)' : 'rgba(255, 255, 255, 0.72)'))};
   width: 24px;
   height: 24px;
   min-width: 24px;
@@ -291,15 +303,18 @@ export const ProgressBarMini = styled.div`
     max-height: 2px;
     border-radius: 0;
     background: rgba(255, 255, 255, 0.28);
+    overflow: hidden;
   ` : css`
     left: ${FLOATING_PROGRESS_INSET_X_PX}px;
     right: ${FLOATING_PROGRESS_INSET_X_PX}px;
     width: auto;
+    bottom: ${FLOATING_PROGRESS_BOTTOM_PX}px;
     height: ${FLOATING_PROGRESS_HEIGHT_PX}px;
     min-height: ${FLOATING_PROGRESS_HEIGHT_PX}px;
     max-height: ${FLOATING_PROGRESS_HEIGHT_PX}px;
-    background: rgba(255, 255, 255, 0.28);
-    border-radius: 1px;
+    background: rgba(0, 0, 0, 0.07);
+    border-radius: 999px;
+    overflow: visible;
   `)}
 `;
 
@@ -308,11 +323,22 @@ export const ProgressFillMini = styled.div`
   height: 100%;
   min-width: 0;
   max-height: 100%;
-  border-radius: inherit;
-  background: #ffffff;
   width: var(--progress, 0%);
   transition: width 0.1s linear;
   transform: translateZ(0);
+
+  ${(p) => (p.$variant === MINI_BAR_VARIANT.CLASSIC ? css`
+    border-radius: inherit;
+    background: #ffffff;
+    box-shadow: none;
+  ` : css`
+    border-radius: 999px;
+    background: #ffffff;
+    box-shadow:
+      0 0 4px rgba(255, 255, 255, 0.95),
+      0 2px 10px rgba(255, 255, 255, 0.72),
+      0 4px 14px rgba(255, 255, 255, 0.38);
+  `)}
 `;
 
 export const SwipeableTrackContainer = styled(motion.div)`
@@ -355,7 +381,7 @@ export const MiniCoverPlaceholder = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(255, 255, 255, 0.35);
+  color: ${(p) => (p.$variant === MINI_BAR_VARIANT.CLASSIC ? 'rgba(255, 255, 255, 0.35)' : 'rgba(18, 18, 18, 0.28)')};
   font-size: 13px;
   line-height: 1;
 `;
@@ -372,7 +398,7 @@ export const MiniTrackDetails = styled.div`
 `;
 
 export const MiniTrackTitle = styled.div`
-  color: white;
+  color: ${(p) => (p.$variant === MINI_BAR_VARIANT.CLASSIC ? '#ffffff' : 'rgba(12, 12, 14, 0.94)')};
   font-size: ${(p) => (p.$variant === MINI_BAR_VARIANT.CLASSIC ? '12px' : '11px')};
   font-family: "Unbounded", sans-serif;
   font-weight: 600;
@@ -383,7 +409,7 @@ export const MiniTrackTitle = styled.div`
 `;
 
 export const MiniTrackArtist = styled.div`
-  color: rgba(255, 255, 255, 0.62);
+  color: ${(p) => (p.$variant === MINI_BAR_VARIANT.CLASSIC ? 'rgba(255, 255, 255, 0.62)' : 'rgba(12, 12, 14, 0.48)')};
   font-size: 9px;
   font-family: "Unbounded", sans-serif;
   font-weight: 400;
