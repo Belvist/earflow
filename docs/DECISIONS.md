@@ -22,6 +22,16 @@
 
 ---
 
+## 2026-06-09 — SEC-005 Phase 5 ENFORCE staging closed on VPS
+
+**Status:** accepted  
+**Area:** direct-stream | ebap-hls | auth-e2e  
+**Evidence:** `ru-vmv2-mini` — `run:sec005-phase5-staging` PASS; ticket HEAD 200, legacy cookie 401 `STREAM_TICKET_REQUIRED`; restore-prod exit 0; prod `STREAM_TICKET_*` and `ENFORCE` empty.
+
+**Next:** Phase 6 prod ACCEPT (dual-mode + frontend mint build; no prod ENFORCE).
+
+---
+
 ## 2026-06-09 — SEC-005 Phase 5 ENFORCE (stream services + staging gate)
 
 **Status:** accepted  
