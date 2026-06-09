@@ -10,6 +10,9 @@ import {
   FaCircle,
 } from 'react-icons/fa';
 import apiClient from '../../api/client';
+import StepUpModal from './StepUpModal';
+import { useStepUpRunner } from '../../hooks/useStepUpRunner';
+import { runSensitiveSessionAction } from './activeSessionsStepUp';
 
 const DEVICE_ICONS = {
   desktop: FaDesktop,
@@ -29,10 +32,12 @@ function splitSessions(sessions) {
 }
 
 export default function ActiveSessionsSection() {
+  const { stepUp } = useStepUpRunner();
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busySid, setBusySid] = useState('');
   const [revokingOthers, setRevokingOthers] = useState(false);
+  const [revokingAll, setRevokingAll] = useState(false);
   const [error, setError] = useState('');
 
   const loadSessions = useCallback(async () => {
@@ -55,36 +60,71 @@ export default function ActiveSessionsSection() {
 
   const { current, others } = useMemo(() => splitSessions(sessions), [sessions]);
 
+  const formatActionError = (e, fallback) => {
+    const code = String(e?.code || '').trim().toUpperCase();
+    if (code === 'FRESH_LOGIN_REQUIRED') {
+      return 'Новая сессия не может завершать другие без 2FA. Подтвердите кодом.';
+    }
+    if (code === 'MFA_STEP_UP_REQUIRED') {
+      return 'Нужно подтверждение 2FA для этого действия.';
+    }
+    return e?.message || fallback;
+  };
+
   const handleRevokeOne = async (sid) => {
-    if (!sid || busySid || revokingOthers) return;
+    if (!sid || busySid || revokingOthers || revokingAll) return;
     setError('');
     setBusySid(sid);
     try {
-      await apiClient.revokeAuthSession(sid);
+      await runSensitiveSessionAction({
+        stepUp,
+        action: () => apiClient.revokeAuthSession(sid),
+      });
       await loadSessions();
     } catch (e) {
-      setError(e?.message || 'Не удалось завершить сессию');
+      setError(formatActionError(e, 'Не удалось завершить сессию'));
     } finally {
       setBusySid('');
     }
   };
 
   const handleRevokeOthers = async () => {
-    if (revokingOthers || busySid || others.length === 0) return;
+    if (revokingOthers || busySid || revokingAll || others.length === 0) return;
     setError('');
     setRevokingOthers(true);
     try {
-      await apiClient.revokeOtherAuthSessions();
+      await runSensitiveSessionAction({
+        stepUp,
+        action: () => apiClient.revokeOtherAuthSessions(),
+      });
       await loadSessions();
     } catch (e) {
-      setError(e?.message || 'Не удалось завершить другие сессии');
+      setError(formatActionError(e, 'Не удалось завершить другие сессии'));
     } finally {
       setRevokingOthers(false);
     }
   };
 
+  const handleRevokeAll = async () => {
+    if (revokingAll || busySid || revokingOthers || sessions.length === 0) return;
+    setError('');
+    setRevokingAll(true);
+    try {
+      await runSensitiveSessionAction({
+        stepUp,
+        action: () => apiClient.revokeAllAuthSessions(),
+      });
+      window.location.href = '/login';
+    } catch (e) {
+      setError(formatActionError(e, 'Не удалось завершить все сессии'));
+      setRevokingAll(false);
+    }
+  };
+
   return (
     <Wrap>
+      <StepUpModal open={stepUp.open} onClose={stepUp.close} onSuccess={stepUp.onSuccess} />
+      {stepUp.error ? <ErrorStrip>{stepUp.error}</ErrorStrip> : null}
       <Intro>
         Устройства и браузеры, где вы вошли в Earflow. Если видите незнакомую сессию —
         завершите её и смените пароль.
@@ -140,6 +180,9 @@ export default function ActiveSessionsSection() {
           {others.length > 0 ? (
             <TerminateHint>Выйти на всех устройствах, кроме текущего</TerminateHint>
           ) : null}
+          <TerminateAll type="button" onClick={handleRevokeAll} disabled={revokingAll || !!busySid || revokingOthers}>
+            {revokingAll ? 'Завершаем…' : 'Выйти на всех устройствах (включая это)'}
+          </TerminateAll>
         </Block>
       ) : null}
 
@@ -395,4 +438,24 @@ const TerminateHint = styled.p`
   text-align: center;
   font-size: 12px;
   color: rgba(255, 255, 255, 0.4);
+`;
+
+const TerminateAll = styled.button`
+  appearance: none;
+  border: 1px solid rgba(255, 69, 58, 0.35);
+  width: 100%;
+  margin-top: 8px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  background: transparent;
+  color: #ff8a84;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
 `;

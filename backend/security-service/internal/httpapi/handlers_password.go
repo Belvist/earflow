@@ -211,6 +211,11 @@ func stepUpOK(d Deps, r *http.Request, principal authz.Principal) bool {
 	return st.OK && st.UserID == principal.UserID
 }
 
+// revokeAllSessionsIncludingCurrent revokes every active session for the user.
+func (d Deps) revokeAllSessionsIncludingCurrent(r *http.Request, userID int64, _ string) int {
+	return d.revokeAllSessionsExcept(r, userID, "")
+}
+
 // revokeAllSessionsExcept revokes every session for the user except `keep`.
 func (d Deps) revokeAllSessionsExcept(r *http.Request, userID int64, keepSID string) int {
 	revoked := 0

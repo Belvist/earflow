@@ -22,6 +22,29 @@
 
 ---
 
+## 2026-06-09 — Auth Kit hardening: Phase 4 mint, fresh-login, step-up UI, revoke-all
+
+**Status:** accepted  
+**Area:** auth | frontend | security-service | streaming  
+**Context:** Auth foundation for reuse in other projects required closing operational gaps: stream bytes still cookie-only on frontend, MFA step-up returned raw 403, fresh sessions could mass-revoke, no revoke-all API.
+
+**Decision:**
+- **SEC-005 Phase 4 (code):** `frontend/src/auth/streamTicket.js` mints `media` tickets via proof token; attaches `?st=` on direct playback URLs. Opt-in `REACT_APP_STREAM_TICKET_MINT_ENABLED=1` (prod default `0`, fail-open to legacy).
+- **SEC-003:** `FRESH_LOGIN_REQUIRED` when session age <24h attempts mass revoke without active step-up (`security-service`).
+- **SEC-004 (partial):** listener `StepUpModal` + retry wrapper for sessions revoke/others/all (`MFA_STEP_UP_REQUIRED`).
+- **SEC-002 (partial):** `POST /api/auth/sessions/revoke-all` + UI button.
+- **Reuse doc:** `docs/AUTH_KIT.md` — modules, env, verification checklist.
+
+**Consequences:** Prod unchanged until staging enables mint flag + `STREAM_TICKET_ACCEPT`. Password/email step-up UI still open (SEC-004). WS/HLS ENFORCE not started.
+
+**Files touched:** `frontend/src/auth/streamTicket.js`, `frontend/src/api/client.js`, `frontend/src/components/Settings/*`, `backend/security-service/internal/httpapi/*`, `docs/AUTH_KIT.md`, `docs/PENDING.md`.
+
+**Tests:** `streamTicket.test.js` PASS; `go test ./internal/httpapi/...` PASS.
+
+**Чтобы не повторилось:** never store stream tickets in localStorage; prod mint flag off until staging gate; disclose fail-open legacy path when mint 404.
+
+---
+
 ## 2026-06-09 — SEC-005 Phase 3 ACCEPT closed (VPS auth-e2e + restore PASS)
 
 **Status:** accepted  

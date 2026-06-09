@@ -209,21 +209,21 @@ Real stack: gateway + Redis + security-service + auth login + frontend + `auth-e
 ### PEND-SEC-002 — Sessions/devices control (revoke-all + UI)
 
 **Priority:** high  
-**Status:** partial (sessions list/revoke/revoke-others + UI; нет revoke-all, auth/devices API)
+**Status:** partial (revoke-all API + UI done 2026-06-09; auth/devices API still open)
 
 DoD: см. roadmap §2.
 
 ### PEND-SEC-003 — Fresh-login protection
 
 **Priority:** high  
-**Status:** not started  
+**Status:** **implemented (2026-06-09)** — VPS/browser e2e gate pending  
 
-Mass revoke с сессии <24h → step-up или block. Codes: `FRESH_LOGIN_REQUIRED` / `MFA_STEP_UP_REQUIRED`.
+Mass revoke с сессии <24h без step-up → `FRESH_LOGIN_REQUIRED` (security-service). Step-up via `POST /api/auth/2fa/step-up` unblocks.
 
 ### PEND-SEC-004 — MFA step-up modal (UI)
 
 **Priority:** high  
-**Status:** not started  
+**Status:** **partial (2026-06-09)** — listener sessions UI (`StepUpModal`); password/email/delete flows pending  
 
 Revoke/password/email/delete — modal при `MFA_STEP_UP_REQUIRED`, не raw error strip.
 
@@ -268,7 +268,7 @@ Revoke/password/email/delete — modal при `MFA_STEP_UP_REQUIRED`, не raw e
 ### PEND-SEC-005 — WS/HLS scoped tickets (device-bound stream auth)
 
 **Priority:** critical  
-**Status:** **Phase 3 ACCEPT closed (2026-06-09 VPS)** — Phase 4 frontend mint next (gated; prod ACCEPT still off)
+**Status:** **Phase 4 frontend mint implemented (2026-06-09)** — staging gate + prod ACCEPT still off (`REACT_APP_STREAM_TICKET_MINT_ENABLED=0` prod norm)
 
 **Goal:** bind WS upgrade and playback bytes to epoch-aware scoped tickets; remove cookie-only sufficient auth on consume paths.
 
@@ -281,7 +281,8 @@ Revoke/password/email/delete — modal при `MFA_STEP_UP_REQUIRED`, не raw e
 | 1 | Gateway `POST /api/auth/stream-ticket` mint + unit tests; `STREAM_TICKET_ENABLED=0` default | done |
 | 2 | OBSERVE — mint on auth-e2e overlay; `verify-stream-ticket.sh`; structured mint logs | **done (2026-06-09 restore prod PASS)** |
 | 3 | ACCEPT — direct-stream/ebap-hls dual-mode verify | **done (2026-06-09 VPS `f9da305`)** |
-| 4+ | Frontend mint, ENFORCE | **next** — prod `STREAM_TICKET_ACCEPT` stays `0` until staging gate |
+| 4 | Frontend mint + attach (`streamTicket.js`, opt-in flag) | **code done** — enable on staging only |
+| 5+ | Staging ACCEPT, ENFORCE | **next** — prod flags stay off until gates |
 
 **VPS close report — Phase 3 ACCEPT (`ru-vmv2-mini`, 2026-06-09, git `f9da305`):**
 
