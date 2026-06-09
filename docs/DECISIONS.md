@@ -22,6 +22,16 @@
 
 ---
 
+## 2026-06-09 — SEC-005 Phase 4 staging closed on VPS
+
+**Status:** accepted  
+**Area:** streaming | frontend | auth-e2e  
+**Evidence:** `ru-vmv2-mini` — `run:sec005-phase4-staging` PASS (bundle `earflow:stream-ticket-mint:1`, accept-consume PASS, restore-prod exit 0). Prod: `main.561412f0.js`, `STREAM_TICKET_*` empty.
+
+**Next:** Phase 5 ENFORCE on auth-e2e staging only.
+
+---
+
 ## 2026-06-09 — SEC-005 Phase 4 staging gate + SEC-007 deferred (TG confirm, not email alerts)
 
 **Status:** accepted  

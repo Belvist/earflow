@@ -281,8 +281,8 @@ Revoke/password/email/delete — modal при `MFA_STEP_UP_REQUIRED`, не raw e
 | 1 | Gateway `POST /api/auth/stream-ticket` mint + unit tests; `STREAM_TICKET_ENABLED=0` default | done |
 | 2 | OBSERVE — mint on auth-e2e overlay; `verify-stream-ticket.sh`; structured mint logs | **done (2026-06-09 restore prod PASS)** |
 | 3 | ACCEPT — direct-stream/ebap-hls dual-mode verify | **done (2026-06-09 VPS `f9da305`)** |
-| 4 | Frontend mint + attach (`streamTicket.js`, opt-in flag) | **staging gate** — `bash scripts/run-sec005-phase4-staging.sh` |
-| 5+ | Staging ACCEPT → ENFORCE | **next** after Phase 4 PASS — prod flags stay off |
+| 4 | Frontend mint + attach (`streamTicket.js`, opt-in flag) | **closed (2026-06-09 VPS `727be49`)** — `npm run run:sec005-phase4-staging` PASS |
+| 5+ | Staging ENFORCE → prod ACCEPT | **next** — prod flags stay off |
 
 **VPS close report — Phase 3 ACCEPT (`ru-vmv2-mini`, 2026-06-09, git `f9da305`):**
 
@@ -305,7 +305,7 @@ COOKIE_DOMAIN:                      .earflow.ru
 bash scripts/restore-prod-after-auth-e2e.sh
 ```
 
-**Next:** `npm run run:sec005-phase4-staging` on VPS (build mint frontend → `verify:stream-ticket-phase4` → restore-prod). Then Phase 5 ENFORCE on auth-e2e only.
+**Next:** Phase 5 — `STREAM_TICKET_ENFORCE=1` on auth-e2e only; legacy cookie HEAD → 401; gate script + restore-prod.
 
 **Forbidden until staging gate:** prod `STREAM_TICKET_ACCEPT=1`, ENFORCE, cookie fallback removal.
 
