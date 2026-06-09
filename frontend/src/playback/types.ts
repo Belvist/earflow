@@ -62,7 +62,7 @@ export type ApiClientLike = {
     streamingBaseUrl?: string;
     getSongHlsSession: (_songId: string | number, _options?: { signal?: AbortSignal }) => Promise<HlsSessionResponse>;
     getSongDirectSession: (_songId: string | number, _options?: { signal?: AbortSignal }) => Promise<DirectSessionResponse>;
-    refreshSongDirectSession?: (_sessionId: string, _options?: { signal?: AbortSignal }) => Promise<DirectSessionResponse>;
+    refreshSongDirectSession?: (_sessionId: string, _options?: { signal?: AbortSignal; trackId?: string | number }) => Promise<DirectSessionResponse>;
     getAccessToken?: () => string;
     refreshSession?: (_options?: { signal?: AbortSignal }) => Promise<boolean>;
 };
