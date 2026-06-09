@@ -66,7 +66,7 @@ npm run verify:stream-ticket
 **Prod:** `STREAM_TICKET_ENABLED=0` → `POST /api/auth/stream-ticket` → **404**.  
 **Auth-e2e:** overlay sets `STREAM_TICKET_ENABLED=1`; script runs `mint-observe.mjs` (media, stream_session, ws mint).
 
-**Status (honest):** Phase 2 **validated** when auth-e2e mint gate PASS; **closed** only after **restore prod** PASS:
+**Status:** Phase 2 **closed** (2026-06-09 restore prod on `ru-vmv2-mini`). Phase 3 — accept checklist then code.
 
 | Gate | Command context | Expect |
 |------|-----------------|--------|

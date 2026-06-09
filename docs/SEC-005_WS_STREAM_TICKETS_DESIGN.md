@@ -19,9 +19,8 @@ SEC-005 status:
 ✅ goal correct
 ✅ design accepted (rev. 2, 2026-06-08)
 ✅ Phase 1 gateway mint committed
-✅ Phase 2 OBSERVE validated (VPS e2e 2026-06-08)
-⚠️ restore prod required before Phase 2 final close
-⏭️ Phase 3 ACCEPT — design/checklist first, no code yet
+✅ Phase 2 OBSERVE closed (VPS restore 2026-06-09)
+⏭️ Phase 3 ACCEPT — checklist ready; accept before code
 ❌ ENFORCE / stream-service consume not started
 ```
 
@@ -524,7 +523,7 @@ Playback reverts to `playbackToken` / `mp_stream` / `mp_hls`. Mint endpoint harm
 - [x] v1 scope: listener web only
 - [x] **Reviewer accepts rev. 2 as architecture** → `DECISIONS.md` 2026-06-08
 - [x] Phase 1 gateway mint — done
-- [x] Phase 2 OBSERVE — validated (e2e); **closed after restore prod**
+- [x] Phase 2 OBSERVE — **closed** (restore prod 2026-06-09)
 - [ ] Phase 3 ACCEPT checklist accepted → `docs/SEC-005_PHASE3_ACCEPT_CHECKLIST.md`
 
 **Phase 3 allowed after checklist accept:** dual-mode consume in direct-stream + ebap-hls only. **Forbidden:** ENFORCE, frontend mint, per-segment epoch lookup.

@@ -268,7 +268,7 @@ Revoke/password/email/delete — modal при `MFA_STEP_UP_REQUIRED`, не raw e
 ### PEND-SEC-005 — WS/HLS scoped tickets (device-bound stream auth)
 
 **Priority:** critical  
-**Status:** **Phase 2 OBSERVE validated on VPS (2026-06-08); final close after `restore-prod-after-auth-e2e.sh` PASS** — Phase 3 not started
+**Status:** **Phase 2 OBSERVE closed (2026-06-09, VPS restore `0d59f54`)** — Phase 3 ACCEPT checklist pending accept
 
 **Goal:** bind WS upgrade and playback bytes to epoch-aware scoped tickets; remove cookie-only sufficient auth on consume paths.
 
@@ -279,28 +279,33 @@ Revoke/password/email/delete — modal при `MFA_STEP_UP_REQUIRED`, не raw e
 | Phase | Scope | Status |
 |-------|-------|--------|
 | 1 | Gateway `POST /api/auth/stream-ticket` mint + unit tests; `STREAM_TICKET_ENABLED=0` default | done |
-| 2 | OBSERVE — mint on auth-e2e overlay; `verify-stream-ticket.sh`; structured mint logs | **validated (e2e PASS); closed after restore prod** |
+| 2 | OBSERVE — mint on auth-e2e overlay; `verify-stream-ticket.sh`; structured mint logs | **done (2026-06-09 restore prod PASS)** |
 | 3 | ACCEPT — direct-stream/ebap-hls dual-mode verify | **checklist ready** → `docs/SEC-005_PHASE3_ACCEPT_CHECKLIST.md` (accept before code) |
 | 4+ | Frontend mint, ENFORCE | blocked until Phase 3 |
 
-**VPS validation report (`ru-vmv2-mini`, auth-e2e run):**
+**VPS close report (`ru-vmv2-mini`, 2026-06-09, git `0d59f54`):**
 
 ```text
-auth-e2e verify:stream-ticket: PASS (media/stream_session/ws mint 200; ws token-only 401)
-prod verify (pre-e2e):           PASS (404 when STREAM_TICKET_ENABLED off)
-logs ticket leakage:           pending grep stream_ticket_mint after restore
+restore-prod-after-auth-e2e.sh:     exit 0
+STREAM_TICKET_ENABLED/OBSERVE:      empty (prod norm)
+verify:frontend-api-base:           PASS (no 127.0.0.1 / :18080)
+verify:stream-ticket prod gate:     PASS (POST mint → 404)
+EARFLOW_API_BASE_URL:               empty
+COOKIE_DOMAIN:                      .earflow.ru
+stream_ticket_mint on prod logs:    none (expected — mint off)
 ```
 
-**Mandatory after auth-e2e / capacity / SEC-005 OBSERVE test:**
+**Prior e2e validation (2026-06-08):** auth-e2e mint PASS (media/stream_session/ws 200; ws token-only 401).
+
+**After any auth-e2e / capacity run:**
 
 ```bash
-bash scripts/restore-prod-after-auth-e2e.sh   # includes verify:stream-ticket + verify:frontend-api-base
-docker compose exec api-gateway sh -lc 'env | grep STREAM_TICKET'  # empty or 0
+bash scripts/restore-prod-after-auth-e2e.sh
 ```
 
-**Dangerous interim state:** auth-e2e overlay leaves `STREAM_TICKET_ENABLED=1` on gateway — **not prod-safe** until restore.
+**Next:** accept `SEC-005_PHASE3_ACCEPT_CHECKLIST.md` → implement Phase 3 (dual-mode consume, no ENFORCE).
 
-**Forbidden until Phase 3 plan accepted:** direct-stream/ebap-hls consume, frontend mint, ENFORCE.
+**Forbidden until Phase 3 closed:** frontend mint, ENFORCE, cookie fallback removal.
 
 **v1 scope:** listener web SPA only.
 

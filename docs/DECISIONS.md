@@ -22,6 +22,26 @@
 
 ---
 
+## 2026-06-09 — SEC-005 Phase 2 OBSERVE closed (restore prod PASS)
+
+**Status:** accepted  
+**Area:** auth | gateway | ops | streaming  
+**Context:** Phase 2 validated on auth-e2e 2026-06-08; prod remained at risk until `restore-prod-after-auth-e2e.sh` reset gateway/frontend env after overlay (`STREAM_TICKET_ENABLED=1`, `127.0.0.1:18080` API base).
+
+**Decision:** **Close SEC-005 Phase 2 OBSERVE** after VPS `ru-vmv2-mini` restore at git `0d59f54`: `restore-prod-after-auth-e2e.sh` exit 0; `STREAM_TICKET_ENABLED` / `STREAM_TICKET_OBSERVE` empty; `verify:frontend-api-base` PASS; `verify:stream-ticket` prod gate PASS (mint → **404**); `EARFLOW_API_BASE_URL` empty; `COOKIE_DOMAIN=.earflow.ru`.
+
+**Alternatives considered:** Close on e2e-only validation — rejected (overlay left prod mint-enabled).
+
+**Consequences:** Phase 3 ACCEPT next — `docs/SEC-005_PHASE3_ACCEPT_CHECKLIST.md` must be **accepted** before consume code. Prod stream ticket mint remains **off**.
+
+**Files touched:** `docs/PENDING.md`, `docs/DECISIONS.md`, `docs/SEC-005_WS_STREAM_TICKETS_DESIGN.md`.
+
+**Tests:** restore script embedded gates; prod `POST /api/auth/stream-ticket` → 404.
+
+**Чтобы не повторилось:** always run restore after auth-e2e; Phase 2 close requires L7 (restore) per `ENGINEERING_VERIFICATION_PLAYBOOK.md`.
+
+---
+
 ## 2026-06-08 — SEC-005 Phase 2 OBSERVE validated (restore prod before final close)
 
 **Status:** accepted  
