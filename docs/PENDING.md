@@ -268,7 +268,7 @@ Revoke/password/email/delete — modal при `MFA_STEP_UP_REQUIRED`, не raw e
 ### PEND-SEC-005 — WS/HLS scoped tickets (device-bound stream auth)
 
 **Priority:** critical  
-**Status:** **Phase 3 ACCEPT implemented (2026-06-04)** — VPS `verify:stream-ticket-accept` + restore gate pending
+**Status:** **Phase 3 ACCEPT closed (2026-06-09 VPS)** — Phase 4 frontend mint next (gated; prod ACCEPT still off)
 
 **Goal:** bind WS upgrade and playback bytes to epoch-aware scoped tickets; remove cookie-only sufficient auth on consume paths.
 
@@ -280,22 +280,23 @@ Revoke/password/email/delete — modal при `MFA_STEP_UP_REQUIRED`, не raw e
 |-------|-------|--------|
 | 1 | Gateway `POST /api/auth/stream-ticket` mint + unit tests; `STREAM_TICKET_ENABLED=0` default | done |
 | 2 | OBSERVE — mint on auth-e2e overlay; `verify-stream-ticket.sh`; structured mint logs | **done (2026-06-09 restore prod PASS)** |
-| 3 | ACCEPT — direct-stream/ebap-hls dual-mode verify | **code done — VPS gate pending** (`npm run verify:stream-ticket-accept` on auth-e2e + restore) |
-| 4+ | Frontend mint, ENFORCE | blocked until Phase 3 |
+| 3 | ACCEPT — direct-stream/ebap-hls dual-mode verify | **done (2026-06-09 VPS `f9da305`)** |
+| 4+ | Frontend mint, ENFORCE | **next** — prod `STREAM_TICKET_ACCEPT` stays `0` until staging gate |
 
-**VPS close report (`ru-vmv2-mini`, 2026-06-09, git `0d59f54`):**
+**VPS close report — Phase 3 ACCEPT (`ru-vmv2-mini`, 2026-06-09, git `f9da305`):**
 
 ```text
+verify:stream-ticket-accept:        PASS (ticket 200, garbage 401, legacy cookie 200)
 restore-prod-after-auth-e2e.sh:     exit 0
+STREAM_TICKET_ACCEPT (prod):        empty (direct-stream + ebap-hls)
 STREAM_TICKET_ENABLED/OBSERVE:      empty (prod norm)
-verify:frontend-api-base:           PASS (no 127.0.0.1 / :18080)
+verify:frontend-api-base:           PASS
 verify:stream-ticket prod gate:     PASS (POST mint → 404)
 EARFLOW_API_BASE_URL:               empty
 COOKIE_DOMAIN:                      .earflow.ru
-stream_ticket_mint on prod logs:    none (expected — mint off)
 ```
 
-**Prior e2e validation (2026-06-08):** auth-e2e mint PASS (media/stream_session/ws 200; ws token-only 401).
+**Prior VPS close — Phase 2 OBSERVE (`0d59f54`):** restore + prod mint 404 + frontend API base guard PASS.
 
 **After any auth-e2e / capacity run:**
 
@@ -303,9 +304,9 @@ stream_ticket_mint on prod logs:    none (expected — mint off)
 bash scripts/restore-prod-after-auth-e2e.sh
 ```
 
-**Next:** on VPS with auth-e2e overlay: `npm run verify:stream-ticket-accept` → `bash scripts/restore-prod-after-auth-e2e.sh` → confirm playback smoke. Phase 4 frontend mint blocked until Phase 3 VPS close.
+**Next:** Phase 4 — frontend mint + attach scoped tickets on playback/WS paths; staging gate before prod `STREAM_TICKET_ACCEPT=1`. Manual smoke: 30s playback on earflow.ru after restore.
 
-**Forbidden until Phase 3 closed:** frontend mint, ENFORCE, cookie fallback removal.
+**Forbidden until staging gate:** prod `STREAM_TICKET_ACCEPT=1`, ENFORCE, cookie fallback removal.
 
 **v1 scope:** listener web SPA only.
 

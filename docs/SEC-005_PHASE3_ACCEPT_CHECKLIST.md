@@ -1,6 +1,6 @@
 # SEC-005 Phase 3 ACCEPT — implementation checklist
 
-**Status:** implemented (2026-06-04) — **VPS verify + restore gate pending**  
+**Status:** **closed (2026-06-09)** — VPS `verify:stream-ticket-accept` PASS + `restore-prod-after-auth-e2e.sh` at git `f9da305`  
 **Prerequisites:** Phase 2 OBSERVE **closed** (e2e validated + `restore-prod-after-auth-e2e.sh` PASS on VPS)  
 **Design:** `docs/SEC-005_WS_STREAM_TICKETS_DESIGN.md` (rev. 2, accepted)  
 **Parent:** `PEND-SEC-005` in `docs/PENDING.md`
@@ -237,5 +237,5 @@ Legacy cookie/token paths remain; no user impact.
 | 5 | Log hygiene specified | ☐ |
 | 6 | verify script criteria clear | ☐ |
 
-**Accepted by:** _pending_  
-**Date:** _pending_
+**Accepted by:** VPS gate `ru-vmv2-mini`  
+**Date:** 2026-06-09 (`f9da305`)
