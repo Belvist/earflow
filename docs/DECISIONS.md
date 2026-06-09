@@ -22,6 +22,26 @@
 
 ---
 
+## 2026-06-09 — SEC-005 Phase 3 ACCEPT closed (VPS auth-e2e + restore PASS)
+
+**Status:** accepted  
+**Area:** auth | streaming | ops  
+**Context:** Phase 3 dual-mode consume implemented (`686af68`+); e2e gate failed on legacy cookie `PLAYBACK_BINDING_MISMATCH` until accept script aligned UA/IP binding (`f9da305`).
+
+**Decision:** **Close SEC-005 Phase 3 ACCEPT** after VPS `ru-vmv2-mini` at git `f9da305`: auth-e2e `npm run verify:stream-ticket-accept` **PASS** (ticket HEAD 200, garbage 401, legacy cookie 200); `restore-prod-after-auth-e2e.sh` exit 0; prod `STREAM_TICKET_ACCEPT` empty on direct-stream + ebap-hls; `STREAM_TICKET_ENABLED` empty; `verify:frontend-api-base` PASS; `verify:stream-ticket` prod gate PASS (mint → 404).
+
+**Alternatives considered:** skip legacy cookie in e2e gate — rejected (dual-mode contract requires legacy path proof).
+
+**Consequences:** Phase 4 frontend mint + attach unblocked (still gated — no prod `STREAM_TICKET_ACCEPT=1` until staging). `PEND-SEC-005` Phase 3 row closed.
+
+**Files touched:** `scripts/stream-ticket-verify/accept-consume.mjs`, `docs/PENDING.md`, `docs/DECISIONS.md`, `docs/SEC-005_PHASE3_ACCEPT_CHECKLIST.md`.
+
+**Tests:** `npm run verify:stream-ticket-accept` (auth-e2e); `bash scripts/restore-prod-after-auth-e2e.sh`.
+
+**Чтобы не повторилось:** e2e consume scripts must set stable playback binding headers when testing legacy cookie path against direct-stream port.
+
+---
+
 ## 2026-06-04 — SEC-005 Phase 3 ACCEPT implemented (dual-mode consume; VPS gate pending)
 
 **Status:** accepted  
