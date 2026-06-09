@@ -124,8 +124,10 @@ if [[ "$FULL_E2E" == "1" ]]; then
   echo "AUTH_E2E_EMAIL=$AUTH_E2E_EMAIL"
   echo "Starting auth-e2e stack (STREAM_TICKET_ENABLED=1 from overlay)…"
 
-  if auth_e2e_compose_up "$ROOT"; then
-    pass "auth-e2e compose up"
+  if auth_e2e_compose_up "$ROOT" \
+    postgres redis redis-auth database-service auth-service security-service \
+    api-gateway frontend direct-stream-service ebap-hls-adapter auth-e2e-edge; then
+    pass "auth-e2e compose up (incl. stream services for Phase 3 ACCEPT)"
   else
     fail "auth-e2e compose up"
   fi
@@ -143,6 +145,7 @@ if [[ "$FULL_E2E" == "1" ]]; then
   fi
 
   run_step "verify:stream-ticket (e2e mint)" bash "$ROOT/scripts/verify-stream-ticket.sh"
+  run_step "verify:stream-ticket-accept (e2e consume)" bash "$ROOT/scripts/verify-stream-ticket-accept.sh"
 
   section "Layer B — e2e log leakage sample"
   e2e_logs="$(docker compose -f docker-compose.yml -f docker-compose.auth-e2e.yml logs api-gateway --tail=100 2>/dev/null | grep stream_ticket_mint || true)"
@@ -198,7 +201,7 @@ section "Summary"
 echo ""
 if [[ "$failures" -eq 0 ]]; then
   echo "AUTH SECURITY REPLAY: PASS"
-  echo "Phase 3 checklist: NOT accepted until you explicitly accept docs/SEC-005_PHASE3_ACCEPT_CHECKLIST.md"
+  echo "Phase 3 ACCEPT: close when FULL_E2E verify:stream-ticket-accept PASS + restore-prod + playback smoke"
   exit 0
 fi
 
