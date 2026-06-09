@@ -82,8 +82,7 @@ const MobilePlayerBar = ({ onOpenEq }) => {
     [currentTrack],
   );
   const { background: accentBg } = useCoverAccentColor(accentSourceUrl, 0.5, 1);
-  const shellBgForIcon = isFloating ? 'rgba(255, 255, 255, 0.94)' : accentBg;
-  const playIconColor = useMemo(() => miniPlayIconColor(shellBgForIcon), [shellBgForIcon]);
+  const playIconColor = useMemo(() => miniPlayIconColor(accentBg), [accentBg]);
 
   const {
     sheet,
@@ -205,17 +204,17 @@ const MobilePlayerBar = ({ onOpenEq }) => {
         data-mini-gesture-zone="true"
         data-mini-bar-variant={variant}
         data-mini-play-style={playStyle}
-        data-mini-bar-ui="2026-06-v54-light-bar-progress-glow"
+        data-mini-bar-ui="2026-06-v55-progress-fullwidth"
         $variant={variant}
         initial={false}
         animate={false}
-        $accentBg={isClassic ? accentBg : undefined}
+        $accentBg={accentBg}
         style={{
           pointerEvents: sheet.miniBarPointerEvents,
           opacity: hideMiniChrome ? 0 : miniAtRest ? 1 : sheet.miniOpacity,
           y: hideMiniChrome ? 0 : miniAtRest ? 0 : sheet.miniY,
           scale: hideMiniChrome ? 1 : miniAtRest ? 1 : sheet.miniScale,
-          borderRadius: isClassic ? 0 : miniAtRest ? 16 : sheet.miniRadius,
+          borderRadius: isClassic ? 0 : miniAtRest ? 14 : sheet.miniRadius,
           zIndex: isPlayerSheetClosing ? 10000 : undefined,
         }}
       >
@@ -262,7 +261,6 @@ const MobilePlayerBar = ({ onOpenEq }) => {
                 aria-label={isCurrentTrackLiked ? 'Убрать из избранного' : 'Нравится'}
                 title={isCurrentTrackLiked ? 'Убрать из избранного' : 'Нравится'}
                 $active={isCurrentTrackLiked}
-                $lightShell={isFloating}
                 onClick={handleLikeClick}
                 whileTap={{ scale: 0.88 }}
               >
@@ -320,7 +318,7 @@ const MobilePlayerBar = ({ onOpenEq }) => {
           $variant={variant}
           style={floatingProgressStyle}
         >
-          <ProgressFillMini className="ef-mini-progress-fill" $variant={variant} />
+          <ProgressFillMini className="ef-mini-progress-fill" />
         </ProgressBarMini>
       </MiniPlayerShell>
 
