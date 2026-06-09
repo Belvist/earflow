@@ -43,9 +43,13 @@ export function routeName(pathname: string): string {
     return 'other';
 }
 
+type StreamTicketConsumeResult = 'ok' | 'deny' | 'legacy';
+
 export function createMetrics() {
     const startedAt = Date.now();
     const routes = new Map<string, RouteStats>();
+    const streamTicketConsume = new Map<StreamTicketConsumeResult, number>();
+    let streamTicketEpochStale = 0;
 
     function routeKey(method: string, route: string): string {
         return `${normalizeLabel(method, 'unknown')}\n${normalizeLabel(route, 'unknown')}`;
@@ -62,6 +66,14 @@ export function createMetrics() {
     }
 
     return {
+        incStreamTicketConsume(result: StreamTicketConsumeResult) {
+            streamTicketConsume.set(result, (streamTicketConsume.get(result) || 0) + 1);
+        },
+
+        incStreamTicketEpochStale() {
+            streamTicketEpochStale += 1;
+        },
+
         recordHttp(record: HttpRecord) {
             const method = normalizeLabel(record.method, 'unknown').toUpperCase();
             const route = normalizeLabel(record.route, 'unknown');
@@ -111,6 +123,20 @@ export function createMetrics() {
                 lines.push(`direct_stream_http_request_duration_seconds_sum{${labelSet}} ${stats.durationSecondsSum}`);
                 lines.push(`direct_stream_http_request_duration_seconds_count{${labelSet}} ${stats.count}`);
             }
+
+            lines.push(
+                '# HELP direct_stream_stream_ticket_consume_total Scoped stream ticket consume attempts.',
+                '# TYPE direct_stream_stream_ticket_consume_total counter',
+            );
+            for (const result of ['ok', 'deny', 'legacy'] as const) {
+                const count = streamTicketConsume.get(result) || 0;
+                lines.push(`direct_stream_stream_ticket_consume_total{${labels({ result })}} ${count}`);
+            }
+            lines.push(
+                '# HELP direct_stream_stream_ticket_epoch_stale_total Stream tickets rejected due to stale epoch.',
+                '# TYPE direct_stream_stream_ticket_epoch_stale_total counter',
+                `direct_stream_stream_ticket_epoch_stale_total ${streamTicketEpochStale}`,
+            );
 
             lines.push('');
             return lines.join('\n');

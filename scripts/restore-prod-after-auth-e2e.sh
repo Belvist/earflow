@@ -34,8 +34,8 @@ log "stop auth-e2e edge (port 18080) if running"
 log "build api-gateway + frontend (prod compose only — no e2e overlay)"
 "${COMPOSE_PROD[@]}" build api-gateway frontend
 
-log "recreate api-gateway, frontend, nginx with prod .env"
-"${COMPOSE_PROD[@]}" up -d --force-recreate api-gateway frontend nginx
+log "recreate api-gateway, frontend, direct-stream, ebap-hls, nginx with prod .env"
+"${COMPOSE_PROD[@]}" up -d --force-recreate api-gateway frontend direct-stream-service ebap-hls-adapter nginx
 
 log "wait for health"
 sleep 5
@@ -68,6 +68,19 @@ if [[ "$STREAM_ENABLED" == "1" || "$STREAM_ENABLED" == "true" ]]; then
   exit 1
 fi
 
+DS_ACCEPT="$("${COMPOSE_PROD[@]}" exec -T direct-stream-service printenv STREAM_TICKET_ACCEPT 2>/dev/null | tr -d '\r' || true)"
+HLS_ACCEPT="$("${COMPOSE_PROD[@]}" exec -T ebap-hls-adapter printenv STREAM_TICKET_ACCEPT 2>/dev/null | tr -d '\r' || true)"
+log "direct-stream STREAM_TICKET_ACCEPT='${DS_ACCEPT:-<empty>}' (prod: empty or 0)"
+log "ebap-hls STREAM_TICKET_ACCEPT='${HLS_ACCEPT:-<empty>}' (prod: empty or 0)"
+if [[ "$DS_ACCEPT" == "1" || "$DS_ACCEPT" == "true" ]]; then
+  echo "FAIL: direct-stream STREAM_TICKET_ACCEPT still on — recreate without auth-e2e overlay" >&2
+  exit 1
+fi
+if [[ "$HLS_ACCEPT" == "1" || "$HLS_ACCEPT" == "true" ]]; then
+  echo "FAIL: ebap-hls STREAM_TICKET_ACCEPT still on — recreate without auth-e2e overlay" >&2
+  exit 1
+fi
+
 log "nginx config test"
 "${COMPOSE_PROD[@]}" exec -T nginx nginx -t
 
@@ -79,6 +92,9 @@ bash "$ROOT/scripts/verify-frontend-api-base.sh"
 
 log "verify stream ticket prod gate (STREAM_TICKET_ENABLED off → 404)"
 bash "$ROOT/scripts/verify-stream-ticket.sh"
+
+log "verify stream ticket ACCEPT off on prod (consume dual-mode disabled)"
+bash "$ROOT/scripts/verify-stream-ticket-accept.sh"
 
 log "done — hard refresh browser (Ctrl+Shift+R) on earflow.ru / auth.earflow.ru"
 log "DevTools: hot GET /api/profile should use https://api.earflow.ru or same-origin, NOT 127.0.0.1:18080"

@@ -22,6 +22,20 @@
 
 ---
 
+## 2026-06-04 — SEC-005 Phase 3 ACCEPT implemented (dual-mode consume; VPS gate pending)
+
+**Status:** accepted  
+**Area:** auth | streaming | gateway  
+**Context:** Phase 2 OBSERVE closed; playback/WS bytes still authorized by legacy cookie/token only. Phase 3 checklist (`docs/SEC-005_PHASE3_ACCEPT_CHECKLIST.md`) required consume without ENFORCE.  
+**Decision:** Implement **dual-mode** scoped ticket verify on `direct-stream-service` and `ebap-hls-adapter` behind `STREAM_TICKET_ACCEPT=1` (default `0`). Opaque media tickets read from **redis-auth** (`auth:stream_ticket:opaque:*`); `stream_session` JWT verified with gateway `JWT_SECRET`. Local epoch/revoke cache + Redis pub/sub subscriber on `earflow:auth:session:revoke:v1` — **no** per-segment PG lookup. Legacy cookie/token paths remain with `legacy` metric. Auth-e2e overlay sets ACCEPT=1 on stream services only; prod stays off until staging gate PASS.  
+**Alternatives considered:** HTTP epoch hook from gateway — rejected (extra hop); main `redis` for opaque — rejected (gateway stores on redis-auth).  
+**Consequences:** New modules `src/auth/streamTicket*.ts` in both stream services; `npm run verify:stream-ticket-accept`; restore script recreates stream services and checks `STREAM_TICKET_ACCEPT=0`. Frontend mint still Phase 4.  
+**Files touched:** `backend/direct-stream-service/`, `backend/ebap-hls-adapter/`, `docker-compose.auth-e2e.yml`, `scripts/verify-stream-ticket-accept.sh`, `scripts/stream-ticket-verify/accept-consume.mjs`, `scripts/restore-prod-after-auth-e2e.sh`, `package.json`.  
+**Tests:** `bun test` in direct-stream (`streamTicket.test.ts`); VPS `verify:stream-ticket-accept` + `restore-prod-after-auth-e2e.sh` pending.  
+**Чтобы не повторилось:** dual-mode only until ENFORCE gate; never enable ACCEPT on prod without staging checklist.
+
+---
+
 ## 2026-06-09 — SEC-005 Phase 2 OBSERVE closed (restore prod PASS)
 
 **Status:** accepted  

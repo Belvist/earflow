@@ -66,6 +66,16 @@ export type Config = {
         threads: number;
         aacBitrateK: number;
     };
+    streamTicket: {
+        accept: boolean;
+        jwtSecret: Uint8Array;
+        authRedis: {
+            host: string;
+            port: number;
+            password: string;
+        };
+        revokeChannel: string;
+    };
 };
 
 const envSchema = z.object({
@@ -201,6 +211,32 @@ const envSchema = z.object({
     EBAP_HLS_ACTIVE_TRACKS_WINDOW_SECONDS: z.coerce.number().int().positive().default(12),
     EBAP_HLS_ASSET_RL_PER_WINDOW: z.coerce.number().int().positive().default(120),
     EBAP_HLS_ASSET_RL_WINDOW_SECONDS: z.coerce.number().int().positive().default(10),
+
+    STREAM_TICKET_ACCEPT: z
+        .string()
+        .optional()
+        .default('false')
+        .transform((v: string) => ['1', 'true', 'yes', 'on'].includes(String(v).trim().toLowerCase())),
+    STREAM_TICKET_JWT_SECRET: z.preprocess(
+        (v: unknown) => {
+            if (v === undefined || v === null) return undefined;
+            const raw = String(v).trim();
+            return raw ? raw : undefined;
+        },
+        z.string().trim().min(32).optional()
+    ),
+    STREAM_TICKET_AUTH_REDIS_HOST: z.string().trim().min(1).default('redis-auth'),
+    STREAM_TICKET_AUTH_REDIS_PORT: z.coerce.number().int().positive().default(6379),
+    STREAM_TICKET_AUTH_REDIS_PASSWORD: z.preprocess(
+        (v: unknown) => {
+            if (v === undefined || v === null) return undefined;
+            if (typeof v !== 'string') return undefined;
+            const s = v.trim();
+            return s.length > 0 ? s : undefined;
+        },
+        z.string().optional()
+    ),
+    STREAM_TICKET_REVOKE_CHANNEL: z.string().trim().optional().default(''),
 
     REDIS_HOST: z.string().trim().min(1).default('redis'),
     REDIS_PORT: z.coerce.number().int().positive().default(6379),
@@ -388,6 +424,19 @@ export function loadConfig(): Config {
             bin: env.FFMPEG_BIN,
             threads: env.FFMPEG_THREADS,
             aacBitrateK: env.EBAP_HLS_AAC_BITRATE_K,
+        },
+        streamTicket: {
+            accept: env.STREAM_TICKET_ACCEPT,
+            jwtSecret: new TextEncoder().encode(
+                env.STREAM_TICKET_JWT_SECRET || String(process.env.JWT_SECRET || '').trim() || env.SYSTEM_ROOT_SECRET
+            ),
+            authRedis: {
+                host: String(env.STREAM_TICKET_AUTH_REDIS_HOST || 'redis-auth').trim(),
+                port: Number(env.STREAM_TICKET_AUTH_REDIS_PORT) || 6379,
+                password: env.STREAM_TICKET_AUTH_REDIS_PASSWORD || redisPassword || '',
+            },
+            revokeChannel: String(env.STREAM_TICKET_REVOKE_CHANNEL || process.env.AUTH_REVOKE_PUBSUB_CHANNEL || '').trim()
+                || 'earflow:auth:session:revoke:v1',
         },
     };
 }

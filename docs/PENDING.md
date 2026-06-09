@@ -268,7 +268,7 @@ Revoke/password/email/delete — modal при `MFA_STEP_UP_REQUIRED`, не raw e
 ### PEND-SEC-005 — WS/HLS scoped tickets (device-bound stream auth)
 
 **Priority:** critical  
-**Status:** **Phase 2 OBSERVE closed (2026-06-09, VPS restore `0d59f54`)** — Phase 3 ACCEPT checklist pending accept
+**Status:** **Phase 3 ACCEPT implemented (2026-06-04)** — VPS `verify:stream-ticket-accept` + restore gate pending
 
 **Goal:** bind WS upgrade and playback bytes to epoch-aware scoped tickets; remove cookie-only sufficient auth on consume paths.
 
@@ -280,7 +280,7 @@ Revoke/password/email/delete — modal при `MFA_STEP_UP_REQUIRED`, не raw e
 |-------|-------|--------|
 | 1 | Gateway `POST /api/auth/stream-ticket` mint + unit tests; `STREAM_TICKET_ENABLED=0` default | done |
 | 2 | OBSERVE — mint on auth-e2e overlay; `verify-stream-ticket.sh`; structured mint logs | **done (2026-06-09 restore prod PASS)** |
-| 3 | ACCEPT — direct-stream/ebap-hls dual-mode verify | **checklist ready — NOT accepted; run pre-accept replay first** → `docs/SEC-005_PRE_ACCEPT_REPLAY.md` |
+| 3 | ACCEPT — direct-stream/ebap-hls dual-mode verify | **code done — VPS gate pending** (`npm run verify:stream-ticket-accept` on auth-e2e + restore) |
 | 4+ | Frontend mint, ENFORCE | blocked until Phase 3 |
 
 **VPS close report (`ru-vmv2-mini`, 2026-06-09, git `0d59f54`):**
@@ -303,7 +303,7 @@ stream_ticket_mint on prod logs:    none (expected — mint off)
 bash scripts/restore-prod-after-auth-e2e.sh
 ```
 
-**Next:** run `npm run verify:auth-replay` on VPS (see `docs/SEC-005_PRE_ACCEPT_REPLAY.md`); **Phase 3 checklist not accepted** until replay PASS + explicit accept.
+**Next:** on VPS with auth-e2e overlay: `npm run verify:stream-ticket-accept` → `bash scripts/restore-prod-after-auth-e2e.sh` → confirm playback smoke. Phase 4 frontend mint blocked until Phase 3 VPS close.
 
 **Forbidden until Phase 3 closed:** frontend mint, ENFORCE, cookie fallback removal.
 

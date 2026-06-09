@@ -1,6 +1,6 @@
 # SEC-005 Phase 3 ACCEPT — implementation checklist
 
-**Status:** plan / checklist — **no code until this doc is accepted**  
+**Status:** implemented (2026-06-04) — **VPS verify + restore gate pending**  
 **Prerequisites:** Phase 2 OBSERVE **closed** (e2e validated + `restore-prod-after-auth-e2e.sh` PASS on VPS)  
 **Design:** `docs/SEC-005_WS_STREAM_TICKETS_DESIGN.md` (rev. 2, accepted)  
 **Parent:** `PEND-SEC-005` in `docs/PENDING.md`

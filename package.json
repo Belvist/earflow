@@ -24,6 +24,7 @@
     "verify:cors-pop": "bash scripts/verify-cors-pop-preflight.sh",
     "verify:frontend-api-base": "bash scripts/verify-frontend-api-base.sh",
     "verify:stream-ticket": "bash scripts/verify-stream-ticket.sh",
+    "verify:stream-ticket-accept": "bash scripts/verify-stream-ticket-accept.sh",
     "verify:auth-replay": "bash scripts/verify-auth-security-replay.sh",
     "verify:prod-auth-gate": "bash scripts/verify-prod-auth-gate.sh",
     "rollout:auth-pg-sot": "bash scripts/rollout-auth-pg-sot.sh",

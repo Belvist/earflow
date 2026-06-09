@@ -57,6 +57,16 @@ export type Config = {
         enabled: boolean;
         ttlSeconds: number;
     };
+    streamTicket: {
+        accept: boolean;
+        jwtSecret: Uint8Array;
+        authRedis: {
+            host: string;
+            port: number;
+            password: string | null;
+        };
+        revokeChannel: string;
+    };
 };
 
 const envSchema = z.object({
@@ -153,6 +163,24 @@ const envSchema = z.object({
         .default('true')
         .transform((v: string) => ['1', 'true', 'yes', 'on'].includes(String(v).trim().toLowerCase())),
     DIRECT_STREAM_HLS_SEGMENT_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(604800),
+
+    STREAM_TICKET_ACCEPT: z
+        .string()
+        .optional()
+        .default('false')
+        .transform((v: string) => ['1', 'true', 'yes', 'on'].includes(String(v).trim().toLowerCase())),
+    STREAM_TICKET_JWT_SECRET: z.preprocess(
+        (v: unknown) => {
+            if (v === undefined || v === null) return undefined;
+            const raw = String(v).trim();
+            return raw ? raw : undefined;
+        },
+        z.string().trim().min(32).optional()
+    ),
+    STREAM_TICKET_AUTH_REDIS_HOST: z.string().trim().min(1).default('redis-auth'),
+    STREAM_TICKET_AUTH_REDIS_PORT: z.coerce.number().int().positive().default(6379),
+    STREAM_TICKET_AUTH_REDIS_PASSWORD: z.string().optional().default(''),
+    STREAM_TICKET_REVOKE_CHANNEL: z.string().trim().optional().default(''),
 });
 
 function deriveUrlTokenSecret(systemRootSecret: string): Uint8Array {
@@ -250,6 +278,21 @@ export function loadConfig(): Config {
         hlsSegmentCache: {
             enabled: env.DIRECT_STREAM_HLS_SEGMENT_CACHE_ENABLED,
             ttlSeconds: Math.max(3600, Math.min(30 * 24 * 3600, Math.trunc(env.DIRECT_STREAM_HLS_SEGMENT_CACHE_TTL_SECONDS))),
+        },
+        streamTicket: {
+            accept: env.STREAM_TICKET_ACCEPT,
+            jwtSecret: new TextEncoder().encode(
+                env.STREAM_TICKET_JWT_SECRET || String(Bun.env.JWT_SECRET || '').trim() || env.SYSTEM_ROOT_SECRET
+            ),
+            authRedis: {
+                host: String(env.STREAM_TICKET_AUTH_REDIS_HOST || 'redis-auth').trim(),
+                port: Number(env.STREAM_TICKET_AUTH_REDIS_PORT) || 6379,
+                password: env.STREAM_TICKET_AUTH_REDIS_PASSWORD
+                    ? String(env.STREAM_TICKET_AUTH_REDIS_PASSWORD).trim()
+                    : (env.REDIS_PASSWORD ? String(env.REDIS_PASSWORD).trim() : null),
+            },
+            revokeChannel: String(env.STREAM_TICKET_REVOKE_CHANNEL || Bun.env.AUTH_REVOKE_PUBSUB_CHANNEL || '').trim()
+                || 'earflow:auth:session:revoke:v1',
         },
     };
 }

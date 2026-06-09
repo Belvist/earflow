@@ -8,6 +8,9 @@ import {
     hlsSegmentCacheExpSec,
     verifyHlsSegmentCacheSig,
 } from './auth/hlsSegmentCache';
+import { createStreamTicketVerifier } from './auth/streamTicket';
+import { StreamTicketEpochCache } from './auth/streamTicketEpochCache';
+import { startStreamTicketRevokeSubscriber } from './auth/streamTicketRevokeSubscriber';
 import { loadConfig } from './config';
 import { json, gzipJson, text, empty } from './http/responses';
 import { createDb, getSongForStreaming, type QualityVariant } from './db/songs';
@@ -35,6 +38,40 @@ const redis = createRedisClient({
     password: cfg.redis.password,
 });
 redis.connect().catch(() => { /* Redis is optional; graceful degradation */ });
+
+const streamTicketEpochCache = new StreamTicketEpochCache();
+const authTicketRedis = cfg.streamTicket.accept
+    ? createRedisClient({
+        host: cfg.streamTicket.authRedis.host,
+        port: cfg.streamTicket.authRedis.port,
+        password: cfg.streamTicket.authRedis.password,
+    })
+    : null;
+if (authTicketRedis) {
+    authTicketRedis.connect().catch(() => undefined);
+    startStreamTicketRevokeSubscriber({
+        redis: authTicketRedis,
+        epochCache: streamTicketEpochCache,
+        channel: cfg.streamTicket.revokeChannel,
+    });
+}
+
+function logStreamTicketConsume(fields: Record<string, string | number>) {
+    console.log(JSON.stringify({ event: 'stream_ticket_consume', ...fields }));
+}
+
+const streamTicketVerifier = cfg.streamTicket.accept && authTicketRedis
+    ? createStreamTicketVerifier({
+        jwtSecret: cfg.streamTicket.jwtSecret,
+        redisGet: (key) => authTicketRedis.get(key),
+        epochCache: streamTicketEpochCache,
+        metrics: {
+            incConsume: (result) => metrics.incStreamTicketConsume(result),
+            incEpochStale: () => metrics.incStreamTicketEpochStale(),
+        },
+        logConsume: logStreamTicketConsume,
+    })
+    : null;
 
 function readUserId(req: Request): string {
     const h = String(req.headers.get('x-user-id') || req.headers.get('X-User-Id') || '').trim();
@@ -847,10 +884,54 @@ async function consumePlaybackMediaQuota(sessionId: string): Promise<{ ok: boole
     return { ok: false, retryAfterSeconds: Math.max(1, nextWindowAt - nowSec) };
 }
 
-async function authorizePlaybackMedia(req: Request, pathTrackRef: string): Promise<
+async function finalizePlaybackAuthorization(record: PlaybackSessionRecord): Promise<
     | { ok: true; record: PlaybackSessionRecord }
     | { ok: false; response: Response }
 > {
+    const quota = await consumePlaybackMediaQuota(record.sessionId).catch(() => ({ ok: false, retryAfterSeconds: 2 }));
+    if (!quota.ok) {
+        return { ok: false, response: streamFailure(429, 'PLAYBACK_RATE_LIMITED', { 'Retry-After': String(quota.retryAfterSeconds) }) };
+    }
+
+    if (Date.now() - record.lastSeenAt > 10_000) {
+        await refreshPlaybackSessionRecord(record).catch(() => undefined);
+    }
+    return { ok: true, record };
+}
+
+async function authorizePlaybackMedia(req: Request, pathTrackRef: string, url: URL): Promise<
+    | { ok: true; record: PlaybackSessionRecord }
+    | { ok: false; response: Response }
+> {
+    const normalizedTrackRef = normalizeTrackRef(pathTrackRef);
+
+    if (streamTicketVerifier) {
+        const ticketTry = await streamTicketVerifier.tryVerify(req, url, {
+            sessionId: readPlaybackSessionHeader(req) || undefined,
+            trackRef: normalizedTrackRef || undefined,
+        });
+        if (ticketTry.present) {
+            if (!ticketTry.ok) {
+                return { ok: false, response: streamFailure(401, 'STREAM_TICKET_INVALID') };
+            }
+            const sessionId = String(ticketTry.ticket.scope.sessionId || '').trim();
+            const record = await loadPlaybackSession(sessionId).catch(() => null);
+            if (!record) {
+                return { ok: false, response: streamFailure(401, 'PLAYBACK_SESSION_EXPIRED') };
+            }
+            if (record.mode !== 'hls') {
+                return { ok: false, response: streamFailure(403, 'PLAYBACK_MODE_MISMATCH') };
+            }
+            if (!normalizedTrackRef || normalizedTrackRef !== record.trackRef) {
+                return { ok: false, response: streamFailure(403, 'PLAYBACK_TRACK_MISMATCH') };
+            }
+            if (record.userId !== ticketTry.ticket.userId) {
+                return { ok: false, response: streamFailure(403, 'PLAYBACK_SESSION_DENIED') };
+            }
+            return finalizePlaybackAuthorization(record);
+        }
+    }
+
     const token = readBearerToken(req);
     const headerSessionId = readPlaybackSessionHeader(req);
     if (!token || !headerSessionId) {
@@ -870,7 +951,6 @@ async function authorizePlaybackMedia(req: Request, pathTrackRef: string): Promi
         return { ok: false, response: streamFailure(403, 'PLAYBACK_MODE_MISMATCH') };
     }
 
-    const normalizedTrackRef = normalizeTrackRef(pathTrackRef);
     if (!normalizedTrackRef || normalizedTrackRef !== record.trackRef) {
         return { ok: false, response: streamFailure(403, 'PLAYBACK_TRACK_MISMATCH') };
     }
@@ -878,15 +958,8 @@ async function authorizePlaybackMedia(req: Request, pathTrackRef: string): Promi
         return { ok: false, response: streamFailure(403, 'PLAYBACK_SESSION_DENIED') };
     }
 
-    const quota = await consumePlaybackMediaQuota(record.sessionId).catch(() => ({ ok: false, retryAfterSeconds: 2 }));
-    if (!quota.ok) {
-        return { ok: false, response: streamFailure(429, 'PLAYBACK_RATE_LIMITED', { 'Retry-After': String(quota.retryAfterSeconds) }) };
-    }
-
-    if (Date.now() - record.lastSeenAt > 10_000) {
-        await refreshPlaybackSessionRecord(record).catch(() => undefined);
-    }
-    return { ok: true, record };
+    metrics.incStreamTicketConsume('legacy');
+    return finalizePlaybackAuthorization(record);
 }
 
 function playbackSessionJson(record: PlaybackSessionRecord, token: string, tokenExpiresAtSec: number): Response {
@@ -920,7 +993,7 @@ function createDirectStreamCookieHeader(record: PlaybackSessionRecord, req: Requ
     });
 }
 
-async function authorizeDirectStream(req: Request, sessionId: string): Promise<
+async function authorizeDirectStream(req: Request, sessionId: string, url: URL): Promise<
     | { ok: true; record: PlaybackSessionRecord }
     | { ok: false; response: Response }
 > {
@@ -929,6 +1002,31 @@ async function authorizeDirectStream(req: Request, sessionId: string): Promise<
     }
     if (!/^ps_[A-Za-z0-9_-]{20,96}$/.test(sessionId)) {
         return { ok: false, response: streamFailure(404, 'INVALID_SESSION_ID') };
+    }
+
+    if (streamTicketVerifier) {
+        const ticketTry = await streamTicketVerifier.tryVerify(req, url, { sessionId });
+        if (ticketTry.present) {
+            if (!ticketTry.ok) {
+                return { ok: false, response: streamFailure(401, 'STREAM_TICKET_INVALID') };
+            }
+            const record = await loadPlaybackSession(sessionId).catch(() => null);
+            if (!record) {
+                return { ok: false, response: streamFailure(401, 'PLAYBACK_SESSION_EXPIRED') };
+            }
+            if (record.mode !== 'direct' || record.userId !== ticketTry.ticket.userId) {
+                return { ok: false, response: streamFailure(403, 'PLAYBACK_SESSION_DENIED') };
+            }
+            const scopeTrack = String(ticketTry.ticket.scope.trackId || '').trim().toLowerCase();
+            const trackCandidates = new Set([
+                String(record.trackId),
+                String(record.trackRef || '').toLowerCase(),
+            ]);
+            if (scopeTrack && !trackCandidates.has(scopeTrack)) {
+                return { ok: false, response: streamFailure(403, 'PLAYBACK_TRACK_MISMATCH') };
+            }
+            return finalizePlaybackAuthorization(record);
+        }
     }
 
     const cookie = readCookieValue(req, cfg.streamCookie.name);
@@ -955,15 +1053,8 @@ async function authorizeDirectStream(req: Request, sessionId: string): Promise<
         return { ok: false, response: streamFailure(403, 'PLAYBACK_BINDING_MISMATCH') };
     }
 
-    const quota = await consumePlaybackMediaQuota(record.sessionId).catch(() => ({ ok: false, retryAfterSeconds: 2 }));
-    if (!quota.ok) {
-        return { ok: false, response: streamFailure(429, 'PLAYBACK_RATE_LIMITED', { 'Retry-After': String(quota.retryAfterSeconds) }) };
-    }
-
-    if (Date.now() - record.lastSeenAt > 10_000) {
-        await refreshPlaybackSessionRecord(record).catch(() => undefined);
-    }
-    return { ok: true, record };
+    metrics.incStreamTicketConsume('legacy');
+    return finalizePlaybackAuthorization(record);
 }
 
 function parseDirectRange(req: Request, totalBytes: number): { start: number; end: number; partial: boolean } | null {
@@ -1017,7 +1108,7 @@ async function handleDirectPlaybackStream(req: Request, url: URL): Promise<Respo
         return null;
     }
 
-    const auth = await authorizeDirectStream(req, parts[3] || '');
+    const auth = await authorizeDirectStream(req, parts[3] || '', url);
     if (!auth.ok) return auth.response;
 
     const asset = await resolveDirectStreamAsset(auth.record);
@@ -1309,7 +1400,7 @@ async function handlePlaybackMedia(req: Request, url: URL): Promise<Response | n
     const trackRef = normalizeTrackRef(parts[3] || '');
     if (!trackRef) return empty(404, noStoreHeaders());
 
-    const auth = await authorizePlaybackMedia(req, trackRef);
+    const auth = await authorizePlaybackMedia(req, trackRef, url);
     if (!auth.ok) return auth.response;
     const record = auth.record;
 
