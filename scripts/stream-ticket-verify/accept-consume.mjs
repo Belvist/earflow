@@ -17,6 +17,17 @@ const streamBase = (process.env.DIRECT_STREAM_BASE_URL || 'http://127.0.0.1:3096
 const email = process.env.AUTH_E2E_EMAIL || '';
 const password = process.env.AUTH_E2E_PASSWORD || '';
 
+/** Stable UA/IP for playback session binding (legacy cookie path checks both). */
+const E2E_PLAYBACK_UA = process.env.AUTH_E2E_PLAYBACK_UA || 'earflow-sec005-accept-consume/1.0';
+const E2E_PLAYBACK_CLIENT_IP = process.env.AUTH_E2E_CLIENT_IP || '203.0.113.50';
+
+function playbackBindingHeaders() {
+  return {
+    'User-Agent': E2E_PLAYBACK_UA,
+    'X-Forwarded-For': E2E_PLAYBACK_CLIENT_IP,
+  };
+}
+
 function assert(cond, msg) {
   if (!cond) {
     console.error(`FAIL  ${msg}`);
@@ -27,6 +38,7 @@ function assert(cond, msg) {
 
 function sessionHeaders(jar, material, token) {
   return {
+    ...playbackBindingHeaders(),
     'Content-Type': 'application/json',
     Cookie: cookieHeader(jar),
     'X-CSRF-Token': jar.mp_csrf || '',
@@ -90,7 +102,8 @@ async function resolveStreamableTrackId(ctx) {
 
 async function headStream(path, headers = {}) {
   const res = await fetch(`${streamBase}${path}`, { method: 'HEAD', headers });
-  return res.status;
+  const code = String(res.headers.get('x-stream-error') || res.headers.get('X-Stream-Error') || '').trim();
+  return { status: res.status, code };
 }
 
 async function main() {
@@ -137,19 +150,29 @@ async function main() {
   assert(opaque.length > 8, 'opaque media ticket');
 
   const okPath = `/audio/v3/direct/${encodeURIComponent(sessionId)}/stream?st=${encodeURIComponent(opaque)}`;
-  const okStatus = await headStream(okPath);
-  assert(okStatus === 200 || okStatus === 206, `HEAD with valid ticket → ${okStatus} (want 200/206)`);
+  const okHead = await headStream(okPath);
+  assert(
+    okHead.status === 200 || okHead.status === 206,
+    `HEAD with valid ticket → ${okHead.status} (want 200/206)`,
+  );
 
   const badPath = `/audio/v3/direct/${encodeURIComponent(sessionId)}/stream?st=garbage_ticket_value`;
-  const badStatus = await headStream(badPath);
-  assert(badStatus === 401, `HEAD with garbage ticket → ${badStatus} (want 401)`);
+  const badHead = await headStream(badPath);
+  assert(badHead.status === 401, `HEAD with garbage ticket → ${badHead.status} (want 401)`);
 
   if (jar.mp_stream) {
-    const legacyStatus = await headStream(
+    const legacyHead = await headStream(
       `/audio/v3/direct/${encodeURIComponent(sessionId)}/stream`,
-      { Cookie: `mp_stream=${jar.mp_stream}` },
+      {
+        ...playbackBindingHeaders(),
+        Cookie: `mp_stream=${jar.mp_stream}`,
+      },
     );
-    assert(legacyStatus === 200 || legacyStatus === 206, `legacy cookie HEAD → ${legacyStatus}`);
+    const legacyHint = legacyHead.code ? ` [${legacyHead.code}]` : '';
+    assert(
+      legacyHead.status === 200 || legacyHead.status === 206,
+      `legacy cookie HEAD → ${legacyHead.status}${legacyHint} (want 200/206; binding UA=${E2E_PLAYBACK_UA} IP=${E2E_PLAYBACK_CLIENT_IP})`,
+    );
   } else {
     console.log('SKIP  legacy cookie (Set-Cookie mp_stream not in session response)');
   }
