@@ -204,7 +204,7 @@ const MobilePlayerBar = ({ onOpenEq }) => {
         data-mini-gesture-zone="true"
         data-mini-bar-variant={variant}
         data-mini-play-style={playStyle}
-        data-mini-bar-ui="2026-06-v55-progress-fullwidth"
+        data-mini-bar-ui="2026-06-v56-nav-blur-progress-fix"
         $variant={variant}
         initial={false}
         animate={false}
@@ -215,6 +215,7 @@ const MobilePlayerBar = ({ onOpenEq }) => {
           y: hideMiniChrome ? 0 : miniAtRest ? 0 : sheet.miniY,
           scale: hideMiniChrome ? 1 : miniAtRest ? 1 : sheet.miniScale,
           borderRadius: isClassic ? 0 : miniAtRest ? 14 : sheet.miniRadius,
+          '--mini-shell-radius': isClassic ? '0px' : `${miniAtRest ? 14 : sheet.miniRadius}px`,
           zIndex: isPlayerSheetClosing ? 10000 : undefined,
         }}
       >
