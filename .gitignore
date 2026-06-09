@@ -160,6 +160,7 @@ docs/*
 !docs/DECISIONS.md
 !docs/SEC-005_WS_STREAM_TICKETS_DESIGN.md
 !docs/SEC-005_PHASE3_ACCEPT_CHECKLIST.md
+!docs/SEC-005_PRE_ACCEPT_REPLAY.md
 !docs/ENGINEERING_VERIFICATION_PLAYBOOK.md
 reports/*
 !reports/auth-capacity-*.md
