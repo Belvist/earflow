@@ -30,7 +30,8 @@ import {
   MiniTrackDetails,
   MiniTrackTitle,
   MiniTrackArtist,
-  MiniLikeControl,
+  MiniLikeSlot,
+  MiniLikeHit,
   MiniPlayControl,
   MiniPlayInner,
   ProgressBarMini,
@@ -203,7 +204,7 @@ const MobilePlayerBar = ({ onOpenEq }) => {
         data-mini-gesture-zone="true"
         data-mini-bar-variant={variant}
         data-mini-play-style={playStyle}
-        data-mini-bar-ui="2026-06-v50-nav-social-mini-like"
+        data-mini-bar-ui="2026-06-v53-nav-white-icons"
         $variant={variant}
         initial={false}
         animate={false}
@@ -252,23 +253,20 @@ const MobilePlayerBar = ({ onOpenEq }) => {
               </MiniTrackInfo>
             </SwipeableTrackContainer>
 
-            <MiniLikeControl
-              type="button"
-              data-testid="mini-player-like"
-              data-mini-no-drag="true"
-              aria-label={isCurrentTrackLiked ? 'Убрать из избранного' : 'Нравится'}
-              title={isCurrentTrackLiked ? 'Убрать из избранного' : 'Нравится'}
-              $active={isCurrentTrackLiked}
-              $variant={variant}
-              onClick={handleLikeClick}
-              onTouchEnd={(e) => {
-                e.stopPropagation();
-                handleLikeClick(e);
-              }}
-              whileTap={{ scale: 0.88 }}
-            >
-              {isCurrentTrackLiked ? <FaHeart /> : <FaRegHeart />}
-            </MiniLikeControl>
+            <MiniLikeSlot aria-hidden="true">
+              <MiniLikeHit
+                type="button"
+                data-testid="mini-player-like"
+                data-mini-no-drag="true"
+                aria-label={isCurrentTrackLiked ? 'Убрать из избранного' : 'Нравится'}
+                title={isCurrentTrackLiked ? 'Убрать из избранного' : 'Нравится'}
+                $active={isCurrentTrackLiked}
+                onClick={handleLikeClick}
+                whileTap={{ scale: 0.88 }}
+              >
+                {isCurrentTrackLiked ? <FaHeart /> : <FaRegHeart />}
+              </MiniLikeHit>
+            </MiniLikeSlot>
 
             <MiniPlayControl
               key={`mini-play-${playStyle}-${variant}`}
