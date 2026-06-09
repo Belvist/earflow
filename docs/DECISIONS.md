@@ -22,6 +22,24 @@
 
 ---
 
+## 2026-06-09 — SEC-005 Phase 4 staging gate + SEC-007 deferred (TG confirm, not email alerts)
+
+**Status:** accepted  
+**Area:** auth | streaming | ops  
+**Context:** Wave A started; user rejected email/in-app login alerts for now — prefers Telegram bot confirmation with forced bot activation.
+
+**Decision:**
+- **Phase 4 staging:** auth-e2e overlay rebuilds frontend with `REACT_APP_STREAM_TICKET_MINT_ENABLED=1`; gate `scripts/run-sec005-phase4-staging.sh` (verify bundle marker `earflow:stream-ticket-mint:1` + `accept-consume.mjs` + restore-prod).
+- **SEC-007 deferred:** new-session notice = **Telegram user bot confirm flow** (linked TG required), not email/in-app alerts in current waves.
+
+**Consequences:** Prod frontend stays `mint:0` after every restore. Phase 5 ENFORCE on auth-e2e is next after Phase 4 PASS.
+
+**Files touched:** `docker-compose.auth-e2e.yml`, `frontend/Dockerfile`, `scripts/verify-stream-ticket-phase4.sh`, `scripts/run-sec005-phase4-staging.sh`, `docs/PENDING.md`, `docs/AUTH_ROLLOUT_GATES.md`.
+
+**Tests:** `npm run verify:stream-ticket-phase4` on auth-e2e stack.
+
+---
+
 ## 2026-06-09 — Auth Kit hardening: Phase 4 mint, fresh-login, step-up UI, revoke-all
 
 **Status:** accepted  

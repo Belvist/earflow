@@ -281,8 +281,8 @@ Revoke/password/email/delete — modal при `MFA_STEP_UP_REQUIRED`, не raw e
 | 1 | Gateway `POST /api/auth/stream-ticket` mint + unit tests; `STREAM_TICKET_ENABLED=0` default | done |
 | 2 | OBSERVE — mint on auth-e2e overlay; `verify-stream-ticket.sh`; structured mint logs | **done (2026-06-09 restore prod PASS)** |
 | 3 | ACCEPT — direct-stream/ebap-hls dual-mode verify | **done (2026-06-09 VPS `f9da305`)** |
-| 4 | Frontend mint + attach (`streamTicket.js`, opt-in flag) | **code done** — enable on staging only |
-| 5+ | Staging ACCEPT, ENFORCE | **next** — prod flags stay off until gates |
+| 4 | Frontend mint + attach (`streamTicket.js`, opt-in flag) | **staging gate** — `bash scripts/run-sec005-phase4-staging.sh` |
+| 5+ | Staging ACCEPT → ENFORCE | **next** after Phase 4 PASS — prod flags stay off |
 
 **VPS close report — Phase 3 ACCEPT (`ru-vmv2-mini`, 2026-06-09, git `f9da305`):**
 
@@ -305,7 +305,7 @@ COOKIE_DOMAIN:                      .earflow.ru
 bash scripts/restore-prod-after-auth-e2e.sh
 ```
 
-**Next:** Phase 4 — frontend mint + attach scoped tickets on playback/WS paths; staging gate before prod `STREAM_TICKET_ACCEPT=1`. Manual smoke: 30s playback on earflow.ru after restore.
+**Next:** `npm run run:sec005-phase4-staging` on VPS (build mint frontend → `verify:stream-ticket-phase4` → restore-prod). Then Phase 5 ENFORCE on auth-e2e only.
 
 **Forbidden until staging gate:** prod `STREAM_TICKET_ACCEPT=1`, ENFORCE, cookie fallback removal.
 
@@ -318,12 +318,14 @@ bash scripts/restore-prod-after-auth-e2e.sh
 
 Отдельно от PoP. DoD: roadmap §6.
 
-### PEND-SEC-007 — Login alerts
+### PEND-SEC-007 — New-session confirmation (deferred — no email/in-app alerts v1)
 
 **Priority:** medium  
-**Status:** not started  
+**Status:** deferred (2026-06-09) — **not** email/in-app alerts in current wave  
 
-Новый sid → email + in-app security event.
+**Target:** новый sid → подтверждение через **Telegram-бота** (пользователь должен иметь привязанный TG + активировать бота). Без подтверждения — ограниченная сессия или step-up на sensitive. Ops bot (`TELEGRAM_OPS_*`) — отдельно от user-facing confirm flow.
+
+**Not in scope now:** Wave A/B/C transport + sessions; SEC-007 после SEC-005 ENFORCE + SEC-004 password step-up.
 
 ### PEND-SEC-008 — Risk engine
 

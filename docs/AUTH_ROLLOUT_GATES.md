@@ -97,6 +97,24 @@ docker compose logs api-gateway --tail=100 | grep -i stream_ticket_mint
 
 **Close Phase 3 when:** `verify-stream-ticket-accept.sh` PASS on auth-e2e + manual playback smoke + restore prod.
 
+## SEC-005 Phase 4 — frontend mint (staging)
+
+One-shot on VPS:
+
+```bash
+npm run run:sec005-phase4-staging
+```
+
+Or manual: auth-e2e overlay **rebuilds frontend** with `REACT_APP_STREAM_TICKET_MINT_ENABLED=1` → `npm run verify:stream-ticket-phase4` → `restore-prod`.
+
+| Check | Expect |
+|-------|--------|
+| Bundle marker | `main.*.js` contains `earflow:stream-ticket-mint:1` |
+| Client path | `accept-consume.mjs` PASS (mint + `?st=` HEAD 200) |
+| Restore prod | `STREAM_TICKET_*` off; bundle `mint:0` on earflow.ru |
+
+**Forbidden:** prod `STREAM_TICKET_ACCEPT=1` until Phase 4 + Phase 5 staging PASS.
+
 **Universal verify discipline:** `docs/ENGINEERING_VERIFICATION_PLAYBOOK.md` + skill `engineering-verification`.
 
 ## Agent checklist

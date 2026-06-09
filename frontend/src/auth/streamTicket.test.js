@@ -1,4 +1,5 @@
 import {
+  STREAM_TICKET_MINT_BUILD_MARKER,
   attachMediaTicketToUrl,
   applyMediaTicketToPlaybackSession,
   isStreamTicketMintEnabled,
@@ -17,6 +18,10 @@ describe('streamTicket', () => {
   afterEach(() => {
     process.env.REACT_APP_STREAM_TICKET_MINT_ENABLED = prev;
     mockIsProofAccessTokenEnabled.mockReturnValue(true);
+  });
+
+  test('STREAM_TICKET_MINT_BUILD_MARKER is grep-able in built bundles', () => {
+    expect(STREAM_TICKET_MINT_BUILD_MARKER).toMatch(/^earflow:stream-ticket-mint:[01]$/);
   });
 
   test('isStreamTicketMintEnabled requires env flag and proof token path', () => {
