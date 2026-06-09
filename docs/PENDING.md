@@ -280,7 +280,7 @@ Revoke/password/email/delete — modal при `MFA_STEP_UP_REQUIRED`, не raw e
 |-------|-------|--------|
 | 1 | Gateway `POST /api/auth/stream-ticket` mint + unit tests; `STREAM_TICKET_ENABLED=0` default | done |
 | 2 | OBSERVE — mint on auth-e2e overlay; `verify-stream-ticket.sh`; structured mint logs | **done (2026-06-09 restore prod PASS)** |
-| 3 | ACCEPT — direct-stream/ebap-hls dual-mode verify | **checklist ready** → `docs/SEC-005_PHASE3_ACCEPT_CHECKLIST.md` (accept before code) |
+| 3 | ACCEPT — direct-stream/ebap-hls dual-mode verify | **checklist ready — NOT accepted; run pre-accept replay first** → `docs/SEC-005_PRE_ACCEPT_REPLAY.md` |
 | 4+ | Frontend mint, ENFORCE | blocked until Phase 3 |
 
 **VPS close report (`ru-vmv2-mini`, 2026-06-09, git `0d59f54`):**
@@ -303,7 +303,7 @@ stream_ticket_mint on prod logs:    none (expected — mint off)
 bash scripts/restore-prod-after-auth-e2e.sh
 ```
 
-**Next:** accept `SEC-005_PHASE3_ACCEPT_CHECKLIST.md` → implement Phase 3 (dual-mode consume, no ENFORCE).
+**Next:** run `npm run verify:auth-replay` on VPS (see `docs/SEC-005_PRE_ACCEPT_REPLAY.md`); **Phase 3 checklist not accepted** until replay PASS + explicit accept.
 
 **Forbidden until Phase 3 closed:** frontend mint, ENFORCE, cookie fallback removal.
 
