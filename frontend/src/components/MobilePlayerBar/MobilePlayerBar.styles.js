@@ -130,6 +130,35 @@ export const MiniPlayerMainRow = styled.div`
   height: 100%;
 `;
 
+export const MiniLikeControl = styled(motion.button)`
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  color: ${(p) => (p.$active ? '#ff4757' : 'rgba(255, 255, 255, 0.72)')};
+  font-size: ${(p) => (p.$variant === MINI_BAR_VARIANT.CLASSIC ? '17px' : '19px')};
+  width: ${(p) => (p.$variant === MINI_BAR_VARIANT.CLASSIC ? '30px' : '34px')};
+  height: ${(p) => (p.$variant === MINI_BAR_VARIANT.CLASSIC ? '30px' : '34px')};
+  min-width: ${(p) => (p.$variant === MINI_BAR_VARIANT.CLASSIC ? '30px' : '34px')};
+  min-height: ${(p) => (p.$variant === MINI_BAR_VARIANT.CLASSIC ? '30px' : '34px')};
+
+  &:active {
+    transform: scale(0.9);
+  }
+
+  &:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.35);
+    outline-offset: 2px;
+    border-radius: 50%;
+  }
+`;
+
 export const MiniPlayControl = styled(motion.div)`
   flex-shrink: 0;
   display: flex;
@@ -187,18 +216,18 @@ export const MiniPlayControl = styled(motion.div)`
   }
 
   ${(p) => (p.$variant === MINI_BAR_VARIANT.CLASSIC ? css`
-    width: 26px;
-    height: 26px;
-    min-width: 26px;
-    min-height: 26px;
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+    min-height: 30px;
     box-shadow: none;
     background: transparent;
     border: none;
   ` : css`
-    width: ${p.$playStyle === 'metallic' ? '36px' : '36px'};
-    height: ${p.$playStyle === 'metallic' ? '36px' : '36px'};
-    min-width: ${p.$playStyle === 'metallic' ? '36px' : '36px'};
-    min-height: ${p.$playStyle === 'metallic' ? '36px' : '36px'};
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    min-height: 42px;
     box-shadow: none;
     background: transparent;
     border: none;

@@ -18,6 +18,7 @@ import useMiniPlayStyle, { MINI_PLAY_STYLE } from '../../hooks/useMiniPlayStyle'
 import { requestDeviceTiltPermission } from './useDeviceTiltGlare';
 import { miniPlayIconColor } from '../../utils/miniPlayIconColor';
 import { toListenerSameOriginCoverUrl } from '../../utils/listenerCoverUrl';
+import { FaHeart, FaRegHeart } from 'react-icons/fa';
 import {
   MiniPlayerShell,
   MiniPlayerContent,
@@ -29,6 +30,7 @@ import {
   MiniTrackDetails,
   MiniTrackTitle,
   MiniTrackArtist,
+  MiniLikeControl,
   MiniPlayControl,
   MiniPlayInner,
   ProgressBarMini,
@@ -89,6 +91,17 @@ const MobilePlayerBar = ({ onOpenEq }) => {
     forceUnlockGestures,
     isTrackSwipeAnimating,
   } = useMiniPlayerGestureSession({ player });
+
+  const isCurrentTrackLiked = useMemo(() => {
+    const ctid = currentTrack ? Number.parseInt(String(currentTrack.id), 10) : NaN;
+    return Number.isFinite(ctid) && player.likedIds?.has?.(ctid);
+  }, [currentTrack, player.likedIds]);
+
+  const handleLikeClick = useCallback((e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    player.toggleLikeCurrent();
+  }, [player]);
 
   const handlePlayPause = useCallback((e) => {
     e.stopPropagation();
@@ -190,7 +203,7 @@ const MobilePlayerBar = ({ onOpenEq }) => {
         data-mini-gesture-zone="true"
         data-mini-bar-variant={variant}
         data-mini-play-style={playStyle}
-        data-mini-bar-ui="2026-06-v49-track-swipe-no-bounce"
+        data-mini-bar-ui="2026-06-v50-nav-social-mini-like"
         $variant={variant}
         initial={false}
         animate={false}
@@ -239,6 +252,24 @@ const MobilePlayerBar = ({ onOpenEq }) => {
               </MiniTrackInfo>
             </SwipeableTrackContainer>
 
+            <MiniLikeControl
+              type="button"
+              data-testid="mini-player-like"
+              data-mini-no-drag="true"
+              aria-label={isCurrentTrackLiked ? 'Убрать из избранного' : 'Нравится'}
+              title={isCurrentTrackLiked ? 'Убрать из избранного' : 'Нравится'}
+              $active={isCurrentTrackLiked}
+              $variant={variant}
+              onClick={handleLikeClick}
+              onTouchEnd={(e) => {
+                e.stopPropagation();
+                handleLikeClick(e);
+              }}
+              whileTap={{ scale: 0.88 }}
+            >
+              {isCurrentTrackLiked ? <FaHeart /> : <FaRegHeart />}
+            </MiniLikeControl>
+
             <MiniPlayControl
               key={`mini-play-${playStyle}-${variant}`}
               data-testid="mini-player-play"
@@ -267,13 +298,13 @@ const MobilePlayerBar = ({ onOpenEq }) => {
                 {playStyle === MINI_PLAY_STYLE.METALLIC ? (
                   <MiniPlayButtonIos
                     isPlaying={player.isPlaying}
-                    size={isClassic ? 30 : 36}
+                    size={isClassic ? 34 : 42}
                     emphasis="high"
                   />
                 ) : (
                   <MiniPlayButtonAdaptive
                     isPlaying={player.isPlaying}
-                    size={isClassic ? 28 : 36}
+                    size={isClassic ? 32 : 42}
                     iconColor={playIconColor}
                   />
                 )}
