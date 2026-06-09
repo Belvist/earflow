@@ -60,7 +60,8 @@ func revokeSessionHandler(d Deps) http.HandlerFunc {
 			return
 		}
 
-		if !d.requireStepUpForSensitiveSessionAction(w, r, principal, true) {
+		// Single-session revoke: MFA step-up when enabled; fresh-login guard applies only to mass revoke.
+		if !d.requireStepUpForSensitiveSessionAction(w, r, principal, false) {
 			return
 		}
 
