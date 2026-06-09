@@ -277,8 +277,13 @@ export const ProgressBarMini = styled.div`
   left: 0;
   right: 0;
   bottom: 0;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
   box-sizing: border-box;
   overflow: hidden;
+  isolation: isolate;
   pointer-events: none;
   z-index: 10;
   --progress: 0%;
@@ -291,25 +296,23 @@ export const ProgressBarMini = styled.div`
     max-height: 2px;
     border-radius: 0;
     background: rgba(255, 255, 255, 0.28);
-    overflow: hidden;
   ` : css`
-    left: 0;
-    right: 0;
-    width: 100%;
     height: ${FLOATING_PROGRESS_HEIGHT_PX}px;
     min-height: ${FLOATING_PROGRESS_HEIGHT_PX}px;
     max-height: ${FLOATING_PROGRESS_HEIGHT_PX}px;
     background: rgba(255, 255, 255, 0.28);
-    border-radius: 0 0 ${FLOATING_SHELL_RADIUS_PX}px ${FLOATING_SHELL_RADIUS_PX}px;
-    overflow: hidden;
+    border-radius: 0 0 var(--mini-shell-radius, ${FLOATING_SHELL_RADIUS_PX}px) var(--mini-shell-radius, ${FLOATING_SHELL_RADIUS_PX}px);
   `)}
 `;
 
 export const ProgressFillMini = styled.div`
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
   display: block;
-  height: 100%;
   min-width: 0;
-  max-height: 100%;
+  max-width: 100%;
   border-radius: inherit;
   background: #ffffff;
   width: var(--progress, 0%);

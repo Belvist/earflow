@@ -99,7 +99,7 @@ const GlobalStyle = createGlobalStyle`
     right: max(10px, env(safe-area-inset-right, 0px)) !important;
     width: auto !important;
     max-width: calc(100vw - 20px) !important;
-    border-radius: 10px !important;
+    border-radius: ${FLOATING_SHELL_RADIUS_PX}px !important;
   }
 
   :root[data-mini-bar-variant="classic"] [data-testid="mini-player-bar"],
@@ -112,8 +112,13 @@ const GlobalStyle = createGlobalStyle`
   }
 
   [data-testid="mini-player-bar"] .ef-mini-progress-fill {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    bottom: 0 !important;
     display: block !important;
-    height: 100% !important;
+    height: auto !important;
+    max-width: 100% !important;
     background: #ffffff !important;
     width: var(--progress, 0%) !important;
   }
@@ -134,9 +139,12 @@ const GlobalStyle = createGlobalStyle`
     left: 0 !important;
     right: 0 !important;
     width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
     bottom: 0 !important;
     pointer-events: none !important;
-    border-radius: 0 0 ${FLOATING_SHELL_RADIUS_PX}px ${FLOATING_SHELL_RADIUS_PX}px !important;
+    border-radius: 0 0 var(--mini-shell-radius, ${FLOATING_SHELL_RADIUS_PX}px) var(--mini-shell-radius, ${FLOATING_SHELL_RADIUS_PX}px) !important;
     overflow: hidden !important;
     background: rgba(255, 255, 255, 0.28) !important;
   }

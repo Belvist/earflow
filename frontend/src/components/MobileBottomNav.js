@@ -11,6 +11,8 @@ import useAuth from '../hooks/useAuth';
 import { clearRecentLogout, redirectToAuth, sanitizeReturnTo } from '../utils/authRedirect';
 
 const NAV_BAR_PX = 48;
+/** Figma-style progressive backdrop blur: 0 at top → 20px at bottom */
+const NAV_BLUR_TOP_PX = 24;
 
 const Nav = styled.nav`
   position: fixed;
@@ -21,7 +23,7 @@ const Nav = styled.nav`
   padding-bottom: env(safe-area-inset-bottom, 0px);
   box-sizing: border-box;
   background: transparent;
-  border-top: none;
+  border: none;
   z-index: var(--z-bottom-nav, 9997);
   transform: translate3d(0, 0, 0);
   transition: opacity 0.16s ease, transform 0.16s ease;
@@ -38,7 +40,37 @@ const Nav = styled.nav`
   }
 `;
 
+const NavProgressiveBlur = styled.div`
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: -${NAV_BLUR_TOP_PX}px;
+  pointer-events: none;
+  z-index: 0;
+  background: transparent;
+  border: none;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  mask-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 0.08) 28%,
+    rgba(0, 0, 0, 0.42) 58%,
+    rgba(0, 0, 0, 1) 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 0.08) 28%,
+    rgba(0, 0, 0, 0.42) 58%,
+    rgba(0, 0, 0, 1) 100%
+  );
+`;
+
 const Inner = styled.div`
+  position: relative;
+  z-index: 1;
   height: ${NAV_BAR_PX}px;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -118,6 +150,7 @@ export default function MobileBottomNav() {
 
   return (
     <Nav aria-label="Навигация" data-testid="mobile-bottom-nav">
+      <NavProgressiveBlur aria-hidden="true" data-testid="mobile-bottom-nav-blur" />
       <Inner data-testid="mobile-bottom-nav-bar">
         <TabButton
           type="button"
