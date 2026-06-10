@@ -705,26 +705,57 @@ export const PlayerProvider = ({
     if (!Number.isFinite(tid) || tid <= 0) return;
     const isLiked = state.likedIds.has(tid);
     const wasDisliked = state.dislikedIds.has(tid);
-    try {
-      if (isLiked) {
+
+    const likedTrackEntry = {
+      id: track.id,
+      title: track.title,
+      artist: track.artist,
+      album: track.album,
+      duration: track.durationSeconds || track.duration,
+      genre: track.genre,
+      year: track.year,
+      cover_path: track.cover_path,
+    };
+
+    if (isLiked) {
+      state.setLikedIds((prev) => { const next = new Set(prev); next.delete(tid); return next; });
+      state.setLikedTracks?.((prev) => (Array.isArray(prev) ? prev.filter((t) => String(t?.id) !== String(tid)) : []));
+      try {
         await apiClient.unlikeSong(tid);
-        state.setLikedTracks?.((prev) => (Array.isArray(prev) ? prev.filter((t) => String(t?.id) !== String(tid)) : []));
-        state.setLikedIds((prev) => { const next = new Set(prev); next.delete(tid); return next; });
-        return;
+      } catch {
+        state.setLikedIds((prev) => new Set(prev).add(tid));
+        state.setLikedTracks?.((prev) => {
+          const base = Array.isArray(prev) ? prev : [];
+          if (base.some((t) => String(t?.id) === String(track.id))) return base;
+          return [likedTrackEntry, ...base];
+        });
       }
+      return;
+    }
+
+    if (wasDisliked) {
+      state.setDislikedIds((prev) => { const next = new Set(prev); next.delete(tid); return next; });
+    }
+    state.setLikedIds((prev) => new Set(prev).add(tid));
+    state.setLikedTracks?.((prev) => {
+      const base = Array.isArray(prev) ? prev : [];
+      if (base.some((t) => String(t?.id) === String(track.id))) return base;
+      return [likedTrackEntry, ...base];
+    });
+
+    try {
       if (wasDisliked) {
         await apiClient.undislikeSong(tid);
-        state.setDislikedIds((prev) => { const next = new Set(prev); next.delete(tid); return next; });
       }
       await apiClient.likeSong(tid);
-      state.setLikedIds((prev) => new Set(prev).add(tid));
-      state.setLikedTracks?.((prev) => {
-        const base = Array.isArray(prev) ? prev : [];
-        if (base.some((t) => String(t?.id) === String(track.id))) return base;
-        return [{ id: track.id, title: track.title, artist: track.artist, album: track.album, duration: track.durationSeconds || track.duration, genre: track.genre, year: track.year, cover_path: track.cover_path }, ...base];
-      });
       feedbackManager.recordFeedback?.('like');
-    } catch { }
+    } catch {
+      state.setLikedIds((prev) => { const next = new Set(prev); next.delete(tid); return next; });
+      state.setLikedTracks?.((prev) => (Array.isArray(prev) ? prev.filter((t) => String(t?.id) !== String(tid)) : []));
+      if (wasDisliked) {
+        state.setDislikedIds((prev) => new Set(prev).add(tid));
+      }
+    }
   }, [requireAuthFor, currentTrack, state.likedIds, state.dislikedIds, state.setLikedIds, state.setDislikedIds, state.setLikedTracks, feedbackManager]);
 
   const toggleDislikeCurrent = useCallback(async () => {

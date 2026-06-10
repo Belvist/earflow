@@ -27,6 +27,11 @@ import PlayerChrome from './components/PlayerChrome';
 import { lazyWithRetry } from './utils/lazyWithRetry';
 import { HOME_SURFACE_HEX } from './styles/homeSurface';
 import { FLOATING_SHELL_RADIUS_PX } from './components/MobilePlayerBar/miniPlayButtonVisual';
+import {
+  MOBILE_CHROME_SIDE_INSET_PX,
+  MOBILE_MINI_PLAYER_FLOAT_GAP_PX,
+  MOBILE_NAV_TOTAL_HEIGHT_PX,
+} from './components/mobileChromeTokens';
 
 const SkinProviderWrapper = ({ children }) => {
   const skinValue = useSkinState();
@@ -70,9 +75,10 @@ const GlobalStyle = createGlobalStyle`
     --right-rail-width: 0px;
     --panel-rail-width: 380px;
     --panel-rail-gap: 20px;
-    --mobile-bottom-nav-height: 48px;
+    --mobile-chrome-side-inset: ${MOBILE_CHROME_SIDE_INSET_PX}px;
+    --mobile-bottom-nav-height: ${MOBILE_NAV_TOTAL_HEIGHT_PX}px;
     --mobile-mini-player-height: 56px;
-    --mobile-mini-player-float-gap: 9px;
+    --mobile-mini-player-float-gap: ${MOBILE_MINI_PLAYER_FLOAT_GAP_PX}px;
     --mobile-chrome-height: calc(var(--mobile-bottom-nav-height) + var(--mobile-mini-player-float-gap) + var(--mobile-mini-player-height));
     --z-bottom-nav: 9997;
     --z-mini-player: 9998;
@@ -95,10 +101,10 @@ const GlobalStyle = createGlobalStyle`
   :root:not([data-mini-bar-variant="classic"]) [data-testid="mini-player-bar"],
   :root[data-mini-bar-variant="floating"] [data-testid="mini-player-bar"],
   [data-testid="mini-player-bar"][data-mini-bar-variant="floating"] {
-    left: max(10px, env(safe-area-inset-left, 0px)) !important;
-    right: max(10px, env(safe-area-inset-right, 0px)) !important;
+    left: max(var(--mobile-chrome-side-inset, ${MOBILE_CHROME_SIDE_INSET_PX}px), env(safe-area-inset-left, 0px)) !important;
+    right: max(var(--mobile-chrome-side-inset, ${MOBILE_CHROME_SIDE_INSET_PX}px), env(safe-area-inset-right, 0px)) !important;
     width: auto !important;
-    max-width: calc(100vw - 20px) !important;
+    max-width: calc(100vw - (var(--mobile-chrome-side-inset, ${MOBILE_CHROME_SIDE_INSET_PX}px) * 2)) !important;
     border-radius: ${FLOATING_SHELL_RADIUS_PX}px !important;
   }
 
@@ -132,7 +138,8 @@ const GlobalStyle = createGlobalStyle`
 
   :root:not([data-mini-bar-variant="classic"]) [data-testid="mini-player-bar"] [data-testid="mini-player-progress"],
   [data-testid="mini-player-bar"][data-mini-bar-variant="floating"] [data-testid="mini-player-progress"] {
-    position: absolute !important;
+    position: relative !important;
+    flex-shrink: 0 !important;
     height: 2px !important;
     min-height: 2px !important;
     max-height: 2px !important;
@@ -142,7 +149,6 @@ const GlobalStyle = createGlobalStyle`
     max-width: 100% !important;
     margin: 0 !important;
     padding: 0 !important;
-    bottom: 0 !important;
     pointer-events: none !important;
     border-radius: 0 0 var(--mini-shell-radius, ${FLOATING_SHELL_RADIUS_PX}px) var(--mini-shell-radius, ${FLOATING_SHELL_RADIUS_PX}px) !important;
     overflow: hidden !important;

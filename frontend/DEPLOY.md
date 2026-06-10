@@ -37,9 +37,9 @@ git rev-parse --short HEAD   # запомни SHA
 docker compose build --no-cache frontend
 docker compose up -d --force-recreate frontend
 
-# проверка build hint (v58+ после merge UI)
+# проверка build hint (v61+ после merge UI)
 curl -sS https://earflow.ru/ | grep -o 'data-mini-bar-ui="[^"]*"' | head -1
-# ожидаем: data-mini-bar-ui="2026-06-v58-nav-wide-pill-gap"
+# ожидаем: data-mini-bar-ui="2026-06-v61-nav-full-bleed"
 ```
 
 Если `platform-control.sh: Permission denied`:
@@ -76,3 +76,12 @@ git push origin main:frontend   # держим ветки на одном SHA
 ```
 
 Проверка на телефоне: `[data-testid="mini-player-bar"]` → `data-mini-bar-ui`.
+
+### Чеклист mobile chrome (v61)
+
+1. **Навбар** — pill **на всю ширину** (10px inset = как mini-bar), не `max-width: 520px`; снизу ~10px зазор + safe-area.
+2. **Мини-бар** — accent от обложки; progress внизу **на всю ширину** shell (без горизонтальных inset).
+3. **Лайк** — **тот же размер что play** (42px floating); меняется **мгновенно** при тапе (optimistic).
+4. **Nav swipe** — горизонтальный свайп по pill переключает соседнюю вкладку (как iOS tab bar).
+5. **Build hint:** `data-mini-bar-ui="2026-06-v61-nav-full-bleed"`.
+6. **Токены:** `frontend/src/components/mobileChromeTokens.js` — единый источник высоты nav + float gap.

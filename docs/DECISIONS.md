@@ -22,6 +22,81 @@
 
 ---
 
+## 2026-06-09 — SEC-005 Phase 6 prod ACCEPT rollout tooling
+
+**Status:** accepted  
+**Area:** auth | streaming | ops  
+**Context:** Phases 4–5 staging closed on VPS; prod still has `STREAM_TICKET_*` off and frontend `mint:0`. Need controlled prod dual-mode without `.env` hand-edits or auth-e2e overlay leak.  
+**Decision:** Prod ACCEPT via **`docker-compose.stream-prod-accept.yml`** overlay only: `STREAM_TICKET_ENABLED=1`, stream services `STREAM_TICKET_ACCEPT=1`, `ENFORCE=0`, frontend rebuild `REACT_APP_STREAM_TICKET_MINT_ENABLED=1`. Gates: `npm run run:sec005-phase6-prod-accept` (requires `SEC005_PHASE6_CONFIRM=1`), `verify-stream-ticket-phase6-prod.sh`. Rollback: `rollback:sec005-phase6-prod` → `restore-prod-after-auth-e2e.sh`. Phase 7 ENFORCE separate; Auth Kit protocol export + TG confirm (SEC-007) deferred.  
+**Alternatives considered:** `.env` flags on prod compose — rejected (accidental persist, no confirm gate).  
+**Consequences:** Prod unchanged until operator runs Phase 6 script. Weekly DoD still uses restore-prod (not Phase 6 overlay).  
+**Files touched:** `docker-compose.stream-prod-accept.yml`, `scripts/run-sec005-phase6-prod-accept.sh`, `scripts/verify-stream-ticket-phase6-prod.sh`, `scripts/rollback-sec005-phase6-prod.sh`, `docs/AUTH_ROLLOUT_GATES.md`, `docs/AUTH_KIT.md`, `docs/PENDING.md`  
+**Tests:** `accept-consume.mjs` against prod origins; `verify-frontend-api-base.sh`  
+**Чтобы не повторилось:** never combine `docker-compose.auth-e2e.yml` with Phase 6 overlay; confirm env vars mandatory.
+
+---
+
+## 2026-06-07 — Nav pill full-bleed (side inset sync with mini-bar)
+
+**Status:** accepted  
+**Area:** frontend-player  
+**Context:** На скриншоте/широком mobile viewport pill обрезался `max-width: 520px` + 12px padding — по бокам много пустоты; не совпадало с mini-bar.
+
+**Decision:** убрать `max-width: 520px`; `--mobile-chrome-side-inset: 10px` в `mobileChromeTokens.js` для nav + floating mini-bar; grid `minmax(0, 1fr)`; на узких экранах (&lt;360px) чуть меньше IconChip.
+
+**Files touched:** `MobileBottomNav.js`, `mobileChromeTokens.js`, `App.js`, `MobilePlayerBar.styles.js`
+
+**Build hint:** `2026-06-v61-nav-full-bleed`
+
+---
+
+## 2026-06-07 — Mini-bar like instant + nav tab swipe (iOS-style)
+
+**Status:** accepted  
+**Area:** frontend-player | gestures  
+**Context:** Лайк в mini-bar обновлялся с задержкой (await API до setState). Сердце визуально меньше play. Запрос: свайп по нижнему nav как у Apple для переключения вкладок.
+
+**Decision:**
+- **Like:** optimistic `toggleLikeCurrent` в `PlayerContext` (rollback on error); mini-bar читает `likedIds` через `usePlayerState`; heart **42×42** (floating) / **30×30** (classic) — как play.
+- **Nav swipe:** surface `MOBILE_BOTTOM_NAV` (priority 320) + `usePointerGestureMachine` + `HORIZONTAL_SWIPE`; чистая логика соседней вкладки в `mobileBottomNavTabs.js`; лёгкий `pillShift` preview на drag.
+
+**Alternatives considered:** локальный `useState` для like в mini-bar — отвергнуто (двойной source of truth); голый `onTouchStart` на nav — отвергнуто (`INV-GESTURE-011`).
+
+**Consequences:** свайп влево → следующая вкладка, вправо → предыдущая; на краях (home/profile) — no-op.
+
+**Files touched:** `PlayerContext.js`, `MobilePlayerBar/*`, `MobileBottomNav.js`, `useMobileBottomNavSwipe.js`, `mobileBottomNavTabs.js`, `gestureContracts.js`, `GESTURE_OWNERSHIP_MATRIX.md`
+
+**Tests:** `mobileBottomNavTabs.test.js`, `npm test`
+
+**Чтобы не повторилось:** like state только из PlayerContext; nav swipe только через arbiter surface, не второй touch listener.
+
+---
+
+## 2026-06-07 — Mobile chrome v50–v59: nav pill, mini-bar progress, like spacing
+
+**Status:** accepted  
+**Area:** frontend-player  
+**Context:** Итерации mobile UI: 4-tab nav, social stub, floating mini-bar с accent от обложки. Отвергнуты iOS gradient orb и светлая frosted card (v52–v54). На PC DevTools nav выглядел «прилипшим» к низу; progress казался смещённым и «не работающим»; сердце лайка стало мелким и близко к play.
+
+**Decision:**
+- **Nav:** full-width gray pill (`rgba(0,0,0,0.5)` + blur), белые outline-иконки, активная вкладка — `rgba(255,255,255,0.28)` без ring; **10px зазор от низа** экрана (`MOBILE_NAV_BOTTOM_GAP_PX`) + safe-area.
+- **Mini-bar:** оставить accent shell; progress — **отдельная flex-строка** внизу shell (не absolute overlay), edge-to-edge внутри shell; fill без `border-radius: inherit`.
+- **Like:** `MiniControlsCluster` gap 12px; heart 18px в hit 30×30; slot layout-only (`pointer-events: none`) — свайпы по треку не крадутся (`INV-SHEET-010`).
+- **Токены:** `mobileChromeTokens.js` — `--mobile-bottom-nav-height` = pill 48 + gap 10; float gap 9px.
+- **Build hint:** `data-mini-bar-ui="2026-06-v59-nav-lift-progress-like"`.
+
+**Alternatives considered:** compact oval nav (v57) — слишком узкий; progressive full-width blur — текст страницы просвечивал через иконки; progress с horizontal inset — отвергнуто (v55 rollback full-bleed).
+
+**Consequences:** `MobileBottomNav.js`, `MobilePlayerBar/*`, `App.js` GlobalStyle, e2e `mini-bar-layout.spec.js` (edge-to-edge progress). Жесты mini-bar без второго control path (`INV-ARCH-001`).
+
+**Files touched:** `frontend/src/components/MobileBottomNav.js`, `MobilePlayerBar/index.js`, `MobilePlayerBar.styles.js`, `mobileChromeTokens.js`, `App.js`, `frontend/DEPLOY.md`, `frontend/e2e/mini-bar-layout.spec.js`
+
+**Tests:** `npm test -- --testPathPattern=playerSheetArchitecture`, `npx playwright test e2e/mini-bar-layout.spec.js`
+
+**Чтобы не повторилось:** не возвращать progress inset >2px без явного UX-запроса; nav bottom gap и nav total height только через `mobileChromeTokens.js`; не уменьшать like ниже 18px/12px gap без проверки swipe regression.
+
+---
+
 ## 2026-06-09 — SEC-005 Phase 5 ENFORCE staging closed on VPS
 
 **Status:** accepted  

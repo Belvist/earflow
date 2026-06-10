@@ -72,10 +72,10 @@ export const MiniPlayerShell = styled(motion.div)`
   ` : css`
     height: var(--mobile-mini-player-height, 56px);
     max-height: var(--mobile-mini-player-height, 56px);
-    left: max(10px, env(safe-area-inset-left, 0px));
-    right: max(10px, env(safe-area-inset-right, 0px));
+    left: max(var(--mobile-chrome-side-inset, 10px), env(safe-area-inset-left, 0px));
+    right: max(var(--mobile-chrome-side-inset, 10px), env(safe-area-inset-right, 0px));
     width: auto;
-    max-width: calc(100vw - 20px);
+    max-width: calc(100vw - (var(--mobile-chrome-side-inset, 10px) * 2));
     bottom: calc(
       var(--mobile-bottom-nav-height, 48px)
       + var(--mobile-mini-player-float-gap, 0px)
@@ -114,7 +114,9 @@ export const MiniPlayerContent = styled.div`
     height: 100%;
   ` : css`
     padding: 0 14px;
-    height: 100%;
+    flex: 1;
+    min-height: 0;
+    height: auto;
   `)}
 `;
 
@@ -125,9 +127,17 @@ export const MiniPlayerMainRow = styled.div`
   flex: 1;
   min-width: 0;
   min-height: 0;
-  gap: 6px;
+  gap: 8px;
   width: 100%;
   height: 100%;
+`;
+
+/** Like + play — equal-size controls cluster. */
+export const MiniControlsCluster = styled.div`
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 8px;
 `;
 
 /** Layout-only — no pointer events; keeps swipe lane wide (INV-SHEET-010). */
@@ -136,12 +146,11 @@ export const MiniLikeSlot = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
   height: 100%;
   pointer-events: none;
 `;
 
-/** Tight 24×24 hit target — must not steal horizontal track swipes beside it. */
+/** Same footprint as MiniPlayControl — heart icon scaled to match play visual weight. */
 export const MiniLikeHit = styled(motion.button)`
   pointer-events: auto;
   flex-shrink: 0;
@@ -156,29 +165,47 @@ export const MiniLikeHit = styled(motion.button)`
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   color: ${(p) => (p.$active ? '#ff4757' : 'rgba(255, 255, 255, 0.72)')};
-  width: 24px;
-  height: 24px;
-  min-width: 24px;
-  min-height: 24px;
-  max-width: 24px;
-  max-height: 24px;
   border-radius: 50%;
   overflow: hidden;
 
+  ${(p) => (p.$variant === MINI_BAR_VARIANT.CLASSIC ? css`
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+    min-height: 30px;
+    max-width: 30px;
+    max-height: 30px;
+
+    svg {
+      width: 16px;
+      height: 16px;
+    }
+  ` : css`
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    min-height: 42px;
+    max-width: 42px;
+    max-height: 42px;
+
+    svg {
+      width: 24px;
+      height: 24px;
+    }
+  `)}
+
   svg {
-    width: 15px;
-    height: 15px;
     flex-shrink: 0;
     pointer-events: none;
   }
 
   &:active {
-    transform: scale(0.9);
+    transform: scale(0.94);
   }
 
   &:focus-visible {
     outline: 2px solid rgba(255, 255, 255, 0.35);
-    outline-offset: 1px;
+    outline-offset: 2px;
     border-radius: 50%;
   }
 `;
@@ -273,10 +300,8 @@ export const MiniPlayInner = styled.div`
 `;
 
 export const ProgressBarMini = styled.div`
-  position: absolute;
   left: 0;
   right: 0;
-  bottom: 0;
   width: 100%;
   max-width: 100%;
   margin: 0;
@@ -285,18 +310,23 @@ export const ProgressBarMini = styled.div`
   overflow: hidden;
   isolation: isolate;
   pointer-events: none;
-  z-index: 10;
   --progress: 0%;
   line-height: 0;
   transform: translateZ(0);
 
   ${(p) => (p.$variant === MINI_BAR_VARIANT.CLASSIC ? css`
+    position: absolute;
+    bottom: 0;
+    z-index: 10;
     height: 2px;
     min-height: 2px;
     max-height: 2px;
     border-radius: 0;
     background: rgba(255, 255, 255, 0.28);
   ` : css`
+    position: relative;
+    flex-shrink: 0;
+    z-index: 3;
     height: ${FLOATING_PROGRESS_HEIGHT_PX}px;
     min-height: ${FLOATING_PROGRESS_HEIGHT_PX}px;
     max-height: ${FLOATING_PROGRESS_HEIGHT_PX}px;
@@ -313,7 +343,7 @@ export const ProgressFillMini = styled.div`
   display: block;
   min-width: 0;
   max-width: 100%;
-  border-radius: inherit;
+  border-radius: 0;
   background: #ffffff;
   width: var(--progress, 0%);
   transition: width 0.1s linear;
