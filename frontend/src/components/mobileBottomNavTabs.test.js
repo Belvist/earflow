@@ -1,7 +1,9 @@
 import {
   MOBILE_NAV_TAB_ORDER,
+  getNavTabIndex,
   normalizeNavTabForSwipe,
   resolveAdjacentNavTab,
+  resolveTabFromDragOffset,
 } from './mobileBottomNavTabs';
 
 describe('mobileBottomNavTabs', () => {
@@ -29,7 +31,16 @@ describe('mobileBottomNavTabs', () => {
 
   it('maps off-tab routes to home anchor for swipe', () => {
     expect(normalizeNavTabForSwipe('artists')).toBe('home');
+    expect(getNavTabIndex('artists')).toBe(0);
     expect(resolveAdjacentNavTab('artists', -1)).toBe('social');
     expect(resolveAdjacentNavTab('', -1)).toBe('social');
+  });
+
+  it('resolveTabFromDragOffset settles to nearest tab by drag distance', () => {
+    const seg = 80;
+    expect(resolveTabFromDragOffset({ activeTab: 'home', dx: -50, segmentWidthPx: seg })).toBe('social');
+    expect(resolveTabFromDragOffset({ activeTab: 'social', dx: 50, segmentWidthPx: seg })).toBe('home');
+    expect(resolveTabFromDragOffset({ activeTab: 'home', dx: -8, segmentWidthPx: seg })).toBeNull();
+    expect(resolveTabFromDragOffset({ activeTab: 'home', dx: -20, segmentWidthPx: seg, velocityX: -700 })).toBe('social');
   });
 });

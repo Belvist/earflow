@@ -36,6 +36,20 @@
 
 ---
 
+## 2026-06-07 — Nav Liquid Glass drag (pill follow + scale + sliding chip)
+
+**Status:** accepted  
+**Area:** frontend-player | gestures  
+**Context:** v62 «свайп» был невидимым flick-switch; пользователь ожидал iOS 26 Liquid Glass — **тащишь таблетку**, она **увеличивается**, активный chip **перетекает** между слотами.
+
+**Decision:** `useMobileBottomNavSwipe` — 1:1 pill `translateX` (×0.48), `scale` до 1.07 при drag; один `ActiveIndicator` (motion) скользит по `segmentWidth`; settle через `resolveTabFromDragOffset` (fractional index + velocity). Gesture arbiter без изменений (`MOBILE_BOTTOM_NAV`).
+
+**Files touched:** `MobileBottomNav.js`, `useMobileBottomNavSwipe.js`, `mobileBottomNavTabs.js`
+
+**Build hint:** `2026-06-v63-nav-liquid-drag`
+
+---
+
 ## 2026-06-07 — Nav pill full-bleed (side inset sync with mini-bar)
 
 **Status:** accepted  

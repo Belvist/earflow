@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useRef } from 'react';
 import styled from 'styled-components';
 import { motion } from 'framer-motion';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -18,6 +18,7 @@ import {
 import useMobileBottomNavSwipe from './useMobileBottomNavSwipe';
 
 const NAV_PILL_H_PX = MOBILE_NAV_PILL_HEIGHT_PX;
+const NAV_INNER_PAD_PX = 4;
 
 const Nav = styled.nav`
   position: fixed;
@@ -53,7 +54,7 @@ const Nav = styled.nav`
   }
 `;
 
-/** Edge-to-edge pill (minus chrome side inset) — sync with floating mini-bar margins */
+/** Liquid Glass pill — whole bar drags + scales during horizontal gesture */
 const NavPill = styled(motion.div)`
   pointer-events: auto;
   flex: 1;
@@ -61,10 +62,7 @@ const NavPill = styled(motion.div)`
   min-width: 0;
   max-width: 100%;
   height: ${NAV_PILL_H_PX}px;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  align-items: center;
-  padding: 0 4px;
+  position: relative;
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(20px) saturate(1.15);
@@ -74,6 +72,38 @@ const NavPill = styled(motion.div)`
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  transform-origin: center center;
+`;
+
+const NavPillTrack = styled.div`
+  position: relative;
+  width: 100%;
+  height: 100%;
+  padding: 0 ${NAV_INNER_PAD_PX}px;
+  box-sizing: border-box;
+`;
+
+/** Sliding active glass chip — moves with drag between tab slots */
+const ActiveIndicator = styled(motion.div)`
+  position: absolute;
+  top: ${NAV_INNER_PAD_PX}px;
+  bottom: ${NAV_INNER_PAD_PX}px;
+  left: ${NAV_INNER_PAD_PX}px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28);
+  pointer-events: none;
+  z-index: 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+`;
+
+const TabGrid = styled.div`
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: center;
+  height: 100%;
+  width: 100%;
 `;
 
 const TabButton = styled.button`
@@ -82,13 +112,27 @@ const TabButton = styled.button`
   justify-content: center;
   width: 100%;
   height: 100%;
-  min-height: ${NAV_PILL_H_PX}px;
   border: none;
   background: transparent;
-  padding: 0 2px;
+  padding: 0;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   touch-action: none;
+  color: ${(p) => (p.$lit ? 'rgba(255, 255, 255, 0.98)' : 'rgba(255, 255, 255, 0.5)')};
+  transition: color 0.14s ease;
+
+  svg {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+  }
+
+  @media (max-width: 360px) {
+    svg {
+      width: 20px;
+      height: 20px;
+    }
+  }
 
   &:active {
     opacity: 0.9;
@@ -101,47 +145,15 @@ const TabButton = styled.button`
   }
 `;
 
-/** Active segment fills grid cell — no dead space between outer pill and inner chip */
-const IconChip = styled.span`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: ${(p) => (p.$active ? '100%' : 'auto')};
-  max-width: 100%;
-  min-width: ${(p) => (p.$active ? '0' : '36px')};
-  height: ${(p) => (p.$active ? '36px' : '30px')};
-  padding: ${(p) => (p.$active ? '0' : '0 6px')};
-  border-radius: 999px;
-  border: none;
-  box-shadow: none;
-  outline: none;
-  color: ${(p) => (p.$active ? 'rgba(255, 255, 255, 0.98)' : 'rgba(255, 255, 255, 0.5)')};
-  background: ${(p) => (p.$active ? 'rgba(255, 255, 255, 0.28)' : 'transparent')};
-  transition: background 0.18s ease, color 0.18s ease, width 0.18s ease, height 0.18s ease;
-
-  @media (max-width: 360px) {
-    min-width: ${(p) => (p.$active ? '0' : '30px')};
-    height: ${(p) => (p.$active ? '34px' : '28px')};
-
-    svg {
-      width: 20px;
-      height: 20px;
-    }
-  }
-
-  svg {
-    width: 22px;
-    height: 22px;
-    flex-shrink: 0;
-  }
-`;
-
-function NavTab({ active, label, onClick, onSuppressTap, children }) {
+function NavTab({
+  active, lit, label, onClick, onSuppressTap, children,
+}) {
   return (
     <TabButton
       type="button"
       aria-current={active ? 'page' : undefined}
       aria-label={label}
+      $lit={lit}
       onClick={(e) => {
         if (onSuppressTap?.()) {
           e.preventDefault();
@@ -151,14 +163,20 @@ function NavTab({ active, label, onClick, onSuppressTap, children }) {
         onClick();
       }}
     >
-      <IconChip $active={active} aria-hidden="true">
-        {children}
-      </IconChip>
+      {children}
     </TabButton>
   );
 }
 
+const NAV_TABS = [
+  { id: 'home', label: 'Главная', icon: HiOutlineHome },
+  { id: 'social', label: 'Соцсеть', icon: HiOutlineUserGroup },
+  { id: 'search', label: 'Поиск', icon: HiOutlineMagnifyingGlass },
+  { id: 'profile', label: 'Аккаунт', icon: HiOutlineUser },
+];
+
 export default function MobileBottomNav() {
+  const pillRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated } = useAuth();
@@ -194,57 +212,70 @@ export default function MobileBottomNav() {
 
   const {
     captureHandlers: navSwipeHandlers,
-    pillShift,
+    dragVisual,
+    segmentWidthPx,
+    litTabIndex,
+    indicatorX,
     gestureSurfaceAttr,
     suppressTapIfSwipeCommitted,
   } = useMobileBottomNavSwipe({
+    pillRef,
     activeTab: active,
     onSelectTab: selectTab,
   });
 
+  const indicatorWidth = Math.max(0, segmentWidthPx - 2);
+
   return (
     <Nav aria-label="Навигация" data-testid="mobile-bottom-nav">
       <NavPill
+        ref={pillRef}
         data-testid="mobile-bottom-nav-pill"
-        style={pillShift}
         {...gestureSurfaceAttr}
+        animate={{
+          x: dragVisual.pillX,
+          scale: dragVisual.scale,
+        }}
+        transition={
+          dragVisual.active
+            ? { duration: 0 }
+            : { type: 'spring', stiffness: 520, damping: 34, mass: 0.82 }
+        }
         onPointerDownCapture={navSwipeHandlers.onPointerDownCapture}
         onPointerMoveCapture={navSwipeHandlers.onPointerMoveCapture}
         onPointerUpCapture={navSwipeHandlers.onPointerUpCapture}
         onPointerCancelCapture={navSwipeHandlers.onPointerCancelCapture}
       >
-        <NavTab
-          active={active === 'home'}
-          label="Главная"
-          onSuppressTap={suppressTapIfSwipeCommitted}
-          onClick={() => navigate('/')}
-        >
-          <HiOutlineHome />
-        </NavTab>
-        <NavTab
-          active={active === 'social'}
-          label="Соцсеть"
-          onSuppressTap={suppressTapIfSwipeCommitted}
-          onClick={() => navigate('/social')}
-        >
-          <HiOutlineUserGroup />
-        </NavTab>
-        <NavTab
-          active={active === 'search'}
-          label="Поиск"
-          onSuppressTap={suppressTapIfSwipeCommitted}
-          onClick={() => navigate('/search')}
-        >
-          <HiOutlineMagnifyingGlass />
-        </NavTab>
-        <NavTab
-          active={active === 'profile'}
-          label="Аккаунт"
-          onSuppressTap={suppressTapIfSwipeCommitted}
-          onClick={goProfile}
-        >
-          <HiOutlineUser />
-        </NavTab>
+        <NavPillTrack>
+          {indicatorWidth > 0 ? (
+            <ActiveIndicator
+              data-testid="mobile-bottom-nav-indicator"
+              animate={{ x: indicatorX, width: indicatorWidth }}
+              transition={
+                dragVisual.active
+                  ? { duration: 0 }
+                  : { type: 'spring', stiffness: 480, damping: 32, mass: 0.78 }
+              }
+            />
+          ) : null}
+          <TabGrid>
+            {NAV_TABS.map((tab, index) => {
+              const Icon = tab.icon;
+              return (
+                <NavTab
+                  key={tab.id}
+                  active={active === tab.id}
+                  lit={litTabIndex === index}
+                  label={tab.label}
+                  onSuppressTap={suppressTapIfSwipeCommitted}
+                  onClick={() => selectTab(tab.id)}
+                >
+                  <Icon />
+                </NavTab>
+              );
+            })}
+          </TabGrid>
+        </NavPillTrack>
       </NavPill>
     </Nav>
   );

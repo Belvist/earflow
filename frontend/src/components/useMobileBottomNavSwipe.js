@@ -1,9 +1,12 @@
-import { useCallback, useRef } from 'react';
-import { useAnimation } from 'framer-motion';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import {
   GESTURE_AXIS,
   IOS_GESTURE,
-  shouldCommitHorizontalSwipe,
 } from '../utils/gestureIntent';
 import {
   GESTURE_CAPTURE_POLICY,
@@ -12,54 +15,116 @@ import {
 } from '../gestures/gestureContracts';
 import { GESTURE_PROFILE } from '../gestures/gestureProfiles';
 import { usePointerGestureMachine } from '../gestures/usePointerGestureMachine';
-import { normalizeNavTabForSwipe, resolveAdjacentNavTab } from './mobileBottomNavTabs';
+import {
+  getNavTabIndex,
+  resolveTabFromDragOffset,
+} from './mobileBottomNavTabs';
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
-/** Nav pill is short — lower threshold than album/mini track swipe (52px). */
-const NAV_SWIPE_DISTANCE_PX = 28;
-const NAV_SWIPE_MIN_TRAVEL_PX = 10;
-const NAV_SWIPE_FLICK_TRAVEL_PX = 8;
+const PILL_DRAG_FOLLOW = 0.48;
+const PILL_SCALE_MAX = 0.07;
+const INDICATOR_RUBBER = 1.15;
+
+const IDLE_DRAG = Object.freeze({
+  active: false,
+  pillX: 0,
+  scale: 1,
+  indicatorOffsetPx: 0,
+  visualIndex: 0,
+});
 
 /**
- * iOS-style horizontal swipe on bottom nav pill — adjacent tab only (INV-GESTURE-011).
- * One surface via usePointerGestureMachine; taps still reach TabButton when travel < slop.
+ * iOS Liquid Glass tab bar drag — pill follows finger, scales up, indicator slides between tabs.
+ * INV-GESTURE-011: single surface via usePointerGestureMachine.
  */
 export default function useMobileBottomNavSwipe({
+  pillRef,
   activeTab = '',
   onSelectTab,
   disabled = false,
 } = {}) {
   const swipeCommittedRef = useRef(false);
-  const pillShift = useAnimation();
+  const pillWidthRef = useRef(0);
+  const activeIndex = Math.max(0, getNavTabIndex(activeTab));
 
-  const resetShift = useCallback(() => {
-    pillShift.set({ x: 0 });
-  }, [pillShift]);
+  const [segmentWidthPx, setSegmentWidthPx] = useState(0);
+  const [dragVisual, setDragVisual] = useState(IDLE_DRAG);
 
-  const handleActiveMove = useCallback(({ dx, intent }) => {
-    if (intent !== GESTURE_AXIS.HORIZONTAL) return;
-    pillShift.set({ x: clamp(dx * 0.18, -28, 28) });
-  }, [pillShift]);
+  useEffect(() => {
+    const node = pillRef?.current;
+    if (!node || typeof ResizeObserver === 'undefined') return undefined;
 
-  const handleCommit = useCallback(({ dx, dy, intent, state }) => {
-    resetShift();
-    if (intent !== GESTURE_AXIS.HORIZONTAL) return;
+    const measure = (width) => {
+      const w = Math.max(0, Math.floor(width));
+      pillWidthRef.current = w;
+      setSegmentWidthPx(w > 0 ? w / 4 : 0);
+    };
 
-    const direction = shouldCommitHorizontalSwipe({
-      dx,
-      dy,
-      velocityX: state.velocityX,
-      velocityY: state.velocityY,
-      distancePx: NAV_SWIPE_DISTANCE_PX,
-      minTravelPx: NAV_SWIPE_MIN_TRAVEL_PX,
-      flickTravelPx: NAV_SWIPE_FLICK_TRAVEL_PX,
+    measure(node.getBoundingClientRect().width);
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      measure(entry.contentRect.width);
     });
-    const nextTab = resolveAdjacentNavTab(activeTab, direction);
-    if (!nextTab) return;
-    swipeCommittedRef.current = true;
-    onSelectTab?.(nextTab);
-  }, [activeTab, onSelectTab, resetShift]);
+    ro.observe(node);
+    return () => ro.disconnect();
+  }, [pillRef]);
+
+  const applyDragFrame = useCallback((dx, intent) => {
+    const seg = pillWidthRef.current > 0 ? pillWidthRef.current / 4 : segmentWidthPx;
+    if (!seg || intent !== GESTURE_AXIS.HORIZONTAL) return;
+
+    const maxTravel = seg * INDICATOR_RUBBER;
+    const dxClamped = clamp(dx, -maxTravel, maxTravel);
+    const progress = Math.min(1, Math.abs(dxClamped) / (seg * 0.9));
+    const scale = 1 + progress * PILL_SCALE_MAX;
+    const pillX = dxClamped * PILL_DRAG_FOLLOW;
+    const indicatorOffsetPx = -dxClamped;
+    const visualIndex = clamp(activeIndex - dxClamped / seg, 0, 3);
+
+    setDragVisual({
+      active: true,
+      pillX,
+      scale,
+      indicatorOffsetPx,
+      visualIndex,
+    });
+  }, [activeIndex, segmentWidthPx]);
+
+  const resetDragVisual = useCallback((visualIndex = activeIndex) => {
+    setDragVisual({
+      active: false,
+      pillX: 0,
+      scale: 1,
+      indicatorOffsetPx: 0,
+      visualIndex,
+    });
+  }, [activeIndex]);
+
+  const handleCommit = useCallback(({ dx, intent, state }) => {
+    const seg = pillWidthRef.current > 0 ? pillWidthRef.current / 4 : segmentWidthPx;
+
+    if (intent !== GESTURE_AXIS.HORIZONTAL || !seg) {
+      resetDragVisual(activeIndex);
+      return;
+    }
+
+    const nextTab = resolveTabFromDragOffset({
+      activeTab,
+      dx,
+      segmentWidthPx: seg,
+      velocityX: state.velocityX,
+    });
+
+    if (nextTab) {
+      swipeCommittedRef.current = true;
+      onSelectTab?.(nextTab);
+    }
+
+    const nextIndex = nextTab ? getNavTabIndex(nextTab) : activeIndex;
+    resetDragVisual(nextIndex);
+  }, [activeIndex, activeTab, onSelectTab, resetDragVisual, segmentWidthPx]);
 
   const suppressTapIfSwipeCommitted = useCallback(() => {
     if (!swipeCommittedRef.current) return false;
@@ -76,9 +141,9 @@ export default function useMobileBottomNavSwipe({
     dominance: IOS_GESTURE.dominance,
     disabled,
     shouldActivate: ({ intent }) => intent === GESTURE_AXIS.HORIZONTAL,
-    onActiveMove: handleActiveMove,
+    onActiveMove: ({ dx, intent }) => applyDragFrame(dx, intent),
     onCommit: handleCommit,
-    onCancel: resetShift,
+    onCancel: () => resetDragVisual(activeIndex),
   });
 
   const wrapHandler = (handler) => (event) => {
@@ -88,7 +153,6 @@ export default function useMobileBottomNavSwipe({
     handler?.(event);
   };
 
-  /** Capture phase — TabButton touch-action must not eat moves before the pill sees them. */
   const captureHandlers = {
     onPointerDownCapture: wrapHandler(machineHandlers.onPointerDown),
     onPointerMoveCapture: wrapHandler(machineHandlers.onPointerMove),
@@ -96,11 +160,20 @@ export default function useMobileBottomNavSwipe({
     onPointerCancelCapture: wrapHandler(machineHandlers.onPointerCancel),
   };
 
+  const litTabIndex = dragVisual.active
+    ? Math.round(dragVisual.visualIndex)
+    : activeIndex;
+
+  const indicatorX = (activeIndex * segmentWidthPx) + dragVisual.indicatorOffsetPx;
+
   return {
     captureHandlers,
-    pillShift,
+    dragVisual,
+    segmentWidthPx,
+    activeIndex,
+    litTabIndex,
+    indicatorX,
     suppressTapIfSwipeCommitted,
-    swipeAnchorTab: normalizeNavTabForSwipe(activeTab),
     gestureSurfaceAttr: { [GESTURE_DATA_ATTRIBUTE.SURFACE]: GESTURE_SURFACE.MOBILE_BOTTOM_NAV },
   };
 }
