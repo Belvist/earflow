@@ -45,7 +45,7 @@
 | Gateway mint | auth-e2e |
 | Stream ACCEPT dual-mode | auth-e2e (`verify:stream-ticket-accept`) |
 | Frontend `?st=` attach | opt-in `REACT_APP_STREAM_TICKET_MINT_ENABLED=1` |
-| Prod ACCEPT / ENFORCE | intentionally off |
+| Prod ACCEPT / ENFORCE | Phase 6 tooling ready; **off** until `run:sec005-phase6-prod-accept` |
 | WS connect opaque ticket | Phase 8 |
 
 **Gate:** auth-e2e overlay + `npm run verify:auth-kit -- --with-e2e`
@@ -131,7 +131,31 @@ bash scripts/verify-prod-auth-gate.sh
 # manual: run-auth-proof-token-browser-dod.sh if not run recently
 ```
 
-**`.env` на prod не трогать**, если restore уже показывал пустые `STREAM_TICKET_*`.
+**`.env` на prod не трогать** для stream flags — Phase 6 включает overlay `docker-compose.stream-prod-accept.yml`, не правки `.env`.
+
+Phase 6 prod ACCEPT (после staging 4+5):
+
+```bash
+bash scripts/restore-prod-after-auth-e2e.sh   # если недавно был DoD/e2e
+SEC005_PHASE6_CONFIRM=1 npm run run:sec005-phase6-prod-accept
+```
+
+Rollback: `SEC005_ROLLBACK_CONFIRM=1 npm run rollback:sec005-phase6-prod`
+
+---
+
+## Auth Kit как протокол (будущее — «как Telegram»)
+
+Level 1 уже даёт **контракт API**, который можно вынести в отдельный пакет / микросервис:
+
+| Слой | Контракт | Статус |
+|------|----------|--------|
+| Session + PoP | ECDSA device proof, proof access token, epoch revoke | prod |
+| Step-up | `MFA_STEP_UP_REQUIRED`, fresh-login guard | prod (sessions UI) |
+| Stream transport | scoped tickets mint/consume, dual-mode → ENFORCE | Phase 6–7 prod |
+| New-session confirm | **Telegram bot** (SEC-007), не email alerts | deferred |
+
+**Не обещаем «Telegram-level» сегодня** — это Wave C + SEC-007 после transport ENFORCE. Архитектура (gateway mint, opaque tickets, pub/sub revoke) совместима с вынесением в отдельный auth-protocol service позже.
 
 ---
 

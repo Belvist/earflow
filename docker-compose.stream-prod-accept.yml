@@ -1,0 +1,46 @@
+# SEC-005 Phase 6 — prod ACCEPT dual-mode (mint + ?st= + legacy cookie).
+# NOT ENFORCE — legacy mp_stream / mp_hls still work alongside tickets.
+#
+# Usage (VPS, after Phase 4+5 staging PASS):
+#   cd /opt/music-platform
+#   SEC005_PHASE6_CONFIRM=1 npm run run:sec005-phase6-prod-accept
+#
+# Rollback to prod norm (mint off, flags off):
+#   SEC005_ROLLBACK_CONFIRM=1 npm run rollback:sec005-phase6-prod
+#
+# Do NOT combine with docker-compose.auth-e2e.yml.
+# After auth-e2e / browser DoD: bash scripts/restore-prod-after-auth-e2e.sh first.
+
+services:
+  api-gateway:
+    environment:
+      STREAM_TICKET_ENABLED: "1"
+      STREAM_TICKET_OBSERVE: "0"
+      PROOF_ACCESS_TOKEN_ENABLED: ${PROOF_ACCESS_TOKEN_ENABLED:-1}
+
+  frontend:
+    build:
+      args:
+        REACT_APP_STREAM_TICKET_MINT_ENABLED: "1"
+        REACT_APP_PROOF_ACCESS_TOKEN_ENABLED: "1"
+        REACT_APP_DEVICE_PROOF_REQUIRED: "1"
+    environment:
+      EARFLOW_API_BASE_URL: ""
+
+  direct-stream-service:
+    environment:
+      STREAM_TICKET_ACCEPT: "1"
+      STREAM_TICKET_ENFORCE: "0"
+      STREAM_TICKET_JWT_SECRET: ${JWT_SECRET}
+      STREAM_TICKET_AUTH_REDIS_HOST: redis-auth
+      STREAM_TICKET_AUTH_REDIS_PORT: 6379
+      STREAM_TICKET_AUTH_REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+
+  ebap-hls-adapter:
+    environment:
+      STREAM_TICKET_ACCEPT: "1"
+      STREAM_TICKET_ENFORCE: "0"
+      STREAM_TICKET_JWT_SECRET: ${JWT_SECRET}
+      STREAM_TICKET_AUTH_REDIS_HOST: redis-auth
+      STREAM_TICKET_AUTH_REDIS_PORT: 6379
+      STREAM_TICKET_AUTH_REDIS_PASSWORD: ${REDIS_PASSWORD:-}
