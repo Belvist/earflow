@@ -2,6 +2,9 @@
 # MUSIC PLATFORM - GITIGNORE
 # ═══════════════════════════════════════════════════════════════
 
+# SEC-005 Phase 6 prod overlay symlink (created on VPS by run-sec005-phase6-prod-accept)
+docker-compose.override.yml
+
 # ────────────────────────────────────────────────────────────────
 # DEPENDENCIES
 # ────────────────────────────────────────────────────────────────

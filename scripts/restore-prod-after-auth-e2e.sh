@@ -55,6 +55,13 @@ if [[ "${SEC005_PROD_MODE:-}" == "phase6" || "${SEC005_PROD_MODE:-}" == "split" 
   log "RESTORE_PROD_CONFIRM=1 — proceeding (will return to stream ticket norm / mint:0 frontend)"
 fi
 
+# shellcheck source=scripts/sec005-phase6-overlay.sh
+source "$ROOT/scripts/sec005-phase6-overlay.sh"
+if sec005_phase6_overlay_active "$ROOT"; then
+  sec005_phase6_overlay_disable "$ROOT" || true
+  log "removed Phase 6 docker-compose.override.yml symlink"
+fi
+
 log "stop auth-e2e edge (port 18080) if running"
 "${COMPOSE_E2E[@]}" stop auth-e2e-edge 2>/dev/null || true
 "${COMPOSE_E2E[@]}" rm -f auth-e2e-edge 2>/dev/null || true
