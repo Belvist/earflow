@@ -16,94 +16,98 @@ import {
 import { GESTURE_PROFILE } from '../gestures/gestureProfiles';
 import { usePointerGestureMachine } from '../gestures/usePointerGestureMachine';
 import {
+  getNavTabCount,
   getNavTabIndex,
   resolveTabFromDragOffset,
 } from './mobileBottomNavTabs';
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
-const PILL_DRAG_FOLLOW = 0.48;
-const PILL_SCALE_MAX = 0.07;
-const INDICATOR_RUBBER = 1.15;
+const PILL_SCALE_MAX = 0.05;
+const INDICATOR_RUBBER = 1.12;
 
 const IDLE_DRAG = Object.freeze({
   active: false,
-  pillX: 0,
   scale: 1,
-  indicatorOffsetPx: 0,
+  indicatorX: 0,
   visualIndex: 0,
 });
 
 /**
- * iOS Liquid Glass tab bar drag — pill follows finger, scales up, indicator slides between tabs.
- * INV-GESTURE-011: single surface via usePointerGestureMachine.
+ * Liquid Glass tab drag — scale pill + sliding chip inside (chip never leaves pill).
+ * INV-GESTURE-011: usePointerGestureMachine only.
  */
 export default function useMobileBottomNavSwipe({
-  pillRef,
+  trackRef,
   activeTab = '',
   onSelectTab,
   disabled = false,
+  innerPadPx = 4,
 } = {}) {
   const swipeCommittedRef = useRef(false);
-  const pillWidthRef = useRef(0);
+  const segmentWidthRef = useRef(0);
   const activeIndex = Math.max(0, getNavTabIndex(activeTab));
+  const tabCount = getNavTabCount();
 
   const [segmentWidthPx, setSegmentWidthPx] = useState(0);
   const [dragVisual, setDragVisual] = useState(IDLE_DRAG);
 
+  const measureSegments = useCallback(() => {
+    const node = trackRef?.current;
+    if (!node) return;
+    const w = Math.max(0, Math.floor(node.getBoundingClientRect().width));
+    const seg = w > 0 ? w / tabCount : 0;
+    segmentWidthRef.current = seg;
+    setSegmentWidthPx(seg);
+  }, [tabCount, trackRef]);
+
   useEffect(() => {
-    const node = pillRef?.current;
+    measureSegments();
+    const node = trackRef?.current;
     if (!node || typeof ResizeObserver === 'undefined') return undefined;
-
-    const measure = (width) => {
-      const w = Math.max(0, Math.floor(width));
-      pillWidthRef.current = w;
-      setSegmentWidthPx(w > 0 ? w / 4 : 0);
-    };
-
-    measure(node.getBoundingClientRect().width);
-    const ro = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (!entry) return;
-      measure(entry.contentRect.width);
-    });
+    const ro = new ResizeObserver(() => measureSegments());
     ro.observe(node);
     return () => ro.disconnect();
-  }, [pillRef]);
+  }, [measureSegments, trackRef]);
 
-  const applyDragFrame = useCallback((dx, intent) => {
-    const seg = pillWidthRef.current > 0 ? pillWidthRef.current / 4 : segmentWidthPx;
-    if (!seg || intent !== GESTURE_AXIS.HORIZONTAL) return;
+  const baseIndicatorX = activeIndex * segmentWidthPx;
 
-    const maxTravel = seg * INDICATOR_RUBBER;
-    const dxClamped = clamp(dx, -maxTravel, maxTravel);
-    const progress = Math.min(1, Math.abs(dxClamped) / (seg * 0.9));
-    const scale = 1 + progress * PILL_SCALE_MAX;
-    const pillX = dxClamped * PILL_DRAG_FOLLOW;
-    const indicatorOffsetPx = -dxClamped;
-    const visualIndex = clamp(activeIndex - dxClamped / seg, 0, 3);
-
+  const resetDragVisual = useCallback((index = activeIndex) => {
+    const seg = segmentWidthRef.current || segmentWidthPx;
     setDragVisual({
-      active: true,
-      pillX,
-      scale,
-      indicatorOffsetPx,
-      visualIndex,
+      active: false,
+      scale: 1,
+      indicatorX: index * seg,
+      visualIndex: index,
     });
   }, [activeIndex, segmentWidthPx]);
 
-  const resetDragVisual = useCallback((visualIndex = activeIndex) => {
+  useEffect(() => {
+    resetDragVisual(activeIndex);
+  }, [activeIndex, segmentWidthPx, resetDragVisual]);
+
+  const applyDragFrame = useCallback((dx, intent) => {
+    const seg = segmentWidthRef.current || segmentWidthPx;
+    if (!seg || intent !== GESTURE_AXIS.HORIZONTAL) return;
+
+    const maxOffset = seg * INDICATOR_RUBBER;
+    const dxClamped = clamp(dx, -maxOffset, maxOffset);
+    const progress = Math.min(1, Math.abs(dxClamped) / (seg * 0.85));
+    const scale = 1 + progress * PILL_SCALE_MAX;
+    const maxX = Math.max(0, (tabCount - 1) * seg);
+    const indicatorX = clamp(baseIndicatorX - dxClamped, 0, maxX);
+    const visualIndex = clamp(indicatorX / seg, 0, tabCount - 1);
+
     setDragVisual({
-      active: false,
-      pillX: 0,
-      scale: 1,
-      indicatorOffsetPx: 0,
+      active: true,
+      scale,
+      indicatorX,
       visualIndex,
     });
-  }, [activeIndex]);
+  }, [baseIndicatorX, segmentWidthPx, tabCount]);
 
   const handleCommit = useCallback(({ dx, intent, state }) => {
-    const seg = pillWidthRef.current > 0 ? pillWidthRef.current / 4 : segmentWidthPx;
+    const seg = segmentWidthRef.current || segmentWidthPx;
 
     if (intent !== GESTURE_AXIS.HORIZONTAL || !seg) {
       resetDragVisual(activeIndex);
@@ -164,15 +168,15 @@ export default function useMobileBottomNavSwipe({
     ? Math.round(dragVisual.visualIndex)
     : activeIndex;
 
-  const indicatorX = (activeIndex * segmentWidthPx) + dragVisual.indicatorOffsetPx;
+  const indicatorX = dragVisual.active ? dragVisual.indicatorX : baseIndicatorX;
 
   return {
     captureHandlers,
     dragVisual,
     segmentWidthPx,
-    activeIndex,
     litTabIndex,
     indicatorX,
+    innerPadPx,
     suppressTapIfSwipeCommitted,
     gestureSurfaceAttr: { [GESTURE_DATA_ATTRIBUTE.SURFACE]: GESTURE_SURFACE.MOBILE_BOTTOM_NAV },
   };
