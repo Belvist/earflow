@@ -135,6 +135,46 @@ func (s *Store) UpsertDevice(ctx context.Context, p DeviceUpsertParams) error {
 	return s.AppendEvent(ctx, p.UserID, sid, id, EventDeviceUpsert, map[string]any{"authDeviceId": id})
 }
 
+// ActiveAuthDeviceRow is a non-revoked PoP device row for list UI.
+type ActiveAuthDeviceRow struct {
+	AuthDeviceID string
+	SID          string
+	UserAgent    string
+	CreatedAt    time.Time
+	LastSeenAt   time.Time
+}
+
+// ListActiveAuthDevices returns non-revoked auth_devices for a user (PG SoT).
+func (s *Store) ListActiveAuthDevices(ctx context.Context, userID int64) ([]ActiveAuthDeviceRow, error) {
+	if s == nil || s.pool == nil || userID <= 0 {
+		return nil, errors.New("authpg store unavailable")
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT auth_device_id, sid, COALESCE(user_agent, ''), created_at, last_seen_at
+		FROM auth_devices
+		WHERE user_id = $1 AND revoked_at IS NULL
+		ORDER BY last_seen_at DESC NULLS LAST, created_at DESC
+	`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list auth_devices: %w", err)
+	}
+	defer rows.Close()
+	out := make([]ActiveAuthDeviceRow, 0, 8)
+	for rows.Next() {
+		var row ActiveAuthDeviceRow
+		if err := rows.Scan(&row.AuthDeviceID, &row.SID, &row.UserAgent, &row.CreatedAt, &row.LastSeenAt); err != nil {
+			return nil, err
+		}
+		row.AuthDeviceID = strings.TrimSpace(row.AuthDeviceID)
+		row.SID = strings.TrimSpace(row.SID)
+		if row.AuthDeviceID == "" {
+			continue
+		}
+		out = append(out, row)
+	}
+	return out, rows.Err()
+}
+
 // ListActiveSessionSIDs returns non-revoked session ids for a user (PG SoT read for dual_write revoke/list).
 func (s *Store) ListActiveSessionSIDs(ctx context.Context, userID int64) ([]string, error) {
 	if s == nil || s.pool == nil || userID <= 0 {

@@ -50,6 +50,23 @@ else
   fail "revoke-all route missing in security-service"
 fi
 
+if grep -q 'listAuthDevicesHandler' "$ROOT/backend/security-service/internal/httpapi/server.go" 2>/dev/null; then
+  pass "GET /api/auth/devices registered"
+else
+  fail "auth devices route missing in security-service"
+fi
+
+if [[ -f "$ROOT/backend/device-sync-service/internal/streamticket/verifier.go" ]]; then
+  pass "SEC-005 Phase 8 device-sync streamticket verifier"
+else
+  fail "device-sync streamticket verifier missing"
+fi
+
+check_file "frontend/src/components/Settings/PasswordChangeSection.js" "Password change UI"
+check_file "frontend/src/components/Settings/AuthDevicesSection.js" "Auth devices UI"
+check_file "frontend/src/components/Settings/TelegramUnlinkSection.js" "Telegram unlink UI"
+check_file "scripts/verify-stream-ticket-ws-accept.sh" "WS accept gate script"
+
 if grep -q 'FRESH_LOGIN_REQUIRED' "$ROOT/backend/security-service/internal/httpapi/helpers_sessions.go" 2>/dev/null; then
   pass "fresh-login guard (FRESH_LOGIN_REQUIRED)"
 else
@@ -157,6 +174,11 @@ if [[ "$WITH_E2E" == "true" ]]; then
     pass "verify-stream-ticket-accept.sh"
   else
     fail "verify-stream-ticket-accept.sh"
+  fi
+  if bash "$ROOT/scripts/verify-stream-ticket-ws-accept.sh"; then
+    pass "verify-stream-ticket-ws-accept.sh (Phase 8 WS)"
+  else
+    fail "verify-stream-ticket-ws-accept.sh (Phase 8 WS)"
   fi
 else
   skip "auth-e2e stream accept (pass --with-e2e on VPS after overlay)"

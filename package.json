@@ -36,6 +36,8 @@
     "verify:stream-ticket-phase7-prod": "bash scripts/verify-stream-ticket-phase7-prod.sh",
     "run:sec005-phase7-prod-enforce": "bash scripts/run-sec005-phase7-prod-enforce.sh",
     "rollback:sec005-phase7-prod": "bash scripts/rollback-sec005-phase7-prod.sh",
+    "verify:stream-ticket-ws-accept": "bash scripts/verify-stream-ticket-ws-accept.sh",
+    "run:auth-wave-b-prod-deploy": "bash scripts/run-auth-wave-b-prod-deploy.sh",
     "verify:auth-replay": "bash scripts/verify-auth-security-replay.sh",
     "verify:prod-auth-gate": "bash scripts/verify-prod-auth-gate.sh",
     "verify:auth-kit": "bash scripts/verify-auth-kit.sh",

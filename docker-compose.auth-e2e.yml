@@ -102,6 +102,15 @@ services:
       STREAM_TICKET_AUTH_REDIS_PORT: 6379
       STREAM_TICKET_AUTH_REDIS_PASSWORD: ${REDIS_PASSWORD:-}
 
+  device-sync-service:
+    environment:
+      DEVICE_SYNC_ENABLED: ${AUTH_E2E_DEVICE_SYNC_ENABLED:-1}
+      STREAM_TICKET_ACCEPT: ${STREAM_TICKET_ACCEPT:-1}
+      STREAM_TICKET_ENFORCE: ${STREAM_TICKET_ENFORCE:-0}
+      STREAM_TICKET_AUTH_REDIS_HOST: redis-auth
+      STREAM_TICKET_AUTH_REDIS_PORT: 6379
+      STREAM_TICKET_AUTH_REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+
   auth-e2e-playwright:
     profiles: [ "auth-e2e-run" ]
     image: mcr.microsoft.com/playwright:v1.48.2-jammy

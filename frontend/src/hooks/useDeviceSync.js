@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import apiClient from '../api/client';
 import { DEVICE_SYNC_ENABLED } from '../api/runtimeConfig';
+import { isStreamTicketMintEnabled, mintWsConnectStreamTicket } from '../auth/streamTicket';
 import { recordSyncEvent, updateSyncDiagnosticsState } from '../utils/syncDiagnostics';
 import { buildCommandAckFrame, buildNowPlayingWriteState, sendRealtimeJsonFrame } from './deviceSyncTransport';
 import {
@@ -439,21 +440,34 @@ export default function useDeviceSync({
                     /* WS init will fill the gap */
                 }
 
-                let ticketResp;
-                try {
-                    ticketResp = await apiClient.getDeviceWsTicket(deviceIdRef.current);
-                } catch (e) {
-                    const st = e && typeof e === 'object' ? e.status : 0;
-                    if ((st === 403 || st === 404) && allowReregisterOnTicket403) {
-                        deviceIdRef.current = null;
-                        writeStoredDeviceId(null);
-                        return attemptConnection(false);
+                let ticket = null;
+                if (isStreamTicketMintEnabled()) {
+                    try {
+                        ticket = await mintWsConnectStreamTicket({
+                            deviceId: deviceIdRef.current,
+                        });
+                    } catch {
+                        ticket = null;
                     }
-                    throw e;
+                }
+
+                if (!ticket) {
+                    let ticketResp;
+                    try {
+                        ticketResp = await apiClient.getDeviceWsTicket(deviceIdRef.current);
+                    } catch (e) {
+                        const st = e && typeof e === 'object' ? e.status : 0;
+                        if ((st === 403 || st === 404) && allowReregisterOnTicket403) {
+                            deviceIdRef.current = null;
+                            writeStoredDeviceId(null);
+                            return attemptConnection(false);
+                        }
+                        throw e;
+                    }
+                    ticket = ticketResp?.token;
                 }
 
                 if (!mountedRef.current) return;
-                const ticket = ticketResp?.token;
                 if (!ticket) throw new Error('NO_TICKET');
 
                 const url = apiClient.getDeviceWebSocketUrl(ticket);

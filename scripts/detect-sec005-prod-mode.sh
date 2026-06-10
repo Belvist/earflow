@@ -83,12 +83,16 @@ detect_sec005_prod_mode() {
   hls_accept="$(compose_read_service_env ebap-hls-adapter STREAM_TICKET_ACCEPT "${compose[@]}" 2>/dev/null || true)"
   ds_enforce="$(compose_read_service_env direct-stream-service STREAM_TICKET_ENFORCE "${compose[@]}" 2>/dev/null || true)"
   hls_enforce="$(compose_read_service_env ebap-hls-adapter STREAM_TICKET_ENFORCE "${compose[@]}" 2>/dev/null || true)"
+  dsync_accept="$(compose_read_service_env device-sync-service STREAM_TICKET_ACCEPT "${compose[@]}" 2>/dev/null || true)"
+  dsync_enforce="$(compose_read_service_env device-sync-service STREAM_TICKET_ENFORCE "${compose[@]}" 2>/dev/null || true)"
 
   export SEC005_GW_ENABLED="$gw_enabled"
   export SEC005_DS_ACCEPT="$ds_accept"
   export SEC005_HLS_ACCEPT="$hls_accept"
   export SEC005_DS_ENFORCE="$ds_enforce"
   export SEC005_HLS_ENFORCE="$hls_enforce"
+  export SEC005_DSYNC_ACCEPT="$dsync_accept"
+  export SEC005_DSYNC_ENFORCE="$dsync_enforce"
 
   if detect_sec005_bundle_mint_enabled "${LISTENER_ORIGIN:-https://earflow.ru}"; then
     mint_bundle=true

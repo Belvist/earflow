@@ -385,7 +385,59 @@ routes:
       require_service_token: true
       timeout: 10s
 
-  # Account security (sessions list/revoke) — security-service Go handlers.
+  # Account security — security-service Go handlers (must win over auth_passthrough).
+  - id: auth_2fa_recovery
+    match:
+      type: prefix
+      value: /api/auth/2fa/recovery
+    upstream: security
+    policies:
+      class: unsafe
+      require_user: true
+      timeout: 10s
+
+  - id: auth_security
+    match:
+      type: prefix
+      value: /api/auth/security
+    upstream: security
+    policies:
+      class: unsafe
+      require_user: true
+      timeout: 10s
+
+  - id: auth_password
+    match:
+      type: prefix
+      value: /api/auth/password
+    upstream: security
+    policies:
+      class: unsafe
+      require_user: true
+      timeout: 10s
+
+  - id: auth_telegram_unlink
+    methods:
+      - POST
+    match:
+      type: exact
+      value: /api/auth/telegram/unlink
+    upstream: security
+    policies:
+      class: unsafe
+      require_user: true
+      timeout: 10s
+
+  - id: auth_devices
+    match:
+      type: prefix
+      value: /api/auth/devices
+    upstream: security
+    policies:
+      class: unsafe
+      require_user: true
+      timeout: 10s
+
   - id: auth_sessions
     match:
       type: prefix

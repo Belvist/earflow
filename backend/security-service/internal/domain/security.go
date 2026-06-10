@@ -354,6 +354,69 @@ func ComputeMfaCapability(ctx SecurityContext) MfaCapability {
 	}
 }
 
+// AuthDeviceView is the client-facing decorated PoP device record.
+type AuthDeviceView struct {
+	AuthDeviceID   string `json:"authDeviceId"`
+	SID            string `json:"sid"`
+	Current        bool   `json:"current"`
+	SessionCurrent bool   `json:"sessionCurrent"`
+	Device         string `json:"device"`
+	DeviceType     string `json:"deviceType"`
+	CreatedAt      string `json:"createdAt,omitempty"`
+	LastSeenAt     string `json:"lastSeenAt,omitempty"`
+	CreatedAtLabel string `json:"createdAtLabel"`
+	LastSeenLabel  string `json:"lastSeenLabel"`
+}
+
+// DecorateAuthDevice turns a raw auth device row into a client-ready view.
+func DecorateAuthDevice(
+	authDeviceID, sid, ua, currentAuthDeviceID, currentSID string,
+	createdAt, lastSeenAt time.Time,
+	now time.Time,
+) AuthDeviceView {
+	createdRFC := ""
+	if !createdAt.IsZero() {
+		createdRFC = createdAt.UTC().Format(time.RFC3339)
+	}
+	lastRFC := ""
+	if !lastSeenAt.IsZero() {
+		lastRFC = lastSeenAt.UTC().Format(time.RFC3339)
+	}
+	return AuthDeviceView{
+		AuthDeviceID:   authDeviceID,
+		SID:            sid,
+		Current:        authDeviceID != "" && authDeviceID == currentAuthDeviceID,
+		SessionCurrent: sid != "" && sid == currentSID,
+		Device:         ShortUaLabel(ua),
+		DeviceType:     DetectDeviceType(ua),
+		CreatedAt:      createdRFC,
+		LastSeenAt:     lastRFC,
+		CreatedAtLabel: ifNonEmpty(FormatDateTimeShortRu(createdRFC), ""),
+		LastSeenLabel:  ifNonEmpty(FormatRelativeRu(lastRFC, now), "давно"),
+	}
+}
+
+// SortAuthDevices orders devices with current first, then session-current, then last seen desc.
+func SortAuthDevices(in []AuthDeviceView) {
+	sort.SliceStable(in, func(i, j int) bool {
+		if in[i].Current && !in[j].Current {
+			return true
+		}
+		if !in[i].Current && in[j].Current {
+			return false
+		}
+		if in[i].SessionCurrent && !in[j].SessionCurrent {
+			return true
+		}
+		if !in[i].SessionCurrent && in[j].SessionCurrent {
+			return false
+		}
+		ti := parseRFC3339(in[i].LastSeenAt)
+		tj := parseRFC3339(in[j].LastSeenAt)
+		return ti.After(tj)
+	})
+}
+
 // SessionView is the client-facing decorated session record.
 type SessionView struct {
 	SID              string `json:"sid"`
