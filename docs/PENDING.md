@@ -283,7 +283,8 @@ Revoke/password/email/delete — modal при `MFA_STEP_UP_REQUIRED`, не raw e
 | 3 | ACCEPT — direct-stream/ebap-hls dual-mode verify | **done (2026-06-09 VPS `f9da305`)** |
 | 4 | Frontend mint + attach (`streamTicket.js`, opt-in flag) | **closed (2026-06-09 VPS `727be49`)** — `npm run run:sec005-phase4-staging` PASS |
 | 5 | Staging ENFORCE | **closed (2026-06-09 VPS)** — `npm run run:sec005-phase5-staging` PASS |
-| 6+ | Prod ACCEPT (dual-mode) | **next** — ENFORCE stays off on prod |
+| 6 | Prod ACCEPT (dual-mode) | **tooling ready** — `npm run run:sec005-phase6-prod-accept` (not run on prod yet) |
+| 7+ | Prod ENFORCE, WS tickets | after Phase 6 soak |
 
 **VPS close report — Phase 3 ACCEPT (`ru-vmv2-mini`, 2026-06-09, git `f9da305`):**
 
@@ -306,9 +307,14 @@ COOKIE_DOMAIN:                      .earflow.ru
 bash scripts/restore-prod-after-auth-e2e.sh
 ```
 
-**Next:** Phase 6 prod ACCEPT — gateway `STREAM_TICKET_ENABLED=1`, stream services `STREAM_TICKET_ACCEPT=1`, frontend rebuild with `REACT_APP_STREAM_TICKET_MINT_ENABLED=1`. **Not** ENFORCE on prod yet.
+**Next:** run Phase 6 on VPS when ready:
 
-**Forbidden until staging gate:** prod `STREAM_TICKET_ACCEPT=1`, ENFORCE, cookie fallback removal.
+```bash
+bash scripts/restore-prod-after-auth-e2e.sh
+SEC005_PHASE6_CONFIRM=1 npm run run:sec005-phase6-prod-accept
+```
+
+**Forbidden until Phase 6 gate PASS:** prod `STREAM_TICKET_ENFORCE=1`, cookie fallback removal.
 
 **v1 scope:** listener web SPA only.
 

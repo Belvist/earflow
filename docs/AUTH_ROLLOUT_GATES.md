@@ -130,7 +130,42 @@ npm run run:sec005-phase5-staging
 
 **Forbidden:** prod `STREAM_TICKET_ENFORCE=1` until Phase 6 prod ACCEPT soak.
 
-**Universal verify discipline:** `docs/ENGINEERING_VERIFICATION_PLAYBOOK.md` + skill `engineering-verification`.
+## SEC-005 Phase 6 — prod ACCEPT (dual-mode)
+
+**Prerequisites:** Phase 4 + 5 staging PASS; `bash scripts/restore-prod-after-auth-e2e.sh` clean.
+
+```bash
+cd /opt/music-platform
+git pull origin main
+SEC005_PHASE6_CONFIRM=1 npm run run:sec005-phase6-prod-accept
+```
+
+| Check | Expect |
+|-------|--------|
+| Overlay | `docker-compose.stream-prod-accept.yml` |
+| `STREAM_TICKET_ENABLED` | `1` on api-gateway |
+| `STREAM_TICKET_ACCEPT` | `1` on direct-stream + ebap-hls |
+| `STREAM_TICKET_ENFORCE` | **off** on prod |
+| Frontend bundle | `earflow:stream-ticket-mint:1` on earflow.ru |
+| Mint endpoint | POST → **401/403** (not 404) |
+| `accept-consume.mjs` | ticket 200 + legacy cookie 200 (dual-mode) |
+| `verify-frontend-api-base` | PASS (no 127.0.0.1:18080 leak) |
+
+**Manual soak:** 30s playback on earflow.ru; Network tab may show `?st=` on stream URLs.
+
+**Rollback:**
+
+```bash
+SEC005_ROLLBACK_CONFIRM=1 npm run rollback:sec005-phase6-prod
+```
+
+**Forbidden:** Phase 7 ENFORCE until Phase 6 soak complete.
+
+## SEC-005 Phase 7 — prod ENFORCE (future)
+
+Not implemented yet. After Phase 6 soak: `STREAM_TICKET_ENFORCE=1` + verify legacy cookie → 401.
+
+**Universal verify discipline:**
 
 ## Agent checklist
 

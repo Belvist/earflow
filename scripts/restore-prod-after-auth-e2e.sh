@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Restore production api-gateway + frontend after auth-e2e DoD overlay.
+# Restore production api-gateway + frontend after auth-e2e DoD overlay
+# or SEC-005 Phase 6 rollback (see scripts/rollback-sec005-phase6-prod.sh).
 #
 # The DoD runner uses docker-compose.auth-e2e.yml which temporarily sets:
 #   frontend.EARFLOW_API_BASE_URL → http://127.0.0.1:18080
