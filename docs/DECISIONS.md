@@ -22,6 +22,20 @@
 
 ---
 
+## 2026-06-10 — Профиль → «Защита»: сессии сгруппированы по устройству
+
+**Status:** accepted  
+**Area:** auth | frontend  
+**Context:** Каждый вход создаёт новый `sid`, поэтому один браузер отображался в списке сессий 3+ раз. Параллельно во вкладке Профиль → Сессии стояли четыре независимых блока (сессии, PoP-устройства, пароль, Telegram) с дублирующейся информацией — пользователь не понимал, что есть что.  
+**Decision:** (1) `/api/auth/sessions` отдаёт `authDeviceId` для sid, привязанных к активным PoP-устройствам (`auth_devices`, PG SoT). (2) Группировка на клиенте — чистый модуль `utils/sessionDeviceGroups.js`: сначала по `authDeviceId`, непривязанные sid цепляются к bound-группе только при **однозначном** совпадении UA-метки, иначе отдельная UA-группа. (3) Один экран `SecuritySettingsSection`: карточка «Это устройство», карточки других устройств (раскрываются до списка сессий, кнопка «Завершить старые входы»), глобальные revoke-кнопки, пароль и Telegram свёрнуты в аккордеоны. `ActiveSessionsSection` и `AuthDevicesSection` удалены.  
+**Alternatives considered:** Серверная группировка/auto-revoke дублей при login — отвергнуто как второй control path поверх существующего `revokeStaleSessionForAuthDevice` (INV-ARCH-001); слепое слияние по UA — отвергнуто, два одинаковых ПК склеились бы в одно устройство.  
+**Consequences:** Одно устройство = одна карточка; дубли видны как «старых входов: N» и завершаются одной кнопкой в общем step-up окне; `SESSION_NOT_FOUND` при пакетном revoke пропускается.  
+**Files touched:** `backend/security-service/internal/domain/security.go`, `backend/security-service/internal/httpapi/helpers_sessions.go`, `frontend/src/utils/sessionDeviceGroups.js`, `frontend/src/components/Settings/SecuritySettingsSection.js`, `frontend/src/components/ProfilePage.js`  
+**Tests:** `frontend/src/utils/sessionDeviceGroups.test.js`, `go test ./internal/...` (security-service)  
+**Чтобы не повторилось:** не отображать сырой список sid пользователю; клиентская группировка — presentation-only, источник правды о сессиях остаётся backend.
+
+---
+
 ## 2026-06-10 — SEC-005 Phase 8 WS tickets + Wave B devices/password (listener)
 
 **Status:** accepted  
@@ -33,6 +47,20 @@
 **Files touched:** `backend/device-sync-service/internal/streamticket/*`, `backend/security-service/internal/httpapi/handlers_devices.go`, `frontend/src/auth/streamTicket.js`, `frontend/src/hooks/useDeviceSync.js`, `backend/go-api-gateway/gateway.yaml`, `scripts/stream-ticket-verify/ws-accept-consume.mjs`  
 **Tests:** `streamticket/verifier_test.go`, `npm run verify:stream-ticket-ws-accept`  
 **Чтобы не повторилось:** WS mint requires **full PoP** at gateway (`kind: ws`); do not use proof-access-token-only for ws stream-ticket.
+
+---
+
+## 2026-06-10 — Mobile smoothness pass v71 (route fade, instant press, no loading flash)
+
+**Status:** accepted  
+**Area:** frontend-player | ux  
+**Context:** Пользователь: переходы/нажатия ощущаются дёргано («у телеги всё плавно»). Диагностика: (1) смена вкладки — контент появляется без перехода, fallback «Загрузка...» чёрным экраном с текстом; (2) кнопки плеера — `transition: all 0.2–0.3s` делает press-отклик вялым; (3) обложка мини-бара меняется со скачком; (4) у иконок nav нет тактильного отклика.  
+**Decision:** (a) `RouteFade` (opacity-only, 0.2s, key=pathname) вокруг listener `<Routes>` — без transform, чтобы не ломать `position: fixed` внутри страниц; (b) `LoadingContainer` — поверхность `--ef-surface-main`, появление с задержкой 0.18s (быстрые загрузки не мигают); (c) все `transition: all` в `MobilePlayerModal.styles.js` заменены на явные (`transform 0.12s` + цвет/фон) — мгновенный press; (d) nav-иконки: scale 0.82 на `:active` со spring-easing; (e) `MiniAlbumCover` fade-in 0.24s на смену трека. Gesture owner chain (`usePlayerSheetState`/`useMiniPlayerPan`) **не тронут**.  
+**Known gap (не закрыто):** `MobilePlayerModal` монтируется в момент начала свайпа мини-бара — на слабых телефонах это съедает первые кадры жеста. Фикс = pre-mount/отложенный mount в INV-SHEET зоне, отдельной задачей с `verify:player-mobile`.  
+**Files touched:** `App.js`, `MobileBottomNav.js`, `MobilePlayerModal.styles.js`, `MobilePlayerBar.styles.js`, `MobilePlayerBar/index.js`, `frontend/DEPLOY.md`  
+**Tests:** unit 249 pass; prod build ok; `validate:ai` 0 errors.  
+**Build hints:** `data-mobile-nav-ui="2026-06-v71-smooth-pass"`, `data-mini-bar-ui="2026-06-v71-smooth-pass"`  
+**Чтобы не повторилось:** новые интерактивные элементы — никаких `transition: all`; press-отклик ≤0.12s по transform.
 
 ---
 

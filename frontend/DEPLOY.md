@@ -39,9 +39,9 @@ docker compose up -d --force-recreate frontend
 
 # проверка build hints (v67+ после merge UI)
 curl -sS https://earflow.ru/ | grep -o 'data-mini-bar-ui="[^"]*"' | head -1
-# ожидаем: data-mini-bar-ui="2026-06-v70-chrome-tune"
+# ожидаем: data-mini-bar-ui="2026-06-v71-smooth-pass"
 curl -sS https://earflow.ru/ | grep -o 'data-mobile-nav-ui="[^"]*"' | head -1
-# ожидаем: data-mobile-nav-ui="2026-06-v70-chrome-tune"
+# ожидаем: data-mobile-nav-ui="2026-06-v71-smooth-pass"
 ```
 
 Если `platform-control.sh: Permission denied`:
@@ -79,10 +79,11 @@ git push origin main:frontend   # держим ветки на одном SHA
 
 Проверка на телефоне: `[data-testid="mini-player-bar"]` → `data-mini-bar-ui`.
 
-### Чеклист mobile chrome (v68)
+### Чеклист mobile chrome (v71)
 
-1. **Навбар** — solid `#0D0D0D`, **без blur и без swipe/drag**; переключение только tap по иконкам.
-2. **Мини-бар** — progress track **серый** (`rgba(255,255,255,0.22)`), fill белый; не пропадает после 5с (`useSeekableProgress`).
-3. **Лайк** — тот же размер что play (42px); optimistic toggle.
-4. **Build hints:** `data-mini-bar-ui="2026-06-v68-progress-gray-track"`, `data-mobile-nav-ui="2026-06-v68-solid-nav"`.
-5. **Токены:** `mobileChromeTokens.js` — высота nav + float gap.
+1. **Навбар** — solid `#0D0D0D` до низа экрана, tap-only; иконка сжимается при нажатии (scale 0.82) и пружинит обратно.
+2. **Переход вкладок** — новая страница появляется fade 0.2s; нет чёрного экрана «Загрузка...» при быстрой загрузке.
+3. **Мини-бар** — progress 2px серый track; обложка при смене трека появляется fade 0.24s.
+4. **Плеер (шит)** — кнопки реагируют на нажатие мгновенно (transform 0.12s, без `transition: all`).
+5. **Build hints:** `data-mini-bar-ui="2026-06-v71-smooth-pass"`, `data-mobile-nav-ui="2026-06-v71-smooth-pass"`.
+6. **Токены:** `mobileChromeTokens.js` — высота nav + float gap.
