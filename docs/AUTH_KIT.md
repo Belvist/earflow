@@ -45,7 +45,8 @@
 | Gateway mint | auth-e2e |
 | Stream ACCEPT dual-mode | auth-e2e (`verify:stream-ticket-accept`) |
 | Frontend `?st=` attach | opt-in `REACT_APP_STREAM_TICKET_MINT_ENABLED=1` |
-| Prod ACCEPT / ENFORCE | Phase 6 tooling ready; **off** until `run:sec005-phase6-prod-accept` |
+| Prod ACCEPT (dual-mode) | **prod (2026-06-10 VPS)** — `mint:1`, ACCEPT on, ENFORCE off |
+| Prod ENFORCE | after Phase 6 soak |
 | WS connect opaque ticket | Phase 8 |
 
 **Gate:** auth-e2e overlay + `npm run verify:auth-kit -- --with-e2e`

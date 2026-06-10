@@ -268,7 +268,7 @@ Revoke/password/email/delete — modal при `MFA_STEP_UP_REQUIRED`, не raw e
 ### PEND-SEC-005 — WS/HLS scoped tickets (device-bound stream auth)
 
 **Priority:** critical  
-**Status:** **Phase 4 frontend mint implemented (2026-06-09)** — staging gate + prod ACCEPT still off (`REACT_APP_STREAM_TICKET_MINT_ENABLED=0` prod norm)
+**Status:** **Phase 6 prod ACCEPT closed (2026-06-10 VPS `1852924`)** — dual-mode on prod; ENFORCE still off
 
 **Goal:** bind WS upgrade and playback bytes to epoch-aware scoped tickets; remove cookie-only sufficient auth on consume paths.
 
@@ -283,8 +283,9 @@ Revoke/password/email/delete — modal при `MFA_STEP_UP_REQUIRED`, не raw e
 | 3 | ACCEPT — direct-stream/ebap-hls dual-mode verify | **done (2026-06-09 VPS `f9da305`)** |
 | 4 | Frontend mint + attach (`streamTicket.js`, opt-in flag) | **closed (2026-06-09 VPS `727be49`)** — `npm run run:sec005-phase4-staging` PASS |
 | 5 | Staging ENFORCE | **closed (2026-06-09 VPS)** — `npm run run:sec005-phase5-staging` PASS |
-| 6 | Prod ACCEPT (dual-mode) | **tooling ready** — `npm run run:sec005-phase6-prod-accept` (not run on prod yet) |
-| 7+ | Prod ENFORCE, WS tickets | after Phase 6 soak |
+| 6 | Prod ACCEPT (dual-mode) | **closed (2026-06-10 VPS `1852924`)** — `verify:stream-ticket-phase6-prod` PASS |
+| 7 | Prod ENFORCE | **next** — after soak |
+| 8 | WS connect tickets | after Phase 7 |
 
 **VPS close report — Phase 3 ACCEPT (`ru-vmv2-mini`, 2026-06-09, git `f9da305`):**
 
@@ -307,14 +308,21 @@ COOKIE_DOMAIN:                      .earflow.ru
 bash scripts/restore-prod-after-auth-e2e.sh
 ```
 
-**Next:** run Phase 6 on VPS when ready:
+**VPS close report — Phase 6 prod ACCEPT (`ru-vmv2-mini`, 2026-06-10, git `1852924`):**
 
-```bash
-bash scripts/restore-prod-after-auth-e2e.sh
-SEC005_PHASE6_CONFIRM=1 npm run run:sec005-phase6-prod-accept
+```text
+verify:stream-ticket-phase6-prod:   PASS
+STREAM_TICKET_ENABLED (prod):       1 (api-gateway)
+STREAM_TICKET_ACCEPT (prod):        1 (direct-stream + ebap-hls)
+STREAM_TICKET_ENFORCE (prod):       0
+bundle main.f34684ea.js:            earflow:stream-ticket-mint:1
+accept-consume prod:                ticket 200, garbage 401, legacy cookie 200
+verify:frontend-api-base:           PASS
 ```
 
-**Forbidden until Phase 6 gate PASS:** prod `STREAM_TICKET_ENFORCE=1`, cookie fallback removal.
+**Next:** Phase 7 prod ENFORCE — only after soak (manual playback + metrics). Rollback: `SEC005_ROLLBACK_CONFIRM=1 npm run rollback:sec005-phase6-prod`.
+
+**Forbidden until Phase 7 gate:** prod `STREAM_TICKET_ENFORCE=1` without soak sign-off.
 
 **v1 scope:** listener web SPA only.
 
