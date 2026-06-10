@@ -53,10 +53,31 @@ func (d Deps) enumerateSessionSIDs(r *http.Request, userID int64, principalSID s
 	return ordered
 }
 
+// authDeviceBindings maps sid → authDeviceId for the user's active PoP devices,
+// so the client can group duplicate sessions of the same browser into one card.
+func (d Deps) authDeviceBindings(r *http.Request, userID int64) map[string]string {
+	bindings := map[string]string{}
+	if d.AuthSoT == nil || !d.AuthSoT.Mode.WritesEnabled() || d.AuthSoT.PG == nil {
+		return bindings
+	}
+	rows, err := d.AuthSoT.PG.ListActiveAuthDevices(r.Context(), userID)
+	if err != nil {
+		d.Logger.Warn("sessions: device bindings failed", "err", err, "userId", userID)
+		return bindings
+	}
+	for _, row := range rows {
+		if row.SID != "" && row.AuthDeviceID != "" {
+			bindings[row.SID] = row.AuthDeviceID
+		}
+	}
+	return bindings
+}
+
 // collectDecoratedSessions enumerates the user's sessions and decorates them
 // with UI-ready labels. Cleans up dead sids from the index as it iterates.
 func (d Deps) collectDecoratedSessions(r *http.Request, principal authz.Principal) []domain.SessionView {
 	ordered := d.enumerateSessionSIDs(r, principal.UserID, principal.SID)
+	bindings := d.authDeviceBindings(r, principal.UserID)
 
 	now := time.Now().UTC()
 	views := make([]domain.SessionView, 0, len(ordered))
@@ -116,6 +137,7 @@ func (d Deps) collectDecoratedSessions(r *http.Request, principal authz.Principa
 			principal.SID,
 			now,
 		)
+		view.AuthDeviceID = bindings[sid]
 		views = append(views, view)
 	}
 

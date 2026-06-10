@@ -420,6 +420,7 @@ func SortAuthDevices(in []AuthDeviceView) {
 // SessionView is the client-facing decorated session record.
 type SessionView struct {
 	SID              string `json:"sid"`
+	AuthDeviceID     string `json:"authDeviceId,omitempty"`
 	Current          bool   `json:"current"`
 	CreatedAt        string `json:"createdAt,omitempty"`
 	LastSeenAt       string `json:"lastSeenAt,omitempty"`
