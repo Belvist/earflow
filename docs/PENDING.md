@@ -302,11 +302,13 @@ COOKIE_DOMAIN:                      .earflow.ru
 
 **Prior VPS close — Phase 2 OBSERVE (`0d59f54`):** restore + prod mint 404 + frontend API base guard PASS.
 
-**After any auth-e2e / capacity run:**
+**After any auth-e2e / capacity run** (when **not** in Phase 6 soak):
 
 ```bash
 bash scripts/restore-prod-after-auth-e2e.sh
 ```
+
+**During Phase 6 soak:** use `npm run verify:sec005-prod-health` — **do not** run `restore-prod` (split-brain: frontend mint:1 + gateway mint off → 404).
 
 **VPS close report — Phase 6 prod ACCEPT (`ru-vmv2-mini`, 2026-06-10, git `1852924`):**
 
