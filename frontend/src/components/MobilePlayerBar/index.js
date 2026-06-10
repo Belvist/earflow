@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { usePlayer } from '../../context/PlayerContext';
+import { usePlayer, usePlayerState } from '../../context/PlayerContext';
 import { usePlayerSheet } from '../../context/PlayerSheetContext';
 import { usePlayerStoreSnapshot } from '../../hooks/usePlayerStoreSnapshot';
 import MobilePlayerModal from '../MobilePlayerModal';
@@ -30,6 +30,7 @@ import {
   MiniTrackDetails,
   MiniTrackTitle,
   MiniTrackArtist,
+  MiniControlsCluster,
   MiniLikeSlot,
   MiniLikeHit,
   MiniPlayControl,
@@ -42,6 +43,7 @@ import {
 const MobilePlayerBar = ({ onOpenEq }) => {
   const [showParty, setShowParty] = useState(false);
   const player = usePlayer();
+  const { likedIds } = usePlayerState();
   const store = usePlayerStoreSnapshot();
   const { registerOpenFullPlayer } = usePlayerSheet();
   const { variant, isClassic, isFloating } = useMiniBarVariant();
@@ -95,8 +97,8 @@ const MobilePlayerBar = ({ onOpenEq }) => {
 
   const isCurrentTrackLiked = useMemo(() => {
     const ctid = currentTrack ? Number.parseInt(String(currentTrack.id), 10) : NaN;
-    return Number.isFinite(ctid) && player.likedIds?.has?.(ctid);
-  }, [currentTrack, player.likedIds]);
+    return Number.isFinite(ctid) && likedIds?.has?.(ctid);
+  }, [currentTrack, likedIds]);
 
   const handleLikeClick = useCallback((e) => {
     e.stopPropagation();
@@ -204,7 +206,7 @@ const MobilePlayerBar = ({ onOpenEq }) => {
         data-mini-gesture-zone="true"
         data-mini-bar-variant={variant}
         data-mini-play-style={playStyle}
-        data-mini-bar-ui="2026-06-v58-nav-wide-pill-gap"
+        data-mini-bar-ui="2026-06-v61-nav-full-bleed"
         $variant={variant}
         initial={false}
         animate={false}
@@ -254,61 +256,64 @@ const MobilePlayerBar = ({ onOpenEq }) => {
               </MiniTrackInfo>
             </SwipeableTrackContainer>
 
-            <MiniLikeSlot aria-hidden="true">
-              <MiniLikeHit
-                type="button"
-                data-testid="mini-player-like"
-                data-mini-no-drag="true"
-                aria-label={isCurrentTrackLiked ? 'Убрать из избранного' : 'Нравится'}
-                title={isCurrentTrackLiked ? 'Убрать из избранного' : 'Нравится'}
-                $active={isCurrentTrackLiked}
-                onClick={handleLikeClick}
-                whileTap={{ scale: 0.88 }}
-              >
-                {isCurrentTrackLiked ? <FaHeart /> : <FaRegHeart />}
-              </MiniLikeHit>
-            </MiniLikeSlot>
+            <MiniControlsCluster data-testid="mini-player-controls">
+              <MiniLikeSlot aria-hidden="true">
+                <MiniLikeHit
+                  type="button"
+                  data-testid="mini-player-like"
+                  data-mini-no-drag="true"
+                  aria-label={isCurrentTrackLiked ? 'Убрать из избранного' : 'Нравится'}
+                  title={isCurrentTrackLiked ? 'Убрать из избранного' : 'Нравится'}
+                  $active={isCurrentTrackLiked}
+                  $variant={variant}
+                  onClick={handleLikeClick}
+                  whileTap={{ scale: 0.88 }}
+                >
+                  {isCurrentTrackLiked ? <FaHeart /> : <FaRegHeart />}
+                </MiniLikeHit>
+              </MiniLikeSlot>
 
-            <MiniPlayControl
-              key={`mini-play-${playStyle}-${variant}`}
-              data-testid="mini-player-play"
-              data-play-style={playStyle}
-              className={`ef-mini-play-control ef-mini-play--${playStyle}`}
-              role="button"
-              tabIndex={0}
-              aria-label={player.isPlaying ? 'Пауза' : 'Воспроизведение'}
-              onClick={handlePlayPause}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
+              <MiniPlayControl
+                key={`mini-play-${playStyle}-${variant}`}
+                data-testid="mini-player-play"
+                data-play-style={playStyle}
+                className={`ef-mini-play-control ef-mini-play--${playStyle}`}
+                role="button"
+                tabIndex={0}
+                aria-label={player.isPlaying ? 'Пауза' : 'Воспроизведение'}
+                onClick={handlePlayPause}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handlePlayPause(e);
+                  }
+                }}
+                onTouchEnd={(e) => {
+                  e.stopPropagation();
                   handlePlayPause(e);
-                }
-              }}
-              onTouchEnd={(e) => {
-                e.stopPropagation();
-                handlePlayPause(e);
-              }}
-              whileTap={{ scale: 0.94 }}
-              data-mini-no-drag="true"
-              $variant={variant}
-              $playStyle={playStyle}
-            >
-              <MiniPlayInner $variant={variant} $playStyle={playStyle}>
-                {playStyle === MINI_PLAY_STYLE.METALLIC ? (
-                  <MiniPlayButtonIos
-                    isPlaying={player.isPlaying}
-                    size={isClassic ? 34 : 42}
-                    emphasis="high"
-                  />
-                ) : (
-                  <MiniPlayButtonAdaptive
-                    isPlaying={player.isPlaying}
-                    size={isClassic ? 32 : 42}
-                    iconColor={playIconColor}
-                  />
-                )}
-              </MiniPlayInner>
-            </MiniPlayControl>
+                }}
+                whileTap={{ scale: 0.94 }}
+                data-mini-no-drag="true"
+                $variant={variant}
+                $playStyle={playStyle}
+              >
+                <MiniPlayInner $variant={variant} $playStyle={playStyle}>
+                  {playStyle === MINI_PLAY_STYLE.METALLIC ? (
+                    <MiniPlayButtonIos
+                      isPlaying={player.isPlaying}
+                      size={isClassic ? 34 : 42}
+                      emphasis="high"
+                    />
+                  ) : (
+                    <MiniPlayButtonAdaptive
+                      isPlaying={player.isPlaying}
+                      size={isClassic ? 32 : 42}
+                      iconColor={playIconColor}
+                    />
+                  )}
+                </MiniPlayInner>
+              </MiniPlayControl>
+            </MiniControlsCluster>
           </MiniPlayerMainRow>
         </MiniPlayerContent>
 

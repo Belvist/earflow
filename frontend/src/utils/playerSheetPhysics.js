@@ -76,7 +76,7 @@ function getRootPxVariable(name, fallback) {
 
 export function getPlayerSheetClosedY(viewportHeight = getPlayerSheetHeight()) {
   const height = Math.max(1, Number(viewportHeight) || 1);
-  const bottomNavHeight = getRootPxVariable('--mobile-bottom-nav-height', 48);
+  const bottomNavHeight = getRootPxVariable('--mobile-bottom-nav-height', 58);
   const miniPlayerHeight = getRootPxVariable('--mobile-mini-player-height', 52);
   const floatGap = getRootPxVariable('--mobile-mini-player-float-gap', 6);
   return Math.max(1, height - bottomNavHeight - floatGap - miniPlayerHeight);

@@ -163,8 +163,8 @@ test.describe('Mini-bar layout (playground)', () => {
     expect(progressBox?.height ?? 99).toBeLessThanOrEqual(2);
   });
 
-  test('floating progress track has equal horizontal insets', async ({ page }) => {
-    const insets = await page.evaluate(() => {
+  test('floating progress track is edge-to-edge inside shell', async ({ page }) => {
+    const metrics = await page.evaluate(() => {
       const shell = document.querySelector('[data-testid="mini-player-bar"]');
       const progress = document.querySelector('[data-testid="mini-player-progress"]');
       if (!shell || !progress) return null;
@@ -173,12 +173,14 @@ test.describe('Mini-bar layout (playground)', () => {
       return {
         leftInset: p.left - s.left,
         rightInset: s.right - p.right,
+        bottomGap: s.bottom - p.bottom,
       };
     });
-    expect(insets).toBeTruthy();
-    expect(Math.abs(insets.leftInset - insets.rightInset)).toBeLessThan(2);
-    expect(insets.leftInset).toBeGreaterThan(10);
-    expect(insets.rightInset).toBeGreaterThan(10);
+    expect(metrics).toBeTruthy();
+    expect(Math.abs(metrics.leftInset - metrics.rightInset)).toBeLessThan(2);
+    expect(metrics.leftInset).toBeLessThan(2);
+    expect(metrics.rightInset).toBeLessThan(2);
+    expect(Math.abs(metrics.bottomGap)).toBeLessThan(2);
   });
 
   test('classic variant: full-width shell + progress edge-to-edge', async ({ page }) => {

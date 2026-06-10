@@ -10,6 +10,7 @@ export const GESTURE_SURFACE = Object.freeze({
   COVER_STACK: 'cover-stack',
   PLAYLIST_SCROLL: 'playlist-scroll',
   PAGE_SCROLL: 'page-scroll',
+  MOBILE_BOTTOM_NAV: 'mobile-bottom-nav',
 });
 
 export const GESTURE_PRIORITY = Object.freeze({
@@ -23,6 +24,7 @@ export const GESTURE_PRIORITY = Object.freeze({
   [GESTURE_SURFACE.MINI_TRACK_SWIPE]: 450,
   [GESTURE_SURFACE.COVER_STACK]: 440,
   [GESTURE_SURFACE.PLAYLIST_SCROLL]: 200,
+  [GESTURE_SURFACE.MOBILE_BOTTOM_NAV]: 320,
   [GESTURE_SURFACE.PAGE_SCROLL]: 100,
 });
 
