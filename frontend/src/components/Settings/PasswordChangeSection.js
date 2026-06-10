@@ -20,7 +20,7 @@ function mapPasswordError(e) {
   return e?.message || 'Не удалось изменить пароль';
 }
 
-export default function PasswordChangeSection() {
+export default function PasswordChangeSection({ embedded = false }) {
   const { stepUp } = useStepUpRunner();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -111,8 +111,8 @@ export default function PasswordChangeSection() {
   };
 
   return (
-    <Wrap>
-      <Title>Пароль</Title>
+    <Wrap $embedded={embedded}>
+      {embedded ? null : <Title>Пароль</Title>}
       <Hint>
         Смена пароля требует подтверждения 2FA, если она включена. После смены другие сессии могут быть завершены.
       </Hint>
@@ -173,9 +173,9 @@ const Wrap = styled.div`
   display: flex;
   flex-direction: column;
   gap: 12px;
-  margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin-top: ${(p) => (p.$embedded ? '0' : '24px')};
+  padding-top: ${(p) => (p.$embedded ? '0' : '20px')};
+  border-top: ${(p) => (p.$embedded ? 'none' : '1px solid rgba(255, 255, 255, 0.08)')};
 `;
 
 const Title = styled.h3`

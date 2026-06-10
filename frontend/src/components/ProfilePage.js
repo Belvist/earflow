@@ -39,10 +39,7 @@ import { resolveArtistPath } from "../utils/artistRoute";
 import { usePlayer } from "../context/PlayerContext";
 import useAuth from "../hooks/useAuth";
 import MiniBarVariantPicker from "./MobilePlayerBar/MiniBarVariantPicker";
-import ActiveSessionsSection from "./Settings/ActiveSessionsSection";
-import AuthDevicesSection from "./Settings/AuthDevicesSection";
-import PasswordChangeSection from "./Settings/PasswordChangeSection";
-import TelegramUnlinkSection from "./Settings/TelegramUnlinkSection";
+import SecuritySettingsSection from "./Settings/SecuritySettingsSection";
 import { buildPlaylistShareUrlFromSlug } from "../utils/playlistUrls";
 
 // ============ КОНСТАНТЫ ============
@@ -77,13 +74,13 @@ const SETTINGS_TABS = DEVICE_SYNC_ENABLED
   ? [
     { id: "profile", label: "Профиль", icon: FaUser },
     { id: "audio", label: "Звук", icon: FaVolumeUp },
-    { id: "sessions", label: "Сессии", icon: FaShieldAlt },
+    { id: "sessions", label: "Защита", icon: FaShieldAlt },
     { id: "devices", label: "Устройства", icon: FaNetworkWired },
   ]
   : [
     { id: "profile", label: "Профиль", icon: FaUser },
     { id: "audio", label: "Звук", icon: FaVolumeUp },
-    { id: "sessions", label: "Сессии", icon: FaShieldAlt },
+    { id: "sessions", label: "Защита", icon: FaShieldAlt },
   ];
 
 const AUDIO_QUALITY = [
@@ -1210,11 +1207,8 @@ const ProfilePage = () => {
 
                 {settingsTab === "sessions" && (
                   <Section>
-                    <SectionTitle>Активные сеансы</SectionTitle>
-                    <ActiveSessionsSection />
-                    <AuthDevicesSection />
-                    <PasswordChangeSection />
-                    <TelegramUnlinkSection />
+                    <SectionTitle>Защита и устройства</SectionTitle>
+                    <SecuritySettingsSection />
                   </Section>
                 )}
               </ModalBody>

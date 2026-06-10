@@ -15,7 +15,7 @@ function mapUnlinkError(e) {
   return e?.message || 'Не удалось отвязать Telegram';
 }
 
-export default function TelegramUnlinkSection() {
+export default function TelegramUnlinkSection({ embedded = false }) {
   const { stepUp } = useStepUpRunner();
   const [overview, setOverview] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -67,16 +67,16 @@ export default function TelegramUnlinkSection() {
 
   if (loading) {
     return (
-      <Wrap>
-        <Title>Telegram</Title>
+      <Wrap $embedded={embedded}>
+        {embedded ? null : <Title>Telegram</Title>}
         <Muted>Загрузка…</Muted>
       </Wrap>
     );
   }
 
   return (
-    <Wrap>
-      <Title>Telegram</Title>
+    <Wrap $embedded={embedded}>
+      {embedded ? null : <Title>Telegram</Title>}
       <Hint>
         {hasTelegram
           ? 'Аккаунт привязан к Telegram. Отвязка требует пароль и 2FA step-up (если включена).'
@@ -103,9 +103,9 @@ const Wrap = styled.div`
   display: flex;
   flex-direction: column;
   gap: 10px;
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin-top: ${(p) => (p.$embedded ? '0' : '20px')};
+  padding-top: ${(p) => (p.$embedded ? '0' : '16px')};
+  border-top: ${(p) => (p.$embedded ? 'none' : '1px solid rgba(255, 255, 255, 0.08)')};
 `;
 
 const Title = styled.h3`
