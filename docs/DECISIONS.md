@@ -22,6 +22,33 @@
 
 ---
 
+## 2026-06-07 — Mobile nav: solid bar, tap-only (no swipe/blur)
+
+**Status:** accepted  
+**Area:** frontend-player  
+**Context:** Liquid Glass chip drag + blur не нужны; пользователь хочет простой nav — тап по иконкам, фон `#0D0D0D`, без жестов.  
+**Decision:** `MobileBottomNav` — убраны `useMobileNavChipDrag`, sliding chip, `backdrop-filter`, pointer capture. Pill = `background: #0D0D0D`; active/inactive только цвет иконки. Mini-bar progress track — серый `rgba(255,255,255,0.22)` вместо чёрного scrim.  
+**Supersedes:** v67 nav chip drag (gesture hook удалён).  
+**Files touched:** `MobileBottomNav.js`, `MobilePlayerBar.styles.js`, `MobilePlayerBar/index.js`, `frontend/DEPLOY.md`  
+**Build hints:** `data-mobile-nav-ui="2026-06-v68-solid-nav"`, `data-mini-bar-ui="2026-06-v68-progress-gray-track"`
+
+---
+
+## 2026-06-07 — Nav chip drag v67 (Apple selection pill, shell fixed)
+
+**Status:** superseded-by-v68-solid-nav  
+**Area:** frontend-player | gestures  
+**Context:** v63–v66 масштабировали всю `NavPill` при drag — пользователь отверг «бар растёт»; нужен iOS Liquid Glass: **тащится только маленький chip**, shell фиксирован.  
+**Decision:** `useMobileNavChipDrag` заменяет `useMobileBottomNavSwipe`. State machine: IDLE → PRESSED (scale 1.04) → DRAGGING (scale 1.08, chip `translateX` = projected `clientX`) → SNAPPING → IDLE. Snap: `snapIndexFromChipX(round(chipX/seg))`. Inactive tabs — tap; drag стартует с active slot / track background. Profile `NAV_CHIP_DRAG` (horizontal-only, no page scroll). Build hint: `data-mobile-nav-ui="2026-06-v67-nav-chip-drag"`.  
+**Alternatives considered:** scale whole pill (v63) — отвергнуто UX; bar swipe flick (v62) — отвергнуто.  
+**Consequences:** `NavPill` без motion scale; `ActiveIndicator` единственный animated слой. `INV-ARCH-001` — один gesture path (`usePointerGestureMachine` + `MOBILE_BOTTOM_NAV`).  
+**Files touched:** `useMobileNavChipDrag.js`, `MobileBottomNav.js`, `mobileBottomNavTabs.js`, `gestureProfiles.js`, `frontend/DEPLOY.md`  
+**Tests:** `mobileBottomNavTabs.test.js` (snap + pointer projection)  
+**Supersedes:** запись «Nav Liquid Glass drag (pill follow + scale)» ниже — **Status: superseded-by-v67-nav-chip-drag**  
+**Чтобы не повторилось:** не масштабировать shell nav при tab drag; chip-only motion.
+
+---
+
 ## 2026-06-10 — SEC-005 Phase 6 prod ACCEPT closed on VPS
 
 **Status:** accepted  
@@ -50,7 +77,7 @@
 
 ## 2026-06-07 — Nav Liquid Glass drag (pill follow + scale + sliding chip)
 
-**Status:** accepted  
+**Status:** superseded-by-v67-nav-chip-drag  
 **Area:** frontend-player | gestures  
 **Context:** v62 «свайп» был невидимым flick-switch; пользователь ожидал iOS 26 Liquid Glass — **тащишь таблетку**, она **увеличивается**, активный chip **перетекает** между слотами.
 

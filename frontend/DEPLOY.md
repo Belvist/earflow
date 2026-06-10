@@ -37,9 +37,11 @@ git rev-parse --short HEAD   # запомни SHA
 docker compose build --no-cache frontend
 docker compose up -d --force-recreate frontend
 
-# проверка build hint (v61+ после merge UI)
+# проверка build hints (v67+ после merge UI)
 curl -sS https://earflow.ru/ | grep -o 'data-mini-bar-ui="[^"]*"' | head -1
-# ожидаем: data-mini-bar-ui="2026-06-v66-progress-persist"
+# ожидаем: data-mini-bar-ui="2026-06-v68-progress-gray-track"
+curl -sS https://earflow.ru/ | grep -o 'data-mobile-nav-ui="[^"]*"' | head -1
+# ожидаем: data-mobile-nav-ui="2026-06-v68-solid-nav"
 ```
 
 Если `platform-control.sh: Permission denied`:
@@ -77,11 +79,10 @@ git push origin main:frontend   # держим ветки на одном SHA
 
 Проверка на телефоне: `[data-testid="mini-player-bar"]` → `data-mini-bar-ui`.
 
-### Чеклист mobile chrome (v61)
+### Чеклист mobile chrome (v68)
 
-1. **Навбар** — Liquid Glass drag: pill **тащится за пальцем**, **увеличивается**, стеклянный chip **перетекает** между вкладками.
-2. **Мини-бар** — progress **4px**, тёмный scrim track + белый fill; не пропадает после 5с (single owner `useSeekableProgress`).
-3. **Лайк** — **тот же размер что play** (42px floating); меняется **мгновенно** при тапе (optimistic).
-4. **Nav swipe** — горизонтальный свайп по pill переключает соседнюю вкладку (как iOS tab bar).
-5. **Build hint:** `data-mini-bar-ui="2026-06-v66-progress-persist"`.
-6. **Токены:** `frontend/src/components/mobileChromeTokens.js` — единый источник высоты nav + float gap.
+1. **Навбар** — solid `#0D0D0D`, **без blur и без swipe/drag**; переключение только tap по иконкам.
+2. **Мини-бар** — progress track **серый** (`rgba(255,255,255,0.22)`), fill белый; не пропадает после 5с (`useSeekableProgress`).
+3. **Лайк** — тот же размер что play (42px); optimistic toggle.
+4. **Build hints:** `data-mini-bar-ui="2026-06-v68-progress-gray-track"`, `data-mobile-nav-ui="2026-06-v68-solid-nav"`.
+5. **Токены:** `mobileChromeTokens.js` — высота nav + float gap.

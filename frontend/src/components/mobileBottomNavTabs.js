@@ -58,3 +58,32 @@ export function resolveAdjacentNavTab(activeTab, direction) {
 export function getNavTabCount() {
   return TAB_COUNT;
 }
+
+/**
+ * Project pointer X onto chip track — chip center follows finger (clamped inside pill).
+ */
+export function pointerClientXToChipX({
+  clientX,
+  trackRect,
+  innerPadPx = 0,
+  segmentWidthPx,
+  tabCount = TAB_COUNT,
+} = {}) {
+  if (!trackRect || segmentWidthPx <= 0) return 0;
+  const innerLeft = trackRect.left + innerPadPx;
+  const innerWidth = trackRect.width - 2 * innerPadPx;
+  const chipW = segmentWidthPx;
+  const maxX = Math.max(0, innerWidth - chipW);
+  const x = clientX - innerLeft - chipW / 2;
+  return clamp(x, 0, maxX);
+}
+
+/** Nearest tab slot from chip X (release snap). */
+export function snapIndexFromChipX(chipX, segmentWidthPx) {
+  if (segmentWidthPx <= 0) return 0;
+  return clamp(Math.round(chipX / segmentWidthPx), 0, TAB_COUNT - 1);
+}
+
+export function snapTabFromChipX(chipX, segmentWidthPx) {
+  return MOBILE_NAV_TAB_ORDER[snapIndexFromChipX(chipX, segmentWidthPx)];
+}
