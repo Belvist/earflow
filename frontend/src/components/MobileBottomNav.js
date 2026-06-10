@@ -10,26 +10,22 @@ import {
 import useAuth from '../hooks/useAuth';
 import { clearRecentLogout, redirectToAuth, sanitizeReturnTo } from '../utils/authRedirect';
 
-const NAV_SHELL_PX = 52;
-/** Gray ring around active pill — uniform gap (3–5px) */
-const ACTIVE_SHELL_INSET_PX = 4;
-const ICON_CHIP_H_PX = 28;
-const ICON_CHIP_MIN_W_PX = 36;
+const NAV_PILL_H_PX = 48;
 
 const Nav = styled.nav`
   position: fixed;
   bottom: 0;
   left: 0;
   width: 100%;
-  height: calc(${NAV_SHELL_PX}px + env(safe-area-inset-bottom, 0px));
+  height: calc(${NAV_PILL_H_PX}px + env(safe-area-inset-bottom, 0px));
   padding:
     0
     max(12px, env(safe-area-inset-right, 0px))
-    calc(8px + env(safe-area-inset-bottom, 0px))
+    env(safe-area-inset-bottom, 0px)
     max(12px, env(safe-area-inset-left, 0px));
   box-sizing: border-box;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
   background: transparent;
   border: none;
@@ -50,24 +46,26 @@ const Nav = styled.nav`
   }
 `;
 
-/** Compact oval: 50% bg tint + blur inside, no border */
-const NavOval = styled.div`
+/** Full-width gray tablet — blur inside, no border */
+const NavPill = styled.div`
   pointer-events: auto;
-  display: inline-flex;
+  width: 100%;
+  max-width: 520px;
+  height: ${NAV_PILL_H_PX}px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
   align-items: center;
-  justify-content: center;
-  gap: 2px;
-  padding: 5px 8px;
+  padding: 0 4px;
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(20px) saturate(1.15);
   -webkit-backdrop-filter: blur(20px) saturate(1.15);
   border: none;
-  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.38);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.32);
 `;
 
 const TabButton = styled.button`
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
   border: none;
@@ -88,28 +86,20 @@ const TabButton = styled.button`
   }
 `;
 
-/** Gray ring — only on active tab, +4px around pill evenly */
-const TabShell = styled.span`
-  display: ${(p) => (p.$active ? 'inline-flex' : 'contents')};
-  align-items: center;
-  justify-content: center;
-  padding: ${(p) => (p.$active ? `${ACTIVE_SHELL_INSET_PX}px` : '0')};
-  border-radius: 999px;
-  background: ${(p) => (p.$active ? 'rgba(255, 255, 255, 0.1)' : 'transparent')};
-  transition: background 0.18s ease;
-`;
-
-/** Active highlight pill */
+/** Active highlight — lighter fill, no border/outline */
 const IconChip = styled.span`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: ${ICON_CHIP_MIN_W_PX}px;
-  height: ${ICON_CHIP_H_PX}px;
-  padding: 0 10px;
+  min-width: 40px;
+  height: 30px;
+  padding: 0 12px;
   border-radius: 999px;
-  color: ${(p) => (p.$active ? 'rgba(255, 255, 255, 0.98)' : 'rgba(255, 255, 255, 0.52)')};
-  background: ${(p) => (p.$active ? 'rgba(255, 255, 255, 0.18)' : 'transparent')};
+  border: none;
+  box-shadow: none;
+  outline: none;
+  color: ${(p) => (p.$active ? 'rgba(255, 255, 255, 0.98)' : 'rgba(255, 255, 255, 0.5)')};
+  background: ${(p) => (p.$active ? 'rgba(255, 255, 255, 0.28)' : 'transparent')};
   transition: background 0.18s ease, color 0.18s ease;
 
   svg {
@@ -127,11 +117,9 @@ function NavTab({ active, label, onClick, children }) {
       aria-label={label}
       onClick={onClick}
     >
-      <TabShell $active={active} aria-hidden="true">
-        <IconChip $active={active}>
-          {children}
-        </IconChip>
-      </TabShell>
+      <IconChip $active={active} aria-hidden="true">
+        {children}
+      </IconChip>
     </TabButton>
   );
 }
@@ -165,7 +153,7 @@ export default function MobileBottomNav() {
 
   return (
     <Nav aria-label="Навигация" data-testid="mobile-bottom-nav">
-      <NavOval data-testid="mobile-bottom-nav-oval">
+      <NavPill data-testid="mobile-bottom-nav-pill">
         <NavTab active={active === 'home'} label="Главная" onClick={() => navigate('/')}>
           <HiOutlineHome />
         </NavTab>
@@ -178,7 +166,7 @@ export default function MobileBottomNav() {
         <NavTab active={active === 'profile'} label="Аккаунт" onClick={goProfile}>
           <HiOutlineUser />
         </NavTab>
-      </NavOval>
+      </NavPill>
     </Nav>
   );
 }
