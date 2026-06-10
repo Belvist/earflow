@@ -173,7 +173,7 @@ export default function MobileBottomNav() {
     <Nav aria-label="Навигация" data-testid="mobile-bottom-nav">
       <NavPill
         data-testid="mobile-bottom-nav-pill"
-        data-mobile-nav-ui="2026-06-v68-solid-nav"
+        data-mobile-nav-ui="2026-06-v69-chrome-lower"
       >
         <TabGrid>
           {NAV_TABS.map((tab) => {
