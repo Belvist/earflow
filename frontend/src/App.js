@@ -30,6 +30,7 @@ import { FLOATING_SHELL_RADIUS_PX } from './components/MobilePlayerBar/miniPlayB
 import {
   MOBILE_CHROME_SIDE_INSET_PX,
   MOBILE_MINI_PLAYER_FLOAT_GAP_PX,
+  MOBILE_MINI_PLAYER_FLOAT_HEIGHT_PX,
   MOBILE_NAV_TOTAL_HEIGHT_PX,
 } from './components/mobileChromeTokens';
 
@@ -77,7 +78,7 @@ const GlobalStyle = createGlobalStyle`
     --panel-rail-gap: 20px;
     --mobile-chrome-side-inset: ${MOBILE_CHROME_SIDE_INSET_PX}px;
     --mobile-bottom-nav-height: ${MOBILE_NAV_TOTAL_HEIGHT_PX}px;
-    --mobile-mini-player-height: 56px;
+    --mobile-mini-player-height: ${MOBILE_MINI_PLAYER_FLOAT_HEIGHT_PX}px;
     --mobile-mini-player-float-gap: ${MOBILE_MINI_PLAYER_FLOAT_GAP_PX}px;
     --mobile-chrome-height: calc(var(--mobile-bottom-nav-height) + var(--mobile-mini-player-float-gap) + var(--mobile-mini-player-height));
     --z-bottom-nav: 9997;
@@ -144,9 +145,9 @@ const GlobalStyle = createGlobalStyle`
   [data-testid="mini-player-bar"][data-mini-bar-variant="floating"] [data-testid="mini-player-progress"] {
     position: absolute !important;
     bottom: 0 !important;
-    height: 4px !important;
-    min-height: 4px !important;
-    max-height: 4px !important;
+    height: 2px !important;
+    min-height: 2px !important;
+    max-height: 2px !important;
     left: 0 !important;
     right: 0 !important;
     width: 100% !important;
@@ -156,12 +157,8 @@ const GlobalStyle = createGlobalStyle`
     pointer-events: none !important;
     border-radius: 0 0 var(--mini-shell-radius, ${FLOATING_SHELL_RADIUS_PX}px) var(--mini-shell-radius, ${FLOATING_SHELL_RADIUS_PX}px) !important;
     overflow: hidden !important;
-    background: linear-gradient(
-      to top,
-      rgba(0, 0, 0, 0.72) 0%,
-      rgba(0, 0, 0, 0.38) 100%
-    ) !important;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+    background: rgba(255, 255, 255, 0.22) !important;
+    box-shadow: none !important;
   }
 
   :root[data-mini-bar-variant="classic"] [data-testid="mini-player-bar"] [data-testid="mini-player-progress"],
