@@ -45,8 +45,8 @@
 | Gateway mint | auth-e2e |
 | Stream ACCEPT dual-mode | auth-e2e (`verify:stream-ticket-accept`) |
 | Frontend `?st=` attach | opt-in `REACT_APP_STREAM_TICKET_MINT_ENABLED=1` |
-| Prod ACCEPT (dual-mode) | **prod (2026-06-10 VPS)** — `mint:1`, ACCEPT on, ENFORCE off |
-| Prod ENFORCE | tooling ready — `run:sec005-phase7-prod-enforce` after Phase 6 soak |
+| Prod ACCEPT (dual-mode) | prod (2026-06-10 VPS) |
+| Prod ENFORCE | **prod (2026-06-10 VPS)** — legacy stream cookie → 401 |
 | WS connect opaque ticket | Phase 8 |
 
 **Gate:** auth-e2e overlay + `npm run verify:auth-kit -- --with-e2e`
