@@ -75,6 +75,16 @@ type Config struct {
 		WriteBuffer        int
 	}
 
+	StreamTicket struct {
+		Accept bool
+		Enforce bool
+		AuthRedis struct {
+			Addr     string
+			Password string
+			DB       int
+		}
+	}
+
 	HTTP struct {
 		RateLimitWindow time.Duration
 		RateLimitMax    int
@@ -229,7 +239,26 @@ func Load() (*Config, error) {
 		return nil, errors.New("ALLOWED_ORIGINS is required in production")
 	}
 
+	c.StreamTicket.Accept = parseBool("STREAM_TICKET_ACCEPT", false)
+	c.StreamTicket.Enforce = parseBool("STREAM_TICKET_ENFORCE", false)
+	if c.StreamTicket.Enforce {
+		c.StreamTicket.Accept = true
+	}
+	c.StreamTicket.AuthRedis.Addr = fmt.Sprintf("%s:%d",
+		envOr("STREAM_TICKET_AUTH_REDIS_HOST", "redis-auth"),
+		parseIntNoErr("STREAM_TICKET_AUTH_REDIS_PORT", 6379))
+	c.StreamTicket.AuthRedis.Password = strings.TrimSpace(os.Getenv("STREAM_TICKET_AUTH_REDIS_PASSWORD"))
+	if c.StreamTicket.AuthRedis.Password == "" {
+		c.StreamTicket.AuthRedis.Password = c.Redis.Password
+	}
+	c.StreamTicket.AuthRedis.DB = parseIntNoErr("STREAM_TICKET_AUTH_REDIS_DB", 0)
+
 	return c, nil
+}
+
+// StreamTicketEnabled reports whether SEC-005 WS ticket verification is active.
+func (c Config) StreamTicketEnabled() bool {
+	return c.StreamTicket.Accept || c.StreamTicket.Enforce
 }
 
 // originHostsFromList extracts bare hostnames from entries like

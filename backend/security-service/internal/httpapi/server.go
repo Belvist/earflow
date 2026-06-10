@@ -54,6 +54,7 @@ func NewServer(d Deps) *http.Server {
 
 		r.Post("/api/auth/telegram/unlink", telegramUnlinkHandler(d))
 
+		r.Get("/api/auth/devices", listAuthDevicesHandler(d))
 		r.Get("/api/auth/sessions", listSessionsHandler(d))
 		r.Post("/api/auth/sessions/revoke", revokeSessionHandler(d))
 		r.Post("/api/auth/sessions/revoke-others", revokeOtherSessionsHandler(d))

@@ -40,6 +40,9 @@ import { usePlayer } from "../context/PlayerContext";
 import useAuth from "../hooks/useAuth";
 import MiniBarVariantPicker from "./MobilePlayerBar/MiniBarVariantPicker";
 import ActiveSessionsSection from "./Settings/ActiveSessionsSection";
+import AuthDevicesSection from "./Settings/AuthDevicesSection";
+import PasswordChangeSection from "./Settings/PasswordChangeSection";
+import TelegramUnlinkSection from "./Settings/TelegramUnlinkSection";
 import { buildPlaylistShareUrlFromSlug } from "../utils/playlistUrls";
 
 // ============ КОНСТАНТЫ ============
@@ -1209,6 +1212,9 @@ const ProfilePage = () => {
                   <Section>
                     <SectionTitle>Активные сеансы</SectionTitle>
                     <ActiveSessionsSection />
+                    <AuthDevicesSection />
+                    <PasswordChangeSection />
+                    <TelegramUnlinkSection />
                   </Section>
                 )}
               </ModalBody>

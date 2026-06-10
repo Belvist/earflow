@@ -23,9 +23,11 @@ const PROOF_SENSITIVE_PATHS = new Set([
 
 const PROOF_SENSITIVE_PREFIXES = [
   '/api/auth/sessions',
-  '/api/auth/password/change',
+  '/api/auth/devices',
+  '/api/auth/password',
   '/api/auth/security',
   '/api/auth/2fa',
+  '/api/auth/stream-ticket',
 ];
 
 let cached = null;

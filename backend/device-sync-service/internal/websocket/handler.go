@@ -9,6 +9,7 @@ import (
 	ws "github.com/coder/websocket"
 	"github.com/earflow/music-platform/device-sync-service/internal/auth"
 	"github.com/earflow/music-platform/device-sync-service/internal/config"
+	"github.com/earflow/music-platform/device-sync-service/internal/streamticket"
 )
 
 // UpgradeHandler builds the http.HandlerFunc mounted at /ws/devices.
@@ -18,6 +19,7 @@ type UpgradeHandler struct {
 	Manager *Manager
 	Deps    ClientDeps
 	Logger  *slog.Logger
+	Tickets *streamticket.Verifier
 }
 
 func (h *UpgradeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -26,18 +28,21 @@ func (h *UpgradeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	lookupCtx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
 	ticket := r.URL.Query().Get("ticket")
-	claims, err := auth.VerifyTicket(h.Config, ticket)
+	var claims *auth.TicketClaims
+	var err error
+	if h.Tickets != nil {
+		claims, err = h.Tickets.VerifyUpgradeTicket(lookupCtx, h.Config, ticket)
+	} else {
+		claims, err = auth.VerifyTicket(h.Config, ticket)
+	}
 	if err != nil {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-
-	// Short budget for pre-upgrade checks — must be much smaller than the
-	// write deadline of the eventual socket, otherwise a cold Redis would
-	// leave the upgrade hanging.
-	lookupCtx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
-	defer cancel()
 
 	// Cross-check the ticket against Redis: the device must still exist and
 	// belong to the claimed user. Prevents replay of a ticket whose device

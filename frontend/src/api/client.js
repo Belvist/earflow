@@ -948,6 +948,39 @@ class ApiClient {
     return await this.request('/api/auth/sessions', { method: 'GET' });
   }
 
+  async getAuthDevices() {
+    return await this.request('/api/auth/devices', { method: 'GET' });
+  }
+
+  async checkPasswordStrength(password) {
+    return await this.request('/api/auth/password/strength', {
+      method: 'POST',
+      body: JSON.stringify({ password: String(password || '') }),
+    });
+  }
+
+  async changePassword({ currentPassword, newPassword }) {
+    const payload = { newPassword: String(newPassword || '') };
+    if (typeof currentPassword === 'string' && currentPassword.length > 0) {
+      payload.currentPassword = currentPassword;
+    }
+    return await this.request('/api/auth/password/change', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getSecurityOverview() {
+    return await this.request('/api/auth/security/overview', { method: 'GET' });
+  }
+
+  async unlinkTelegram() {
+    return await this.request('/api/auth/telegram/unlink', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  }
+
   async revokeAuthSession(sid) {
     const target = String(sid || '').trim();
     if (!target) {

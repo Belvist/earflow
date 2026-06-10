@@ -1,8 +1,10 @@
+import { signDeviceProofRequest } from './authDeviceCrypto';
 import { getHotPathProofHeaders, isProofAccessTokenEnabled } from './proofAccessToken';
 import { getCsrfToken } from './cookieHelpers';
 
 /** In-memory only — never localStorage (SEC-005 red flag). */
 const mediaTicketCache = new Map();
+const wsTicketCache = new Map();
 
 const apiBaseUrl = () => {
   const raw = String(process.env.REACT_APP_API_URL || '').trim();
@@ -39,6 +41,7 @@ export function isStreamTicketMintEnabled() {
 
 export function clearStreamTicketCache() {
   mediaTicketCache.clear();
+  wsTicketCache.clear();
 }
 
 export function attachMediaTicketToUrl(rawUrl, ticket) {
@@ -137,6 +140,72 @@ export async function mintMediaStreamTicket({ sessionId, trackId, signal } = {})
   const expiresAtMs =
     Number.isFinite(expiresIn) && expiresIn > 0 ? now + expiresIn * 1000 : now + 60_000;
   mediaTicketCache.set(cacheKey, { ticket, expiresAtMs });
+  return ticket;
+}
+
+export async function mintWsConnectStreamTicket({ deviceId, signal } = {}) {
+  const did = String(deviceId || '').trim();
+  if (!did || !isStreamTicketMintEnabled()) {
+    return null;
+  }
+
+  const now = Date.now();
+  const cached = wsTicketCache.get(did);
+  if (cached && cached.expiresAtMs > now + 5000) {
+    return cached.ticket;
+  }
+
+  const mintPath = '/api/auth/stream-ticket';
+  const signed = await signDeviceProofRequest('POST', `${apiBaseUrl()}${mintPath}`);
+  if (!signed?.headers) {
+    return null;
+  }
+
+  const csrf = getCsrfToken();
+  const headers = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+    ...signed.headers,
+  };
+  if (csrf) {
+    headers['X-CSRF-Token'] = csrf;
+  }
+
+  const resp = await fetch(`${apiBaseUrl()}${mintPath}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers,
+    body: JSON.stringify({
+      kind: 'ws',
+      scope: { deviceId: did },
+      client: 'web',
+    }),
+    signal,
+  });
+
+  if (resp.status === 404) {
+    return null;
+  }
+  if (!resp.ok) {
+    return null;
+  }
+
+  let body = {};
+  try {
+    body = await resp.json();
+  } catch {
+    return null;
+  }
+
+  const ticket = String(body?.ticket || '').trim();
+  if (!ticket) {
+    return null;
+  }
+
+  const expiresIn = Number(body?.expiresIn);
+  const expiresAtMs =
+    Number.isFinite(expiresIn) && expiresIn > 0 ? now + expiresIn * 1000 : now + 60_000;
+  wsTicketCache.set(did, { ticket, expiresAtMs });
   return ticket;
 }
 

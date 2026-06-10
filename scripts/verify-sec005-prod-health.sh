@@ -23,6 +23,7 @@ fi
 echo "gateway STREAM_TICKET_ENABLED='${SEC005_GW_ENABLED:-<unknown>}' mint_live=${SEC005_GW_MINT_LIVE:-unknown}"
 echo "direct-stream ACCEPT='${SEC005_DS_ACCEPT:-<unknown>}' ENFORCE='${SEC005_DS_ENFORCE:-<unknown>}'"
 echo "ebap-hls ACCEPT='${SEC005_HLS_ACCEPT:-<unknown>}' ENFORCE='${SEC005_HLS_ENFORCE:-<unknown>}'"
+echo "device-sync ACCEPT='${SEC005_DSYNC_ACCEPT:-<unknown>}' ENFORCE='${SEC005_DSYNC_ENFORCE:-<unknown>}' (Phase 8 WS; ENFORCE optional)"
 echo "bundle mint marker on earflow.ru: ${SEC005_BUNDLE_MINT:-unknown}"
 echo ""
 

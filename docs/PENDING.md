@@ -209,7 +209,7 @@ Real stack: gateway + Redis + security-service + auth login + frontend + `auth-e
 ### PEND-SEC-002 — Sessions/devices control (revoke-all + UI)
 
 **Priority:** high  
-**Status:** partial (revoke-all API + UI done 2026-06-09; auth/devices API still open)
+**Status:** **closed (2026-06-10)** — `GET /api/auth/devices` + listener `AuthDevicesSection`
 
 DoD: см. roadmap §2.
 
@@ -223,7 +223,7 @@ Mass revoke с сессии <24h без step-up → `FRESH_LOGIN_REQUIRED` (secu
 ### PEND-SEC-004 — MFA step-up modal (UI)
 
 **Priority:** high  
-**Status:** **partial (2026-06-09)** — listener sessions UI (`StepUpModal`); password/email/delete flows pending  
+**Status:** **closed (2026-06-10)** — listener: sessions, password, telegram unlink + `StepUpModal`; no backend API for email change / account delete (out of Wave B scope)
 
 Revoke/password/email/delete — modal при `MFA_STEP_UP_REQUIRED`, не raw error strip.
 
@@ -285,7 +285,7 @@ Revoke/password/email/delete — modal при `MFA_STEP_UP_REQUIRED`, не raw e
 | 5 | Staging ENFORCE | **closed (2026-06-09 VPS)** — `npm run run:sec005-phase5-staging` PASS |
 | 6 | Prod ACCEPT (dual-mode) | **closed (2026-06-10 VPS)** — `verify:stream-ticket-phase6-prod` PASS |
 | 7 | Prod ENFORCE | **closed (2026-06-10 VPS)** — `verify:stream-ticket-phase7-prod` PASS |
-| 8 | WS connect tickets | **next** — consume not implemented |
+| 8 | WS connect tickets | **implemented (2026-06-10)** — device-sync ACCEPT + frontend mint; gate `npm run verify:stream-ticket-ws-accept` |
 
 **VPS close report — Phase 3 ACCEPT (`ru-vmv2-mini`, 2026-06-09, git `f9da305`):**
 
@@ -333,7 +333,7 @@ direct-stream + ebap-hls ENFORCE:   1
 override symlink:                   docker-compose.stream-prod-enforce.yml
 ```
 
-**Next:** Phase 8 WS connect tickets (device-sync consume). Wave B: PEND-SEC-002 devices API, PEND-SEC-004 password/email step-up.
+**Next:** VPS `git pull` + `npm run run:auth-wave-b-prod-deploy`. WS ENFORCE (legacy JWT off) — future gate. Level 3: SEC-006–009.
 
 **Rollback Phase 7 → Phase 6:** `SEC005_PHASE7_ROLLBACK_CONFIRM=1 npm run rollback:sec005-phase7-prod`  
 **Weekly health:** `npm run verify:sec005-prod-health` (expect `mode: phase7`)

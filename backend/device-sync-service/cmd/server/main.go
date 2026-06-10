@@ -25,7 +25,9 @@ import (
 	"github.com/earflow/music-platform/device-sync-service/internal/observability"
 	"github.com/earflow/music-platform/device-sync-service/internal/ratelimit"
 	"github.com/earflow/music-platform/device-sync-service/internal/redisx"
+	"github.com/earflow/music-platform/device-sync-service/internal/streamticket"
 	wsx "github.com/earflow/music-platform/device-sync-service/internal/websocket"
+	"github.com/redis/go-redis/v9"
 )
 
 // runHealthcheck performs a local liveness probe via HTTP and exits with 0 on
@@ -96,11 +98,33 @@ func main() {
 		RL:       wsRL,
 	}
 
+	var wsTicketVerifier *streamticket.Verifier
+	var authTicketRedis *redis.Client
+	if cfg.StreamTicketEnabled() {
+		authTicketRedis = redis.NewClient(&redis.Options{
+			Addr:     cfg.StreamTicket.AuthRedis.Addr,
+			Password: cfg.StreamTicket.AuthRedis.Password,
+			DB:       cfg.StreamTicket.AuthRedis.DB,
+		})
+		if err := authTicketRedis.Ping(rootCtx).Err(); err != nil {
+			log.Error("stream ticket auth-redis ping failed", slog.Any("err", err))
+			os.Exit(1)
+		}
+		epochCache := streamticket.NewEpochCache()
+		streamticket.StartRevokeSubscriber(rootCtx, authTicketRedis, epochCache, log)
+		wsTicketVerifier = streamticket.NewVerifier(cfg, authTicketRedis, epochCache)
+		log.Info("SEC-005 WS stream tickets enabled",
+			slog.Bool("accept", cfg.StreamTicket.Accept),
+			slog.Bool("enforce", cfg.StreamTicket.Enforce),
+		)
+	}
+
 	wsHandler := &wsx.UpgradeHandler{
 		Config:  cfg,
 		Manager: wsMgr,
 		Deps:    wsDeps,
 		Logger:  log,
+		Tickets: wsTicketVerifier,
 	}
 
 	router := httpapi.New(httpapi.Deps{
@@ -173,6 +197,11 @@ func main() {
 	stopSweeper()
 	if err := rdb.Close(); err != nil {
 		log.Warn("redis close error", slog.Any("err", err))
+	}
+	if authTicketRedis != nil {
+		if err := authTicketRedis.Close(); err != nil {
+			log.Warn("auth-ticket redis close error", slog.Any("err", err))
+		}
 	}
 
 	// Give goroutines one final breath before the process exits.

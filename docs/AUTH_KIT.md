@@ -1,6 +1,6 @@
 # Earflow Auth Kit — reusable foundation
 
-**Status:** Level 1 code complete (2026-06-09) — **browser DoD + VPS deploy** required for «fully confident»  
+**Status:** Level 1 **prod closed (automated 2026-06-10)** — Level 2 stream **Phase 7 ENFORCE on VPS**; Phase 8 WS code shipped  
 **Gate:** `npm run verify:auth-kit` (automated) + `docs/AUTH_ROLLOUT_GATES.md` (browser)
 
 ---
@@ -12,7 +12,7 @@
 | «Cookie transplant не даёт API-доступ» | **Да** — PoP + proof token на prod (SEC-001, SEC-013) |
 | «Архитектура рассчитана на рост hot-path» | **Да** — proof token вместо ECDSA+Redis SETNX на каждый GET; epoch revoke; PG SoT path |
 | «Абсолютно безопасно / нельзя взломать» | **Нет** — XSS на том же origin, malware с ключом, фишинг вне scope PoP |
-| «Уровень Telegram/Apple сегодня» | **Нет** — нет passkeys, login alerts, risk engine, WS/stream ENFORCE на prod |
+| «Уровень Telegram/Apple сегодня» | **Нет** — нет passkeys, login alerts (SEC-007 deferred), risk engine, WS ENFORCE on prod |
 | «Готово копировать в другой проект (API)** | **Да (Level 1)** — после `verify:auth-kit` + browser DoD |
 | «Готово копировать transport (stream/WS)** | **Частично** — код есть; prod flags **off**; staging gate обязателен |
 
@@ -31,8 +31,9 @@
 | Epoch revoke pub/sub | done |
 | Sessions revoke / others / all | API + UI |
 | Fresh-login 24h guard | `FRESH_LOGIN_REQUIRED` |
-| MFA step-up modal (sessions) | listener UI |
-| Stream ticket mint (frontend) | code; default off |
+| MFA step-up modal | sessions, password, telegram unlink (listener) |
+| PoP devices list | `GET /api/auth/devices` + UI |
+| Stream ticket mint (frontend) | prod Phase 6/7 overlay (`mint:1`) |
 
 **Automated gate:** `npm run verify:auth-kit`  
 **Browser gate:** `bash scripts/run-auth-proof-token-browser-dod.sh` (8/8)  
@@ -47,7 +48,7 @@
 | Frontend `?st=` attach | opt-in `REACT_APP_STREAM_TICKET_MINT_ENABLED=1` |
 | Prod ACCEPT (dual-mode) | prod (2026-06-10 VPS) |
 | Prod ENFORCE | **prod (2026-06-10 VPS)** — legacy stream cookie → 401 |
-| WS connect opaque ticket | Phase 8 |
+| WS connect opaque ticket | Phase 8 ACCEPT (device-sync + frontend mint); prod overlay |
 
 **Gate:** auth-e2e overlay + `npm run verify:auth-kit -- --with-e2e`
 
@@ -121,7 +122,26 @@ Overlay `docker-compose.auth-e2e.yml` + rebuild frontend with `REACT_APP_STREAM_
 
 ---
 
-## VPS deploy checklist (после git pull)
+## VPS deploy checklist (Wave B + Phase 8 after git pull)
+
+```bash
+cd /opt/music-platform
+git pull origin main
+npm run run:auth-wave-b-prod-deploy
+# or manually:
+# docker compose build --no-cache api-gateway security-service device-sync-service frontend
+# docker compose up -d api-gateway security-service device-sync-service frontend
+npm run verify:auth-kit
+npm run verify:sec005-prod-health
+```
+
+Auth-e2e WS gate: `npm run verify:auth-kit -- --with-e2e` (includes `verify:stream-ticket-ws-accept`).
+
+**During Phase 7 soak:** do **not** run `restore-prod-after-auth-e2e.sh` without `RESTORE_PROD_CONFIRM=1`.
+
+---
+
+## VPS deploy checklist (legacy — stream phase only)
 
 ```bash
 git pull origin main

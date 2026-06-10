@@ -22,6 +22,20 @@
 
 ---
 
+## 2026-06-10 — SEC-005 Phase 8 WS tickets + Wave B devices/password (listener)
+
+**Status:** accepted  
+**Area:** auth | device-sync | gateway | frontend  
+**Context:** Stream bytes SEC-005 Phases 6–7 closed on VPS; WS `/ws/devices` still used legacy device-sync JWT only. PEND-SEC-002 devices API and PEND-SEC-004 password step-up on listener were open. Listener `gateway.yaml` routed only `/api/auth/sessions` to security-service — password/overview would hit Node auth-service.  
+**Decision:** (1) device-sync verifies opaque `ws_connect_ticket` from redis-auth (`STREAM_TICKET_ACCEPT`, dual-mode with legacy JWT); frontend mints `kind: ws` via full PoP when `REACT_APP_STREAM_TICKET_MINT_ENABLED=1`. (2) `GET /api/auth/devices` in security-service + `AuthDevicesSection`. (3) `PasswordChangeSection` with `StepUpModal` on listener Profile → sessions tab. (4) Listener gateway routes for `/api/auth/password`, `/api/auth/security`, `/api/auth/devices`, `/api/auth/telegram/unlink`, `/api/auth/2fa/recovery` → security upstream (parity with artist gateway).  
+**Alternatives considered:** WS ENFORCE in same rollout — deferred; prod overlay keeps device-sync `ENFORCE=0` while stream bytes may be Phase 7.  
+**Consequences:** Phase 8 gate `npm run verify:stream-ticket-ws-accept` on auth-e2e. Prod soak: device-sync env in `docker-compose.stream-prod-accept.yml` / enforce overlay.  
+**Files touched:** `backend/device-sync-service/internal/streamticket/*`, `backend/security-service/internal/httpapi/handlers_devices.go`, `frontend/src/auth/streamTicket.js`, `frontend/src/hooks/useDeviceSync.js`, `backend/go-api-gateway/gateway.yaml`, `scripts/stream-ticket-verify/ws-accept-consume.mjs`  
+**Tests:** `streamticket/verifier_test.go`, `npm run verify:stream-ticket-ws-accept`  
+**Чтобы не повторилось:** WS mint requires **full PoP** at gateway (`kind: ws`); do not use proof-access-token-only for ws stream-ticket.
+
+---
+
 ## 2026-06-07 — Mobile nav: solid bar, tap-only (no swipe/blur)
 
 **Status:** accepted  
