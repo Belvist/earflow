@@ -69,7 +69,7 @@ const MobilePlayerBar = ({ onOpenEq }) => {
     progressBarId: 'mini-progress-bar',
   });
 
-  const floatingProgressStyle = isFloating ? getFloatingProgressStyle(displayPercent) : undefined;
+  const progressBarStyle = getFloatingProgressStyle(displayPercent);
 
   const accentCoverUrl = useMemo(
     () => (currentTrack ? apiClient.getCoverUrl(currentTrack, true) : null),
@@ -206,7 +206,7 @@ const MobilePlayerBar = ({ onOpenEq }) => {
         data-mini-gesture-zone="true"
         data-mini-bar-variant={variant}
         data-mini-play-style={playStyle}
-        data-mini-bar-ui="2026-06-v63-nav-liquid-drag"
+        data-mini-bar-ui="2026-06-v64-mini-progress"
         $variant={variant}
         initial={false}
         animate={false}
@@ -322,7 +322,7 @@ const MobilePlayerBar = ({ onOpenEq }) => {
           id="mini-progress-bar"
           data-testid="mini-player-progress"
           $variant={variant}
-          style={floatingProgressStyle}
+          style={progressBarStyle}
         >
           <ProgressFillMini className="ef-mini-progress-fill" />
         </ProgressBarMini>

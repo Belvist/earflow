@@ -109,15 +109,8 @@ export const MiniPlayerContent = styled.div`
   width: 100%;
   height: 100%;
 
-  ${(p) => (p.$variant === MINI_BAR_VARIANT.CLASSIC ? css`
-    padding: 0 14px;
-    height: 100%;
-  ` : css`
-    padding: 0 14px;
-    flex: 1;
-    min-height: 0;
-    height: auto;
-  `)}
+  padding: 0 14px;
+  height: 100%;
 `;
 
 export const MiniPlayerMainRow = styled.div`
@@ -300,8 +293,10 @@ export const MiniPlayInner = styled.div`
 `;
 
 export const ProgressBarMini = styled.div`
+  position: absolute;
   left: 0;
   right: 0;
+  bottom: 0;
   width: 100%;
   max-width: 100%;
   margin: 0;
@@ -310,27 +305,22 @@ export const ProgressBarMini = styled.div`
   overflow: hidden;
   isolation: isolate;
   pointer-events: none;
+  z-index: 10;
   --progress: 0%;
   line-height: 0;
   transform: translateZ(0);
 
   ${(p) => (p.$variant === MINI_BAR_VARIANT.CLASSIC ? css`
-    position: absolute;
-    bottom: 0;
-    z-index: 10;
     height: 2px;
     min-height: 2px;
     max-height: 2px;
     border-radius: 0;
-    background: rgba(255, 255, 255, 0.28);
+    background: rgba(0, 0, 0, 0.35);
   ` : css`
-    position: relative;
-    flex-shrink: 0;
-    z-index: 3;
     height: ${FLOATING_PROGRESS_HEIGHT_PX}px;
     min-height: ${FLOATING_PROGRESS_HEIGHT_PX}px;
     max-height: ${FLOATING_PROGRESS_HEIGHT_PX}px;
-    background: rgba(255, 255, 255, 0.28);
+    background: rgba(0, 0, 0, 0.32);
     border-radius: 0 0 var(--mini-shell-radius, ${FLOATING_SHELL_RADIUS_PX}px) var(--mini-shell-radius, ${FLOATING_SHELL_RADIUS_PX}px);
   `)}
 `;
@@ -343,10 +333,11 @@ export const ProgressFillMini = styled.div`
   display: block;
   min-width: 0;
   max-width: 100%;
-  border-radius: 0;
-  background: #ffffff;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.35);
   width: var(--progress, 0%);
-  transition: width 0.1s linear;
+  transition: width 0.12s linear;
   transform: translateZ(0);
 `;
 
