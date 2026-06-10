@@ -17,6 +17,10 @@ if [[ "${SEC005_ROLLBACK_CONFIRM:-}" != "1" ]]; then
   exit 1
 fi
 
+# shellcheck source=scripts/sec005-phase6-overlay.sh
+source "$ROOT/scripts/sec005-phase6-overlay.sh"
+sec005_phase6_overlay_disable "$ROOT" || true
+
 echo "[rollback-phase6] restoring prod norm via restore-prod-after-auth-e2e.sh"
 RESTORE_PROD_CONFIRM=1 bash "$ROOT/scripts/restore-prod-after-auth-e2e.sh"
 echo "[rollback-phase6] done — STREAM_TICKET_ENABLED off, ACCEPT off, frontend mint:0"

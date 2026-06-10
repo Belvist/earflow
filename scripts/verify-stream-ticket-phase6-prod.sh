@@ -20,6 +20,9 @@ source "$ROOT/scripts/prod-stream-ticket-export-env.sh"
 prod_stream_ticket_export_defaults "$ROOT"
 
 COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.stream-prod-accept.yml)
+COMPOSE_AUTO=(docker compose -f docker-compose.yml)
+# shellcheck source=scripts/compose-read-service-env.sh
+source "$ROOT/scripts/compose-read-service-env.sh"
 failures=0
 
 pass() { echo "PASS  $*"; }
@@ -61,17 +64,26 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 
 section "Container flags (ACCEPT on, ENFORCE off)"
-gw_enabled="$("${COMPOSE[@]}" exec -T api-gateway printenv STREAM_TICKET_ENABLED 2>/dev/null | tr -d '\r' || true)"
-ds_accept="$("${COMPOSE[@]}" exec -T direct-stream-service printenv STREAM_TICKET_ACCEPT 2>/dev/null | tr -d '\r' || true)"
-hls_accept="$("${COMPOSE[@]}" exec -T ebap-hls-adapter printenv STREAM_TICKET_ACCEPT 2>/dev/null | tr -d '\r' || true)"
-ds_enforce="$("${COMPOSE[@]}" exec -T direct-stream-service printenv STREAM_TICKET_ENFORCE 2>/dev/null | tr -d '\r' || true)"
-hls_enforce="$("${COMPOSE[@]}" exec -T ebap-hls-adapter printenv STREAM_TICKET_ENFORCE 2>/dev/null | tr -d '\r' || true)"
-fe_api="$("${COMPOSE[@]}" exec -T frontend printenv EARFLOW_API_BASE_URL 2>/dev/null | tr -d '\r' || true)"
+gw_enabled="$(compose_read_service_env api-gateway STREAM_TICKET_ENABLED "${COMPOSE_AUTO[@]}" 2>/dev/null || true)"
+ds_accept="$(compose_read_service_env direct-stream-service STREAM_TICKET_ACCEPT "${COMPOSE_AUTO[@]}" 2>/dev/null || true)"
+hls_accept="$(compose_read_service_env ebap-hls-adapter STREAM_TICKET_ACCEPT "${COMPOSE_AUTO[@]}" 2>/dev/null || true)"
+ds_enforce="$(compose_read_service_env direct-stream-service STREAM_TICKET_ENFORCE "${COMPOSE_AUTO[@]}" 2>/dev/null || true)"
+hls_enforce="$(compose_read_service_env ebap-hls-adapter STREAM_TICKET_ENFORCE "${COMPOSE_AUTO[@]}" 2>/dev/null || true)"
+fe_api="$(compose_read_service_env frontend EARFLOW_API_BASE_URL "${COMPOSE_AUTO[@]}" 2>/dev/null || true)"
 
-if [[ "$gw_enabled" == "1" || "$gw_enabled" == "true" ]]; then
+gw_mint_live=false
+mint_code="$(curl -sS -o /dev/null -w "%{http_code}" \
+  -X POST "${PROD_API_ORIGIN%/}/api/auth/stream-ticket" \
+  -H "Origin: ${LISTENER_ORIGIN}" \
+  -H "Content-Type: application/json" \
+  -d '{"kind":"media","scope":{"sessionId":"x","trackId":"y"},"client":"web"}' 2>/dev/null || echo "000")"
+if [[ "$mint_code" == "401" || "$mint_code" == "403" ]]; then
+  gw_mint_live=true
+  pass "api-gateway stream-ticket mint live (HTTP ${mint_code})"
+elif [[ "$gw_enabled" == "1" || "$gw_enabled" == "true" ]]; then
   pass "api-gateway STREAM_TICKET_ENABLED=${gw_enabled}"
 else
-  fail "api-gateway STREAM_TICKET_ENABLED='${gw_enabled:-<empty>}' (want 1)"
+  fail "api-gateway STREAM_TICKET_ENABLED='${gw_enabled:-<empty>}' and mint HTTP ${mint_code} (want env=1 or 401/403)"
 fi
 if [[ "$ds_accept" == "1" || "$ds_accept" == "true" ]]; then
   pass "direct-stream STREAM_TICKET_ACCEPT=${ds_accept}"

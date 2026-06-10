@@ -20,7 +20,7 @@ echo "=== SEC-005 prod health (mode: ${SEC005_PROD_MODE}) ==="
 if [[ -n "${SEC005_SPLIT_REASON:-}" ]]; then
   echo "Reason: $SEC005_SPLIT_REASON"
 fi
-echo "gateway STREAM_TICKET_ENABLED='${SEC005_GW_ENABLED:-<unknown>}'"
+echo "gateway STREAM_TICKET_ENABLED='${SEC005_GW_ENABLED:-<unknown>}' mint_live=${SEC005_GW_MINT_LIVE:-unknown}"
 echo "direct-stream ACCEPT='${SEC005_DS_ACCEPT:-<unknown>}' ebap-hls ACCEPT='${SEC005_HLS_ACCEPT:-<unknown>}'"
 echo "bundle mint marker on earflow.ru: ${SEC005_BUNDLE_MINT:-unknown}"
 echo ""
