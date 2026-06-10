@@ -145,8 +145,13 @@ else
 fi
 
 section "Prod consume (mint + ?st= + legacy dual-mode)"
+echo "consume AUTH_E2E_BASE_URL=${AUTH_E2E_BASE_URL}"
+echo "consume AUTH_E2E_ORIGIN=${AUTH_E2E_ORIGIN}"
+echo "consume DIRECT_STREAM_BASE_URL=${DIRECT_STREAM_BASE_URL}"
 if [[ -z "${AUTH_E2E_EMAIL:-}" || -z "${AUTH_E2E_PASSWORD:-}" ]]; then
   fail "AUTH_E2E_EMAIL / AUTH_E2E_PASSWORD required in .env for prod consume gate"
+elif prod_stream_ticket_is_e2e_origin "${AUTH_E2E_BASE_URL:-}"; then
+  fail "AUTH_E2E_BASE_URL still e2e (${AUTH_E2E_BASE_URL}) — prod gate misconfigured"
 elif [[ ! -f "$ROOT/scripts/stream-ticket-verify/accept-consume.mjs" ]]; then
   fail "accept-consume.mjs missing"
 elif node "$ROOT/scripts/stream-ticket-verify/accept-consume.mjs"; then
