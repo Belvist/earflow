@@ -36,4 +36,5 @@ describe('gestureProfiles', () => {
     expect(profile.commit({ dx: -IOS_GESTURE.swipeDistancePx, dy: 6, velocityX: 0 })).toBe(-1);
     expect(profile.commit({ dx: 40, dy: 38, velocityX: 900 })).toBe(0);
   });
+
 });

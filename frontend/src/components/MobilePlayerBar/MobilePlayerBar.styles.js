@@ -315,18 +315,14 @@ export const ProgressBarMini = styled.div`
     min-height: 2px;
     max-height: 2px;
     border-radius: 0;
-    background: rgba(0, 0, 0, 0.35);
+    background: rgba(255, 255, 255, 0.18);
   ` : css`
     height: ${FLOATING_PROGRESS_HEIGHT_PX}px;
     min-height: ${FLOATING_PROGRESS_HEIGHT_PX}px;
     max-height: ${FLOATING_PROGRESS_HEIGHT_PX}px;
-    background: linear-gradient(
-      to top,
-      rgba(0, 0, 0, 0.72) 0%,
-      rgba(0, 0, 0, 0.38) 100%
-    );
+    background: rgba(255, 255, 255, 0.22);
     border-radius: 0 0 var(--mini-shell-radius, ${FLOATING_SHELL_RADIUS_PX}px) var(--mini-shell-radius, ${FLOATING_SHELL_RADIUS_PX}px);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    box-shadow: none;
   `)}
 `;
 

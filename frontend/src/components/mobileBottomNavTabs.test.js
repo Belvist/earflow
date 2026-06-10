@@ -2,8 +2,11 @@ import {
   MOBILE_NAV_TAB_ORDER,
   getNavTabIndex,
   normalizeNavTabForSwipe,
+  pointerClientXToChipX,
   resolveAdjacentNavTab,
   resolveTabFromDragOffset,
+  snapIndexFromChipX,
+  snapTabFromChipX,
 } from './mobileBottomNavTabs';
 
 describe('mobileBottomNavTabs', () => {
@@ -42,5 +45,39 @@ describe('mobileBottomNavTabs', () => {
     expect(resolveTabFromDragOffset({ activeTab: 'social', dx: 50, segmentWidthPx: seg })).toBe('home');
     expect(resolveTabFromDragOffset({ activeTab: 'home', dx: -8, segmentWidthPx: seg })).toBeNull();
     expect(resolveTabFromDragOffset({ activeTab: 'home', dx: -20, segmentWidthPx: seg, velocityX: -700 })).toBe('social');
+  });
+
+  it('snapIndexFromChipX rounds to nearest slot on release', () => {
+    const seg = 80;
+    expect(snapIndexFromChipX(0, seg)).toBe(0);
+    expect(snapIndexFromChipX(39, seg)).toBe(0);
+    expect(snapIndexFromChipX(41, seg)).toBe(1);
+    expect(snapIndexFromChipX(159, seg)).toBe(2);
+    expect(snapTabFromChipX(120, seg)).toBe('search');
+  });
+
+  it('pointerClientXToChipX centers chip on finger and clamps inside track', () => {
+    const seg = 80;
+    const trackRect = { left: 100, width: 320 };
+    const innerPad = 4;
+    expect(pointerClientXToChipX({
+      clientX: 100 + 4 + 40,
+      trackRect,
+      innerPadPx: innerPad,
+      segmentWidthPx: seg,
+    })).toBe(0);
+    expect(pointerClientXToChipX({
+      clientX: 100 + 4 + 120,
+      trackRect,
+      innerPadPx: innerPad,
+      segmentWidthPx: seg,
+    })).toBe(80);
+    const maxX = 320 - 8 - seg;
+    expect(pointerClientXToChipX({
+      clientX: 9999,
+      trackRect,
+      innerPadPx: innerPad,
+      segmentWidthPx: seg,
+    })).toBe(maxX);
   });
 });
