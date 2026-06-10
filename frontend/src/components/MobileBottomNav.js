@@ -11,7 +11,6 @@ import useAuth from '../hooks/useAuth';
 import { clearRecentLogout, redirectToAuth, sanitizeReturnTo } from '../utils/authRedirect';
 import {
   MOBILE_CHROME_SIDE_INSET_PX,
-  MOBILE_NAV_BOTTOM_GAP_PX,
   MOBILE_NAV_PILL_HEIGHT_PX,
 } from './mobileChromeTokens';
 
@@ -23,17 +22,17 @@ const Nav = styled.nav`
   bottom: 0;
   left: 0;
   width: 100%;
-  height: calc(${NAV_PILL_H_PX}px + ${MOBILE_NAV_BOTTOM_GAP_PX}px + env(safe-area-inset-bottom, 0px));
+  height: calc(${NAV_PILL_H_PX}px + env(safe-area-inset-bottom, 0px));
   padding:
     0
     max(${MOBILE_CHROME_SIDE_INSET_PX}px, env(safe-area-inset-right, 0px))
-    calc(${MOBILE_NAV_BOTTOM_GAP_PX}px + env(safe-area-inset-bottom, 0px))
+    env(safe-area-inset-bottom, 0px)
     max(${MOBILE_CHROME_SIDE_INSET_PX}px, env(safe-area-inset-left, 0px));
   box-sizing: border-box;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: stretch;
-  background: transparent;
+  background: ${NAV_SOLID_BG};
   border: none;
   pointer-events: none;
   z-index: var(--z-bottom-nav, 9997);
@@ -173,7 +172,7 @@ export default function MobileBottomNav() {
     <Nav aria-label="Навигация" data-testid="mobile-bottom-nav">
       <NavPill
         data-testid="mobile-bottom-nav-pill"
-        data-mobile-nav-ui="2026-06-v69-chrome-lower"
+        data-mobile-nav-ui="2026-06-v70-chrome-tune"
       >
         <TabGrid>
           {NAV_TABS.map((tab) => {
