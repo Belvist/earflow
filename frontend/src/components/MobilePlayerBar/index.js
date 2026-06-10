@@ -13,7 +13,6 @@ import useMiniPlayerGestureSession from './useMiniPlayerGestureSession';
 import { PLAYER_SHEET_PHASE } from './playerSheetPhase';
 import MiniPlayButtonIos from './MiniPlayButtonIos';
 import MiniPlayButtonAdaptive from './MiniPlayButtonAdaptive';
-import { getFloatingProgressStyle } from './miniPlayButtonVisual';
 import useMiniPlayStyle, { MINI_PLAY_STYLE } from '../../hooks/useMiniPlayStyle';
 import { requestDeviceTiltPermission } from './useDeviceTiltGlare';
 import { miniPlayIconColor } from '../../utils/miniPlayIconColor';
@@ -54,13 +53,22 @@ const MobilePlayerBar = ({ onOpenEq }) => {
   const partyMode = player.partyMode;
   const partyInfo = player.partyInfo;
 
-  const durationSeconds = Number(
-    player.durationRaw || store.duration || currentTrack?.durationSeconds || currentTrack?.duration || 0,
-  );
+  const durationSeconds = useMemo(() => {
+    const candidates = [
+      player.durationRaw,
+      store.duration,
+      currentTrack?.durationSeconds,
+      currentTrack?.duration,
+    ];
+    for (const raw of candidates) {
+      const n = Number(raw);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    return 0;
+  }, [player.durationRaw, store.duration, currentTrack?.durationSeconds, currentTrack?.duration]);
 
   const {
     progressBarRef,
-    displayPercent,
   } = useSeekableProgress({
     currentTimeRef: player.currentTimeRef,
     durationRaw: durationSeconds,
@@ -68,8 +76,6 @@ const MobilePlayerBar = ({ onOpenEq }) => {
     disabled: true,
     progressBarId: 'mini-progress-bar',
   });
-
-  const progressBarStyle = getFloatingProgressStyle(displayPercent);
 
   const accentCoverUrl = useMemo(
     () => (currentTrack ? apiClient.getCoverUrl(currentTrack, true) : null),
@@ -206,7 +212,7 @@ const MobilePlayerBar = ({ onOpenEq }) => {
         data-mini-gesture-zone="true"
         data-mini-bar-variant={variant}
         data-mini-play-style={playStyle}
-        data-mini-bar-ui="2026-06-v65-nav-indicator-fix"
+        data-mini-bar-ui="2026-06-v66-progress-persist"
         $variant={variant}
         initial={false}
         animate={false}
@@ -322,7 +328,6 @@ const MobilePlayerBar = ({ onOpenEq }) => {
           id="mini-progress-bar"
           data-testid="mini-player-progress"
           $variant={variant}
-          style={progressBarStyle}
         >
           <ProgressFillMini className="ef-mini-progress-fill" />
         </ProgressBarMini>

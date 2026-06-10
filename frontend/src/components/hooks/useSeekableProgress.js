@@ -40,7 +40,9 @@ export function useSeekableProgress({
     const safetyTimerRef = useRef(null);
     const progressBarRef = useRef(null);
     const durationRef = useRef(0);
+    const lastGoodDurationRef = useRef(0);
     const seekPreviewTimeRef = useRef(0);
+    const lastReactPercentRef = useRef(-1);
 
     const onBeginSeekRef = useRef(onBeginSeek);
     onBeginSeekRef.current = onBeginSeek;
@@ -49,19 +51,41 @@ export function useSeekableProgress({
     const onPreviewSeekRef = useRef(onPreviewSeek);
     onPreviewSeekRef.current = onPreviewSeek;
 
-    durationRef.current = Number(durationRaw) || 0;
+    const rawDuration = Number(durationRaw) || 0;
+    if (rawDuration > 0) {
+        lastGoodDurationRef.current = rawDuration;
+        durationRef.current = rawDuration;
+    } else if (lastGoodDurationRef.current > 0) {
+        durationRef.current = lastGoodDurationRef.current;
+    } else {
+        durationRef.current = 0;
+    }
 
     const writeProgressCss = useCallback((pct) => {
         const bar = progressBarRef.current;
         let v = Math.max(0, Math.min(100, Number(pct) || 0));
-        if (!seekingRef.current && v > 0 && v < 1) {
+        if (!seekingRef.current && v > 0 && v < 0.35) {
             v = 0;
         }
-        setDisplayPercent(v);
-        if (!bar) return;
+        if (!bar) {
+            if (Math.abs(v - lastReactPercentRef.current) >= 0.5) {
+                lastReactPercentRef.current = v;
+                setDisplayPercent(v);
+            }
+            return;
+        }
         try {
-            bar.style.setProperty('--progress', `${v}%`);
+            const value = `${v}%`;
+            bar.style.setProperty('--progress', value);
+            const fill = bar.querySelector('.ef-mini-progress-fill');
+            if (fill) {
+                fill.style.setProperty('width', value);
+            }
         } catch { /* noop */ }
+        if (Math.abs(v - lastReactPercentRef.current) >= 0.5) {
+            lastReactPercentRef.current = v;
+            setDisplayPercent(v);
+        }
     }, []);
 
     useEffect(() => {

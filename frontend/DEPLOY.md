@@ -39,7 +39,7 @@ docker compose up -d --force-recreate frontend
 
 # проверка build hint (v61+ после merge UI)
 curl -sS https://earflow.ru/ | grep -o 'data-mini-bar-ui="[^"]*"' | head -1
-# ожидаем: data-mini-bar-ui="2026-06-v64-mini-progress"
+# ожидаем: data-mini-bar-ui="2026-06-v66-progress-persist"
 ```
 
 Если `platform-control.sh: Permission denied`:
@@ -80,8 +80,8 @@ git push origin main:frontend   # держим ветки на одном SHA
 ### Чеклист mobile chrome (v61)
 
 1. **Навбар** — Liquid Glass drag: pill **тащится за пальцем**, **увеличивается**, стеклянный chip **перетекает** между вкладками.
-2. **Мини-бар** — accent от обложки; progress **3px**, тёмный track + белый fill с glow, absolute внизу shell.
+2. **Мини-бар** — progress **4px**, тёмный scrim track + белый fill; не пропадает после 5с (single owner `useSeekableProgress`).
 3. **Лайк** — **тот же размер что play** (42px floating); меняется **мгновенно** при тапе (optimistic).
 4. **Nav swipe** — горизонтальный свайп по pill переключает соседнюю вкладку (как iOS tab bar).
-5. **Build hint:** `data-mini-bar-ui="2026-06-v64-mini-progress"`.
+5. **Build hint:** `data-mini-bar-ui="2026-06-v66-progress-persist"`.
 6. **Токены:** `frontend/src/components/mobileChromeTokens.js` — единый источник высоты nav + float gap.

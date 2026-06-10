@@ -29,7 +29,6 @@ export class PlayerTimeTracker {
     private root: HTMLElement | null = null;
     private globalBar: HTMLElement | null = null;
     private mobileBar: HTMLElement | null = null;
-    private miniBar: HTMLElement | null = null;
     private domQueried = false;
 
     attach(
@@ -117,7 +116,6 @@ export class PlayerTimeTracker {
         this.root = null;
         this.globalBar = null;
         this.mobileBar = null;
-        this.miniBar = null;
         this.domQueried = false;
     }
 
@@ -228,13 +226,9 @@ export class PlayerTimeTracker {
         if (!this.mobileBar?.isConnected) {
             this.mobileBar = document.getElementById('mobile-progress-bar');
         }
-        if (!this.miniBar?.isConnected) {
-            this.miniBar = document.getElementById('mini-progress-bar');
-        }
-
         safeSetProperty(this.root, '--player-progress', value);
         safeSetProperty(this.globalBar, '--progress', value);
         safeSetProperty(this.mobileBar, '--progress', value);
-        safeSetProperty(this.miniBar, '--progress', value);
+        /* mini-progress-bar: owned by useSeekableProgress in MobilePlayerBar (INV-ARCH-001) */
     }
 }
