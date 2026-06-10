@@ -101,6 +101,14 @@ if [[ -f "$ROOT/scripts/verify-stream-ticket.sh" ]]; then
   source "$ROOT/scripts/detect-sec005-prod-mode.sh"
   detect_sec005_prod_mode "$ROOT"
   case "${SEC005_PROD_MODE:-unknown}" in
+    phase7)
+      skip "verify-stream-ticket.sh (404 norm) — Phase 7 ENFORCE active"
+      if bash "$ROOT/scripts/verify-stream-ticket-phase7-prod.sh"; then
+        pass "verify-stream-ticket-phase7-prod.sh (Phase 7 ENFORCE)"
+      else
+        fail "verify-stream-ticket-phase7-prod.sh (Phase 7 ENFORCE)"
+      fi
+      ;;
     phase6)
       skip "verify-stream-ticket.sh (404 norm) — Phase 6 active; use npm run verify:sec005-prod-health"
       if bash "$ROOT/scripts/verify-stream-ticket-phase6-prod.sh"; then

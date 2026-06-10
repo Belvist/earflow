@@ -1,0 +1,42 @@
+# SEC-005 Phase 7 — prod ENFORCE (ticket required for stream bytes).
+# Includes Phase 6 mint + ACCEPT; legacy mp_stream/mp_hls cookie-only → 401.
+#
+# Usage:
+#   SEC005_PHASE7_CONFIRM=1 npm run run:sec005-phase7-prod-enforce
+#
+# Rollback to Phase 6 dual-mode:
+#   SEC005_PHASE7_ROLLBACK_CONFIRM=1 npm run rollback:sec005-phase7-prod
+
+services:
+  api-gateway:
+    environment:
+      STREAM_TICKET_ENABLED: "1"
+      STREAM_TICKET_OBSERVE: "0"
+      PROOF_ACCESS_TOKEN_ENABLED: ${PROOF_ACCESS_TOKEN_ENABLED:-1}
+
+  frontend:
+    build:
+      args:
+        REACT_APP_STREAM_TICKET_MINT_ENABLED: "1"
+        REACT_APP_PROOF_ACCESS_TOKEN_ENABLED: "1"
+        REACT_APP_DEVICE_PROOF_REQUIRED: "1"
+    environment:
+      EARFLOW_API_BASE_URL: ""
+
+  direct-stream-service:
+    environment:
+      STREAM_TICKET_ACCEPT: "1"
+      STREAM_TICKET_ENFORCE: "1"
+      STREAM_TICKET_JWT_SECRET: ${JWT_SECRET}
+      STREAM_TICKET_AUTH_REDIS_HOST: redis-auth
+      STREAM_TICKET_AUTH_REDIS_PORT: 6379
+      STREAM_TICKET_AUTH_REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+
+  ebap-hls-adapter:
+    environment:
+      STREAM_TICKET_ACCEPT: "1"
+      STREAM_TICKET_ENFORCE: "1"
+      STREAM_TICKET_JWT_SECRET: ${JWT_SECRET}
+      STREAM_TICKET_AUTH_REDIS_HOST: redis-auth
+      STREAM_TICKET_AUTH_REDIS_PORT: 6379
+      STREAM_TICKET_AUTH_REDIS_PASSWORD: ${REDIS_PASSWORD:-}

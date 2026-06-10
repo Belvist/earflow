@@ -24,8 +24,8 @@ COMPOSE_PROD=(docker compose -f docker-compose.yml)
 
 log() { echo "[phase6-prod-accept] $*"; }
 
-# shellcheck source=scripts/sec005-phase6-overlay.sh
-source "$ROOT/scripts/sec005-phase6-overlay.sh"
+# shellcheck source=scripts/sec005-prod-overlay.sh
+source "$ROOT/scripts/sec005-prod-overlay.sh"
 
 if [[ "${SEC005_PHASE6_CONFIRM:-}" != "1" ]]; then
   echo "Refusing prod Phase 6 without SEC005_PHASE6_CONFIRM=1" >&2
@@ -62,7 +62,7 @@ if [[ "$cookie_domain" == "host" ]]; then
 fi
 
 log "enable docker-compose.override.yml → stream-prod-accept (survives plain docker compose up)"
-sec005_phase6_overlay_enable "$ROOT"
+sec005_prod_overlay_enable "$ROOT" accept
 
 log "build frontend + stream services with stream-prod-accept overlay"
 "${COMPOSE[@]}" build frontend direct-stream-service ebap-hls-adapter api-gateway

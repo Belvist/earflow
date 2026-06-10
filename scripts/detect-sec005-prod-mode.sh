@@ -109,11 +109,29 @@ detect_sec005_prod_mode() {
   detect_sec005_flag_on "$ds_accept" && ds_on=true
   detect_sec005_flag_on "$hls_accept" && hls_on=true
 
-  if detect_sec005_flag_on "$ds_enforce" || detect_sec005_flag_on "$hls_enforce"; then
-    SEC005_PROD_MODE="split"
-    SEC005_SPLIT_REASON="STREAM_TICKET_ENFORCE on prod without Phase 7 gate — unexpected"
+  local ds_enforce_on=false hls_enforce_on=false
+  detect_sec005_flag_on "$ds_enforce" && ds_enforce_on=true
+  detect_sec005_flag_on "$hls_enforce" && hls_enforce_on=true
+
+  if "$gw_on" && "$ds_on" && "$hls_on" && "$ds_enforce_on" && "$hls_enforce_on"; then
+    SEC005_PROD_MODE="phase7"
     export SEC005_PROD_MODE SEC005_SPLIT_REASON
     return 0
+  fi
+
+  if "$ds_enforce_on" || "$hls_enforce_on"; then
+    if ! "$ds_enforce_on" || ! "$hls_enforce_on"; then
+      SEC005_PROD_MODE="split"
+      SEC005_SPLIT_REASON="partial ENFORCE (ds='${ds_enforce:-∅}' hls='${hls_enforce:-∅}') — re-run Phase 7 or rollback"
+      export SEC005_PROD_MODE SEC005_SPLIT_REASON
+      return 0
+    fi
+    if ! "$gw_on" || ! "$ds_on" || ! "$hls_on"; then
+      SEC005_PROD_MODE="split"
+      SEC005_SPLIT_REASON="ENFORCE on but mint/ACCEPT incomplete — re-run Phase 7"
+      export SEC005_PROD_MODE SEC005_SPLIT_REASON
+      return 0
+    fi
   fi
 
   if "$gw_on" && "$ds_on" && "$hls_on"; then

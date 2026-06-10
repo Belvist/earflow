@@ -49,6 +49,18 @@
 
 ---
 
+## 2026-06-10 — SEC-005 Phase 7 prod ENFORCE rollout tooling
+
+**Status:** accepted  
+**Area:** auth | streaming | ops  
+**Context:** Phase 6 prod ACCEPT closed; transport perimeter needs ENFORCE (legacy stream cookie → 401) before claiming stream auth closed.  
+**Decision:** Phase 7 via `docker-compose.stream-prod-enforce.yml` + override symlink (`sec005-prod-overlay.sh` modes `accept` | `enforce`). Gates: `run:sec005-phase7-prod-enforce`, `verify-stream-ticket-phase7-prod` (`enforce-consume.mjs` on prod). Rollback Phase 7 → Phase 6 only (`rollback:sec005-phase7-prod`). `detect-sec005-prod-mode` adds `phase7`.  
+**Consequences:** Prod unchanged until operator runs Phase 7 after soak. Phase 8 WS still open.  
+**Files touched:** `docker-compose.stream-prod-enforce.yml`, `scripts/sec005-prod-overlay.sh`, phase7 run/verify/rollback scripts, `verify-sec005-prod-health.sh`  
+**Чтобы не повторилось:** plain `docker compose up` requires override symlink; `restore-prod` blocked during phase6/phase7 without confirm.
+
+---
+
 ## 2026-06-10 — SEC-005 Phase 6 prod ACCEPT closed on VPS
 
 **Status:** accepted  

@@ -284,8 +284,8 @@ Revoke/password/email/delete — modal при `MFA_STEP_UP_REQUIRED`, не raw e
 | 4 | Frontend mint + attach (`streamTicket.js`, opt-in flag) | **closed (2026-06-09 VPS `727be49`)** — `npm run run:sec005-phase4-staging` PASS |
 | 5 | Staging ENFORCE | **closed (2026-06-09 VPS)** — `npm run run:sec005-phase5-staging` PASS |
 | 6 | Prod ACCEPT (dual-mode) | **closed (2026-06-10 VPS `1852924`)** — `verify:stream-ticket-phase6-prod` PASS |
-| 7 | Prod ENFORCE | **next** — after soak |
-| 8 | WS connect tickets | after Phase 7 |
+| 7 | Prod ENFORCE | **tooling ready** — `npm run run:sec005-phase7-prod-enforce` after Phase 6 soak |
+| 8 | WS connect tickets | after Phase 7 prod PASS — consume not implemented |
 
 **VPS close report — Phase 3 ACCEPT (`ru-vmv2-mini`, 2026-06-09, git `f9da305`):**
 
@@ -322,9 +322,17 @@ accept-consume prod:                ticket 200, garbage 401, legacy cookie 200
 verify:frontend-api-base:           PASS
 ```
 
-**Next:** Phase 7 prod ENFORCE — only after soak (manual playback + metrics). Rollback: `SEC005_ROLLBACK_CONFIRM=1 npm run rollback:sec005-phase6-prod`.
+**Next:** Phase 7 prod ENFORCE after soak:
 
-**Forbidden until Phase 7 gate:** prod `STREAM_TICKET_ENFORCE=1` without soak sign-off.
+```bash
+npm run verify:sec005-prod-health   # must be phase6 PASS
+SEC005_PHASE7_CONFIRM=1 npm run run:sec005-phase7-prod-enforce
+```
+
+Rollback Phase 7 → Phase 6: `SEC005_PHASE7_ROLLBACK_CONFIRM=1 npm run rollback:sec005-phase7-prod`  
+Rollback to norm: `SEC005_ROLLBACK_CONFIRM=1 npm run rollback:sec005-phase6-prod`
+
+**Still open for «auth perimeter closed»:** Phase 8 WS tickets, PEND-SEC-002 devices API, PEND-SEC-004 password/email step-up, SEC-007 TG bot (deferred).
 
 **v1 scope:** listener web SPA only.
 

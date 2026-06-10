@@ -161,9 +161,35 @@ SEC005_ROLLBACK_CONFIRM=1 npm run rollback:sec005-phase6-prod
 
 **Forbidden:** Phase 7 ENFORCE until Phase 6 soak complete.
 
-## SEC-005 Phase 7 — prod ENFORCE (future)
+## SEC-005 Phase 7 — prod ENFORCE
 
-Not implemented yet. After Phase 6 soak: `STREAM_TICKET_ENFORCE=1` + verify legacy cookie → 401.
+**Prerequisites:** Phase 6 PASS + soak; frontend `mint:1` on earflow.ru.
+
+```bash
+cd /opt/music-platform
+git pull origin main
+SEC005_PHASE7_CONFIRM=1 npm run run:sec005-phase7-prod-enforce
+```
+
+| Check | Expect |
+|-------|--------|
+| Overlay | `docker-compose.stream-prod-enforce.yml` via override symlink |
+| `STREAM_TICKET_ENFORCE` | `1` on direct-stream + ebap-hls |
+| Valid `?st=` ticket | HEAD 200/206 |
+| Legacy `mp_stream` cookie only | HEAD **401** `STREAM_TICKET_REQUIRED` |
+| `enforce-consume.mjs` | PASS on prod origins |
+
+**Rollback to Phase 6 dual-mode:**
+
+```bash
+SEC005_PHASE7_ROLLBACK_CONFIRM=1 npm run rollback:sec005-phase7-prod
+```
+
+**Weekly health (Phase 6 or 7):** `npm run verify:sec005-prod-health`
+
+## SEC-005 Phase 8 — WS connect tickets (not started)
+
+Gateway mint type `ws_connect` exists; device-sync consume not wired. After Phase 7 prod PASS.
 
 **Universal verify discipline:**
 
