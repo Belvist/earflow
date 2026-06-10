@@ -1,4 +1,4 @@
-import styled, { css } from 'styled-components';
+import styled, { css, keyframes } from 'styled-components';
 import { motion } from 'framer-motion';
 import { MINI_BAR_VARIANT } from '../../utils/miniBarVariant';
 import {
@@ -370,11 +370,21 @@ export const MiniTrackInfo = styled(motion.div)`
   overflow: hidden;
 `;
 
+const coverIn = keyframes`
+  from { opacity: 0; }
+  to { opacity: 1; }
+`;
+
 export const MiniAlbumCover = styled.img`
   ${(p) => portraitCoverThumbByHeight(
   p.$variant === MINI_BAR_VARIANT.CLASSIC ? CLASSIC_COVER_HEIGHT_PX : FLOATING_COVER_HEIGHT_PX,
 )}
   align-self: center;
+  animation: ${coverIn} 0.24s ease both;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
 `;
 
 export const MiniCoverPlaceholder = styled.div`

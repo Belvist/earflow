@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import styled, { createGlobalStyle } from 'styled-components';
+import styled, { createGlobalStyle, keyframes } from 'styled-components';
 import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import Header from './components/Header';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -423,6 +423,12 @@ const RoutedContent = styled.div`
   z-index: 5;
 `;
 
+const loadingFadeIn = keyframes`
+  from { opacity: 0; }
+  to { opacity: 1; }
+`;
+
+/* Delayed reveal: fast chunk loads never flash this screen. */
 const LoadingContainer = styled.div`
   min-height: 100vh;
   min-height: calc(var(--app-vh, 1vh) * 100);
@@ -430,10 +436,28 @@ const LoadingContainer = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: black;
-  color: white;
+  background: var(--ef-surface-main, #0D0D0D);
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 14px;
   gap: 20px;
   padding: 20px;
+  opacity: 0;
+  animation: ${loadingFadeIn} 0.22s ease 0.18s both;
+`;
+
+const routeEnter = keyframes`
+  from { opacity: 0; }
+  to { opacity: 1; }
+`;
+
+/* Opacity-only enter — no transform, so position: fixed inside pages keeps viewport anchoring. */
+const RouteFade = styled.div`
+  width: 100%;
+  animation: ${routeEnter} 0.2s ease both;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
 `;
 
 const LoginMessage = styled.p`
@@ -708,6 +732,7 @@ function AppLayout() {
             </React.Suspense>
           ) : (
             <React.Suspense fallback={<LoadingContainer>Загрузка...</LoadingContainer>}>
+              <RouteFade key={location.pathname}>
               <Routes>
                 <Route path="/" element={<MainApp />} />
                 <Route path="/playground/mobile-player" element={<MobilePlayerPlayground />} />
@@ -730,6 +755,7 @@ function AppLayout() {
                 <Route path="/mood-radar" element={<RequireAuth><MoodRadarPage /></RequireAuth>} />
                 <Route path="/account/:id" element={<ProfileWithOffline />} />
               </Routes>
+              </RouteFade>
             </React.Suspense>
           )}
         </RoutedContent>

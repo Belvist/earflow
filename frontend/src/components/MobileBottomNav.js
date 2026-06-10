@@ -91,6 +91,7 @@ const TabButton = styled.button`
     width: 22px;
     height: 22px;
     flex-shrink: 0;
+    transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 
   @media (max-width: 360px) {
@@ -100,8 +101,9 @@ const TabButton = styled.button`
     }
   }
 
-  &:active {
-    opacity: 0.9;
+  &:active svg {
+    transform: scale(0.82);
+    transition-duration: 0.08s;
   }
 
   &:focus-visible {
@@ -172,7 +174,7 @@ export default function MobileBottomNav() {
     <Nav aria-label="Навигация" data-testid="mobile-bottom-nav">
       <NavPill
         data-testid="mobile-bottom-nav-pill"
-        data-mobile-nav-ui="2026-06-v70-chrome-tune"
+        data-mobile-nav-ui="2026-06-v71-smooth-pass"
       >
         <TabGrid>
           {NAV_TABS.map((tab) => {

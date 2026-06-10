@@ -93,7 +93,7 @@ export const CloseButton = styled(motion.button)`
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.3s ease;
+  transition: transform 0.12s ease, background 0.2s ease;
 
   &:active {
     transform: scale(0.95);
@@ -209,7 +209,7 @@ export const TrackListItem = styled(motion.div)`
   align-items: center;
   gap: 12px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background 0.16s ease, border-color 0.16s ease;
 
   &:active {
     background: rgba(255, 255, 255, 0.08);
@@ -597,7 +597,7 @@ export const LikeButton = styled(motion.button)`
   align-items: center;
   justify-content: center;
   font-size: 20px;
-  transition: all 0.2s ease;
+  transition: transform 0.12s ease, color 0.18s ease;
   flex-shrink: 0;
 
   &:active {
@@ -629,7 +629,7 @@ export const DislikeButton = styled(motion.button)`
   align-items: center;
   justify-content: center;
   font-size: 20px;
-  transition: all 0.2s ease;
+  transition: transform 0.12s ease, color 0.18s ease;
   flex-shrink: 0;
 
   &:active {
@@ -708,7 +708,7 @@ export const ControlButton = styled(motion.button)`
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.3s ease;
+  transition: transform 0.12s ease, color 0.18s ease, opacity 0.18s ease;
   flex-shrink: 0;
   outline: none;
 
@@ -741,7 +741,7 @@ export const PlayPauseButtonLarge = styled(motion.button)`
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.3s ease;
+  transition: transform 0.12s ease, background 0.2s ease;
   flex-shrink: 0;
 
   & > svg {
@@ -794,7 +794,7 @@ export const ActionButton = styled(motion.button)`
   align-items: center;
   justify-content: center;
   font-size: 18px;
-  transition: all 0.3s ease;
+  transition: transform 0.12s ease, opacity 0.18s ease, color 0.18s ease;
   flex-shrink: 0;
   outline: none;
 
