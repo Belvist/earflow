@@ -41,6 +41,7 @@ const Nav = styled.nav`
   z-index: var(--z-bottom-nav, 9997);
   transform: translate3d(0, 0, 0);
   transition: opacity 0.16s ease, transform 0.16s ease;
+  overflow: hidden;
 
   html.keyboard-open & {
     display: none;
@@ -54,7 +55,7 @@ const Nav = styled.nav`
   }
 `;
 
-/** Liquid Glass pill — whole bar drags + scales during horizontal gesture */
+/** Liquid Glass pill — scale on drag; chip clipped inside */
 const NavPill = styled(motion.div)`
   pointer-events: auto;
   flex: 1;
@@ -73,6 +74,7 @@ const NavPill = styled(motion.div)`
   user-select: none;
   -webkit-user-select: none;
   transform-origin: center center;
+  overflow: hidden;
 `;
 
 const NavPillTrack = styled.div`
@@ -81,19 +83,7 @@ const NavPillTrack = styled.div`
   height: 100%;
   padding: 0 ${NAV_INNER_PAD_PX}px;
   box-sizing: border-box;
-`;
-
-/** Sliding active glass chip — moves with drag between tab slots */
-const ActiveIndicator = styled(motion.div)`
-  position: absolute;
-  top: ${NAV_INNER_PAD_PX}px;
-  bottom: ${NAV_INNER_PAD_PX}px;
-  left: ${NAV_INNER_PAD_PX}px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.28);
-  pointer-events: none;
-  z-index: 0;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  overflow: hidden;
 `;
 
 const TabGrid = styled.div`
@@ -104,6 +94,20 @@ const TabGrid = styled.div`
   align-items: center;
   height: 100%;
   width: 100%;
+`;
+
+/** Sliding active glass chip — clipped inside pill */
+const ActiveIndicator = styled(motion.div)`
+  position: absolute;
+  top: ${NAV_INNER_PAD_PX}px;
+  bottom: ${NAV_INNER_PAD_PX}px;
+  left: ${NAV_INNER_PAD_PX}px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28);
+  pointer-events: none;
+  z-index: 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  will-change: transform, width;
 `;
 
 const TabButton = styled.button`
@@ -176,7 +180,7 @@ const NAV_TABS = [
 ];
 
 export default function MobileBottomNav() {
-  const pillRef = useRef(null);
+  const trackRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated } = useAuth();
@@ -219,23 +223,20 @@ export default function MobileBottomNav() {
     gestureSurfaceAttr,
     suppressTapIfSwipeCommitted,
   } = useMobileBottomNavSwipe({
-    pillRef,
+    trackRef,
     activeTab: active,
     onSelectTab: selectTab,
+    innerPadPx: NAV_INNER_PAD_PX,
   });
 
-  const indicatorWidth = Math.max(0, segmentWidthPx - 2);
+  const indicatorWidth = Math.max(0, segmentWidthPx);
 
   return (
     <Nav aria-label="Навигация" data-testid="mobile-bottom-nav">
       <NavPill
-        ref={pillRef}
         data-testid="mobile-bottom-nav-pill"
         {...gestureSurfaceAttr}
-        animate={{
-          x: dragVisual.pillX,
-          scale: dragVisual.scale,
-        }}
+        animate={{ scale: dragVisual.scale }}
         transition={
           dragVisual.active
             ? { duration: 0 }
@@ -246,7 +247,7 @@ export default function MobileBottomNav() {
         onPointerUpCapture={navSwipeHandlers.onPointerUpCapture}
         onPointerCancelCapture={navSwipeHandlers.onPointerCancelCapture}
       >
-        <NavPillTrack>
+        <NavPillTrack ref={trackRef}>
           {indicatorWidth > 0 ? (
             <ActiveIndicator
               data-testid="mobile-bottom-nav-indicator"

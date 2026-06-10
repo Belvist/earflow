@@ -320,7 +320,7 @@ export const ProgressBarMini = styled.div`
     height: ${FLOATING_PROGRESS_HEIGHT_PX}px;
     min-height: ${FLOATING_PROGRESS_HEIGHT_PX}px;
     max-height: ${FLOATING_PROGRESS_HEIGHT_PX}px;
-    background: rgba(0, 0, 0, 0.32);
+    background: rgba(0, 0, 0, 0.45);
     border-radius: 0 0 var(--mini-shell-radius, ${FLOATING_SHELL_RADIUS_PX}px) var(--mini-shell-radius, ${FLOATING_SHELL_RADIUS_PX}px);
   `)}
 `;
@@ -334,8 +334,8 @@ export const ProgressFillMini = styled.div`
   min-width: 0;
   max-width: 100%;
   border-radius: inherit;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.35);
+  background: #ffffff;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.55);
   width: var(--progress, 0%);
   transition: width 0.12s linear;
   transform: translateZ(0);

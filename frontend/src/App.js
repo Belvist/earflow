@@ -125,8 +125,8 @@ const GlobalStyle = createGlobalStyle`
     display: block !important;
     height: auto !important;
     max-width: 100% !important;
-    background: rgba(255, 255, 255, 0.96) !important;
-    box-shadow: 0 0 8px rgba(255, 255, 255, 0.35) !important;
+    background: #ffffff !important;
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.55) !important;
     width: var(--progress, 0%) !important;
   }
 
@@ -153,7 +153,7 @@ const GlobalStyle = createGlobalStyle`
     pointer-events: none !important;
     border-radius: 0 0 var(--mini-shell-radius, ${FLOATING_SHELL_RADIUS_PX}px) var(--mini-shell-radius, ${FLOATING_SHELL_RADIUS_PX}px) !important;
     overflow: hidden !important;
-    background: rgba(0, 0, 0, 0.32) !important;
+    background: rgba(0, 0, 0, 0.45) !important;
   }
 
   :root[data-mini-bar-variant="classic"] [data-testid="mini-player-bar"] [data-testid="mini-player-progress"],
