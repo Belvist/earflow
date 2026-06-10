@@ -22,6 +22,18 @@
 
 ---
 
+## 2026-06-10 — SEC-005 Phase 6 prod ACCEPT closed on VPS
+
+**Status:** accepted  
+**Area:** auth | streaming | ops  
+**Context:** Phase 6 tooling deployed; first gate run failed because `.env` `AUTH_E2E_BASE_URL=127.0.0.1:18080` leaked into `accept-consume.mjs`. Fix `1852924` forces prod origins in Phase 6 verify.  
+**Decision:** **Close SEC-005 Phase 6 prod ACCEPT** on `ru-vmv2-mini` at git `1852924`: `npm run verify:stream-ticket-phase6-prod` **PASS** — gateway mint live (401 unauth), bundle `mint:1`, ticket HEAD 200, legacy cookie 200, ENFORCE off.  
+**Consequences:** Prod runs dual-mode until Phase 7 or rollback. Auth-e2e DoD must still use `restore-prod-after-auth-e2e.sh` (returns to mint:0 norm). Phase 7 ENFORCE unblocked after soak.  
+**Evidence:** user VPS log 2026-06-10; `main.f34684ea.js`, trackId=793 consume PASS.  
+**Чтобы не повторилось:** Phase 6 verify ignores e2e `AUTH_E2E_*` URLs in `.env`; log consume origins in gate output.
+
+---
+
 ## 2026-06-09 — SEC-005 Phase 6 prod ACCEPT rollout tooling
 
 **Status:** accepted  
