@@ -97,11 +97,38 @@ else
 fi
 
 if [[ -f "$ROOT/scripts/verify-stream-ticket.sh" ]]; then
-  if bash "$ROOT/scripts/verify-stream-ticket.sh"; then
-    pass "verify-stream-ticket.sh (prod mint off → 404)"
-  else
-    fail "verify-stream-ticket.sh"
-  fi
+  # shellcheck source=scripts/detect-sec005-prod-mode.sh
+  source "$ROOT/scripts/detect-sec005-prod-mode.sh"
+  detect_sec005_prod_mode "$ROOT"
+  case "${SEC005_PROD_MODE:-unknown}" in
+    phase6)
+      skip "verify-stream-ticket.sh (404 norm) — Phase 6 active; use npm run verify:sec005-prod-health"
+      if bash "$ROOT/scripts/verify-stream-ticket-phase6-prod.sh"; then
+        pass "verify-stream-ticket-phase6-prod.sh (Phase 6 ACCEPT)"
+      else
+        fail "verify-stream-ticket-phase6-prod.sh (Phase 6 ACCEPT)"
+      fi
+      ;;
+    split)
+      fail "SEC-005 split-brain: ${SEC005_SPLIT_REASON:-partial flags}"
+      echo "       Fix: SEC005_PHASE6_CONFIRM=1 npm run run:sec005-phase6-prod-accept"
+      echo "       Or:  SEC005_ROLLBACK_CONFIRM=1 npm run rollback:sec005-phase6-prod"
+      ;;
+    norm)
+      if bash "$ROOT/scripts/verify-stream-ticket.sh"; then
+        pass "verify-stream-ticket.sh (prod mint off → 404)"
+      else
+        fail "verify-stream-ticket.sh"
+      fi
+      ;;
+    *)
+      if bash "$ROOT/scripts/verify-stream-ticket.sh"; then
+        pass "verify-stream-ticket.sh"
+      else
+        skip "verify-stream-ticket.sh (stack mode unknown)"
+      fi
+      ;;
+  esac
 else
   fail "verify-stream-ticket.sh missing"
 fi
@@ -138,8 +165,12 @@ Sessions hardening (manual, MFA-enabled user):
   revoke-others with step-up → 200
   revoke-all → logout all devices
 
-Prod stream norm (after restore-prod):
+Prod stream norm (after restore-prod — **not during Phase 6 soak**):
   STREAM_TICKET_* empty; POST /api/auth/stream-ticket → 404
+
+During Phase 6 soak weekly health:
+  npm run verify:sec005-prod-health
+  (NOT restore-prod-after-auth-e2e.sh — that breaks Phase 6)
 EOF
 
 section "Summary"

@@ -32,6 +32,7 @@
     "verify:stream-ticket-phase6-prod": "bash scripts/verify-stream-ticket-phase6-prod.sh",
     "run:sec005-phase6-prod-accept": "bash scripts/run-sec005-phase6-prod-accept.sh",
     "rollback:sec005-phase6-prod": "bash scripts/rollback-sec005-phase6-prod.sh",
+    "verify:sec005-prod-health": "bash scripts/verify-sec005-prod-health.sh",
     "verify:auth-replay": "bash scripts/verify-auth-security-replay.sh",
     "verify:prod-auth-gate": "bash scripts/verify-prod-auth-gate.sh",
     "verify:auth-kit": "bash scripts/verify-auth-kit.sh",

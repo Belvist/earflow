@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
-# Restore production api-gateway + frontend after auth-e2e DoD overlay
-# or SEC-005 Phase 6 rollback (see scripts/rollback-sec005-phase6-prod.sh).
+# Restore production api-gateway + frontend after auth-e2e DoD overlay.
+#
+# **During SEC-005 Phase 6 soak:** do NOT run this — it disables gateway mint while
+# frontend may still ship mint:1 (split-brain → mint 404, broken stream).
+# Use rollback:sec005-phase6-prod only when intentionally leaving Phase 6.
+# Requires RESTORE_PROD_CONFIRM=1 if Phase 6 or split state is detected.
 #
 # The DoD runner uses docker-compose.auth-e2e.yml which temporarily sets:
 #   frontend.EARFLOW_API_BASE_URL → http://127.0.0.1:18080
@@ -26,6 +30,29 @@ log() { echo "[restore-prod] $*"; }
 if [[ ! -f "$ROOT/.env" ]]; then
   echo "FAIL: missing .env" >&2
   exit 1
+fi
+
+# shellcheck source=scripts/detect-sec005-prod-mode.sh
+source "$ROOT/scripts/detect-sec005-prod-mode.sh"
+detect_sec005_prod_mode "$ROOT"
+
+if [[ "${SEC005_PROD_MODE:-}" == "phase6" || "${SEC005_PROD_MODE:-}" == "split" ]]; then
+  log "WARN: SEC-005 mode=${SEC005_PROD_MODE} — restore-prod DISABLES Phase 6 gateway mint + stream ACCEPT"
+  if [[ -n "${SEC005_SPLIT_REASON:-}" ]]; then
+    log "WARN: ${SEC005_SPLIT_REASON}"
+  fi
+  if [[ "${RESTORE_PROD_CONFIRM:-}" != "1" ]]; then
+    echo "" >&2
+    echo "Refusing restore-prod without RESTORE_PROD_CONFIRM=1 while Phase 6 / split state detected." >&2
+    echo "If you intend to rollback Phase 6, use instead:" >&2
+    echo "  SEC005_ROLLBACK_CONFIRM=1 npm run rollback:sec005-phase6-prod" >&2
+    echo "If you really need restore-prod (after auth-e2e DoD), re-run with:" >&2
+    echo "  RESTORE_PROD_CONFIRM=1 bash scripts/restore-prod-after-auth-e2e.sh" >&2
+    echo "Then re-apply Phase 6 when soak continues:" >&2
+    echo "  SEC005_PHASE6_CONFIRM=1 npm run run:sec005-phase6-prod-accept" >&2
+    exit 1
+  fi
+  log "RESTORE_PROD_CONFIRM=1 — proceeding (will return to stream ticket norm / mint:0 frontend)"
 fi
 
 log "stop auth-e2e edge (port 18080) if running"
