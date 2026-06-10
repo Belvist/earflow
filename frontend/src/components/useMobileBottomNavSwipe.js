@@ -12,9 +12,14 @@ import {
 } from '../gestures/gestureContracts';
 import { GESTURE_PROFILE } from '../gestures/gestureProfiles';
 import { usePointerGestureMachine } from '../gestures/usePointerGestureMachine';
-import { resolveAdjacentNavTab } from './mobileBottomNavTabs';
+import { normalizeNavTabForSwipe, resolveAdjacentNavTab } from './mobileBottomNavTabs';
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+/** Nav pill is short — lower threshold than album/mini track swipe (52px). */
+const NAV_SWIPE_DISTANCE_PX = 28;
+const NAV_SWIPE_MIN_TRAVEL_PX = 10;
+const NAV_SWIPE_FLICK_TRAVEL_PX = 8;
 
 /**
  * iOS-style horizontal swipe on bottom nav pill — adjacent tab only (INV-GESTURE-011).
@@ -46,6 +51,9 @@ export default function useMobileBottomNavSwipe({
       dy,
       velocityX: state.velocityX,
       velocityY: state.velocityY,
+      distancePx: NAV_SWIPE_DISTANCE_PX,
+      minTravelPx: NAV_SWIPE_MIN_TRAVEL_PX,
+      flickTravelPx: NAV_SWIPE_FLICK_TRAVEL_PX,
     });
     const nextTab = resolveAdjacentNavTab(activeTab, direction);
     if (!nextTab) return;
@@ -66,27 +74,33 @@ export default function useMobileBottomNavSwipe({
     claimOnPointerDown: false,
     intentPx: IOS_GESTURE.intentPx,
     dominance: IOS_GESTURE.dominance,
-    disabled: disabled || !activeTab,
+    disabled,
     shouldActivate: ({ intent }) => intent === GESTURE_AXIS.HORIZONTAL,
     onActiveMove: handleActiveMove,
     onCommit: handleCommit,
     onCancel: resetShift,
   });
 
-  const handlers = {
-    onPointerDown: (event) => {
+  const wrapHandler = (handler) => (event) => {
+    if (handler === machineHandlers.onPointerDown) {
       swipeCommittedRef.current = false;
-      machineHandlers.onPointerDown?.(event);
-    },
-    onPointerMove: machineHandlers.onPointerMove,
-    onPointerUp: machineHandlers.onPointerUp,
-    onPointerCancel: machineHandlers.onPointerCancel,
+    }
+    handler?.(event);
+  };
+
+  /** Capture phase — TabButton touch-action must not eat moves before the pill sees them. */
+  const captureHandlers = {
+    onPointerDownCapture: wrapHandler(machineHandlers.onPointerDown),
+    onPointerMoveCapture: wrapHandler(machineHandlers.onPointerMove),
+    onPointerUpCapture: wrapHandler(machineHandlers.onPointerUp),
+    onPointerCancelCapture: wrapHandler(machineHandlers.onPointerCancel),
   };
 
   return {
-    handlers,
+    captureHandlers,
     pillShift,
     suppressTapIfSwipeCommitted,
+    swipeAnchorTab: normalizeNavTabForSwipe(activeTab),
     gestureSurfaceAttr: { [GESTURE_DATA_ATTRIBUTE.SURFACE]: GESTURE_SURFACE.MOBILE_BOTTOM_NAV },
   };
 }

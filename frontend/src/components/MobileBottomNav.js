@@ -64,7 +64,7 @@ const NavPill = styled(motion.div)`
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: center;
-  padding: 0 2px;
+  padding: 0 4px;
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(20px) saturate(1.15);
@@ -80,12 +80,15 @@ const TabButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-height: ${NAV_PILL_H_PX}px;
   border: none;
   background: transparent;
-  padding: 0;
+  padding: 0 2px;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
+  touch-action: none;
 
   &:active {
     opacity: 0.9;
@@ -98,31 +101,33 @@ const TabButton = styled.button`
   }
 `;
 
-/** Active highlight — lighter fill, no border/outline */
+/** Active segment fills grid cell — no dead space between outer pill and inner chip */
 const IconChip = styled.span`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 36px;
-  height: 30px;
-  padding: 0 10px;
+  width: ${(p) => (p.$active ? '100%' : 'auto')};
+  max-width: 100%;
+  min-width: ${(p) => (p.$active ? '0' : '36px')};
+  height: ${(p) => (p.$active ? '36px' : '30px')};
+  padding: ${(p) => (p.$active ? '0' : '0 6px')};
   border-radius: 999px;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  color: ${(p) => (p.$active ? 'rgba(255, 255, 255, 0.98)' : 'rgba(255, 255, 255, 0.5)')};
+  background: ${(p) => (p.$active ? 'rgba(255, 255, 255, 0.28)' : 'transparent')};
+  transition: background 0.18s ease, color 0.18s ease, width 0.18s ease, height 0.18s ease;
 
   @media (max-width: 360px) {
-    min-width: 32px;
-    padding: 0 8px;
+    min-width: ${(p) => (p.$active ? '0' : '30px')};
+    height: ${(p) => (p.$active ? '34px' : '28px')};
 
     svg {
       width: 20px;
       height: 20px;
     }
   }
-  border: none;
-  box-shadow: none;
-  outline: none;
-  color: ${(p) => (p.$active ? 'rgba(255, 255, 255, 0.98)' : 'rgba(255, 255, 255, 0.5)')};
-  background: ${(p) => (p.$active ? 'rgba(255, 255, 255, 0.28)' : 'transparent')};
-  transition: background 0.18s ease, color 0.18s ease;
 
   svg {
     width: 22px;
@@ -188,7 +193,7 @@ export default function MobileBottomNav() {
   }, [goProfile, navigate]);
 
   const {
-    handlers: navSwipeHandlers,
+    captureHandlers: navSwipeHandlers,
     pillShift,
     gestureSurfaceAttr,
     suppressTapIfSwipeCommitted,
@@ -203,10 +208,10 @@ export default function MobileBottomNav() {
         data-testid="mobile-bottom-nav-pill"
         style={pillShift}
         {...gestureSurfaceAttr}
-        onPointerDown={navSwipeHandlers.onPointerDown}
-        onPointerMove={navSwipeHandlers.onPointerMove}
-        onPointerUp={navSwipeHandlers.onPointerUp}
-        onPointerCancel={navSwipeHandlers.onPointerCancel}
+        onPointerDownCapture={navSwipeHandlers.onPointerDownCapture}
+        onPointerMoveCapture={navSwipeHandlers.onPointerMoveCapture}
+        onPointerUpCapture={navSwipeHandlers.onPointerUpCapture}
+        onPointerCancelCapture={navSwipeHandlers.onPointerCancelCapture}
       >
         <NavTab
           active={active === 'home'}

@@ -1,4 +1,8 @@
-import { MOBILE_NAV_TAB_ORDER, resolveAdjacentNavTab } from './mobileBottomNavTabs';
+import {
+  MOBILE_NAV_TAB_ORDER,
+  normalizeNavTabForSwipe,
+  resolveAdjacentNavTab,
+} from './mobileBottomNavTabs';
 
 describe('mobileBottomNavTabs', () => {
   it('exposes stable tab order', () => {
@@ -19,8 +23,13 @@ describe('mobileBottomNavTabs', () => {
     expect(resolveAdjacentNavTab('home', 1)).toBeNull();
   });
 
-  it('returns null for unknown active tab or zero direction', () => {
-    expect(resolveAdjacentNavTab('', -1)).toBeNull();
+  it('returns null for zero direction', () => {
     expect(resolveAdjacentNavTab('home', 0)).toBeNull();
+  });
+
+  it('maps off-tab routes to home anchor for swipe', () => {
+    expect(normalizeNavTabForSwipe('artists')).toBe('home');
+    expect(resolveAdjacentNavTab('artists', -1)).toBe('social');
+    expect(resolveAdjacentNavTab('', -1)).toBe('social');
   });
 });
