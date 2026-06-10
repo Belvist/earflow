@@ -320,8 +320,13 @@ export const ProgressBarMini = styled.div`
     height: ${FLOATING_PROGRESS_HEIGHT_PX}px;
     min-height: ${FLOATING_PROGRESS_HEIGHT_PX}px;
     max-height: ${FLOATING_PROGRESS_HEIGHT_PX}px;
-    background: rgba(0, 0, 0, 0.45);
+    background: linear-gradient(
+      to top,
+      rgba(0, 0, 0, 0.72) 0%,
+      rgba(0, 0, 0, 0.38) 100%
+    );
     border-radius: 0 0 var(--mini-shell-radius, ${FLOATING_SHELL_RADIUS_PX}px) var(--mini-shell-radius, ${FLOATING_SHELL_RADIUS_PX}px);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   `)}
 `;
 
@@ -335,10 +340,13 @@ export const ProgressFillMini = styled.div`
   max-width: 100%;
   border-radius: inherit;
   background: #ffffff;
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.55);
+  box-shadow:
+    0 0 12px rgba(255, 255, 255, 0.65),
+    0 0 2px rgba(255, 255, 255, 0.9);
   width: var(--progress, 0%);
-  transition: width 0.12s linear;
+  transition: none;
   transform: translateZ(0);
+  opacity: 1;
 `;
 
 export const SwipeableTrackContainer = styled(motion.div)`

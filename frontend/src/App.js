@@ -126,7 +126,10 @@ const GlobalStyle = createGlobalStyle`
     height: auto !important;
     max-width: 100% !important;
     background: #ffffff !important;
-    box-shadow: 0 0 10px rgba(255, 255, 255, 0.55) !important;
+    box-shadow:
+      0 0 12px rgba(255, 255, 255, 0.65),
+      0 0 2px rgba(255, 255, 255, 0.9) !important;
+    transition: none !important;
     width: var(--progress, 0%) !important;
   }
 
@@ -141,9 +144,9 @@ const GlobalStyle = createGlobalStyle`
   [data-testid="mini-player-bar"][data-mini-bar-variant="floating"] [data-testid="mini-player-progress"] {
     position: absolute !important;
     bottom: 0 !important;
-    height: 3px !important;
-    min-height: 3px !important;
-    max-height: 3px !important;
+    height: 4px !important;
+    min-height: 4px !important;
+    max-height: 4px !important;
     left: 0 !important;
     right: 0 !important;
     width: 100% !important;
@@ -153,7 +156,12 @@ const GlobalStyle = createGlobalStyle`
     pointer-events: none !important;
     border-radius: 0 0 var(--mini-shell-radius, ${FLOATING_SHELL_RADIUS_PX}px) var(--mini-shell-radius, ${FLOATING_SHELL_RADIUS_PX}px) !important;
     overflow: hidden !important;
-    background: rgba(0, 0, 0, 0.45) !important;
+    background: linear-gradient(
+      to top,
+      rgba(0, 0, 0, 0.72) 0%,
+      rgba(0, 0, 0, 0.38) 100%
+    ) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
   }
 
   :root[data-mini-bar-variant="classic"] [data-testid="mini-player-bar"] [data-testid="mini-player-progress"],

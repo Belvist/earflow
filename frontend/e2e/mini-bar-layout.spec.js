@@ -158,10 +158,10 @@ test.describe('Mini-bar layout (playground)', () => {
     await expect(page.locator('.ef-mini-play-ios-svg')).toHaveCount(0);
   });
 
-  test('floating progress track is thin (≤4px height)', async ({ page }) => {
+  test('floating progress track is thin (≤5px height)', async ({ page }) => {
     const progressBox = await page.locator(PROGRESS).boundingBox();
     expect(progressBox?.height ?? 99).toBeGreaterThanOrEqual(2);
-    expect(progressBox?.height ?? 99).toBeLessThanOrEqual(4);
+    expect(progressBox?.height ?? 99).toBeLessThanOrEqual(5);
   });
 
   test('floating progress track is edge-to-edge inside shell', async ({ page }) => {
