@@ -268,7 +268,7 @@ Revoke/password/email/delete — modal при `MFA_STEP_UP_REQUIRED`, не raw e
 ### PEND-SEC-005 — WS/HLS scoped tickets (device-bound stream auth)
 
 **Priority:** critical  
-**Status:** **Phase 6 prod ACCEPT closed (2026-06-10 VPS `1852924`)** — dual-mode on prod; ENFORCE still off
+**Status:** **Phase 7 prod ENFORCE closed (2026-06-10 VPS)** — stream bytes require scoped ticket; legacy cookie → 401
 
 **Goal:** bind WS upgrade and playback bytes to epoch-aware scoped tickets; remove cookie-only sufficient auth on consume paths.
 
@@ -283,9 +283,9 @@ Revoke/password/email/delete — modal при `MFA_STEP_UP_REQUIRED`, не raw e
 | 3 | ACCEPT — direct-stream/ebap-hls dual-mode verify | **done (2026-06-09 VPS `f9da305`)** |
 | 4 | Frontend mint + attach (`streamTicket.js`, opt-in flag) | **closed (2026-06-09 VPS `727be49`)** — `npm run run:sec005-phase4-staging` PASS |
 | 5 | Staging ENFORCE | **closed (2026-06-09 VPS)** — `npm run run:sec005-phase5-staging` PASS |
-| 6 | Prod ACCEPT (dual-mode) | **closed (2026-06-10 VPS `1852924`)** — `verify:stream-ticket-phase6-prod` PASS |
-| 7 | Prod ENFORCE | **tooling ready** — `npm run run:sec005-phase7-prod-enforce` after Phase 6 soak |
-| 8 | WS connect tickets | after Phase 7 prod PASS — consume not implemented |
+| 6 | Prod ACCEPT (dual-mode) | **closed (2026-06-10 VPS)** — `verify:stream-ticket-phase6-prod` PASS |
+| 7 | Prod ENFORCE | **closed (2026-06-10 VPS)** — `verify:stream-ticket-phase7-prod` PASS |
+| 8 | WS connect tickets | **next** — consume not implemented |
 
 **VPS close report — Phase 3 ACCEPT (`ru-vmv2-mini`, 2026-06-09, git `f9da305`):**
 
@@ -322,17 +322,21 @@ accept-consume prod:                ticket 200, garbage 401, legacy cookie 200
 verify:frontend-api-base:           PASS
 ```
 
-**Next:** Phase 7 prod ENFORCE after soak:
+**VPS close report — Phase 7 prod ENFORCE (`ru-vmv2-mini`, 2026-06-10):**
 
-```bash
-npm run verify:sec005-prod-health   # must be phase6 PASS
-SEC005_PHASE7_CONFIRM=1 npm run run:sec005-phase7-prod-enforce
+```text
+run:sec005-phase7-prod-enforce:     PASS
+verify:sec005-prod-health (phase7): PASS
+enforce-consume prod:               ticket 200, legacy cookie 401 STREAM_TICKET_REQUIRED
+bundle main.4a14585e.js:            mint:1
+direct-stream + ebap-hls ENFORCE:   1
+override symlink:                   docker-compose.stream-prod-enforce.yml
 ```
 
-Rollback Phase 7 → Phase 6: `SEC005_PHASE7_ROLLBACK_CONFIRM=1 npm run rollback:sec005-phase7-prod`  
-Rollback to norm: `SEC005_ROLLBACK_CONFIRM=1 npm run rollback:sec005-phase6-prod`
+**Next:** Phase 8 WS connect tickets (device-sync consume). Wave B: PEND-SEC-002 devices API, PEND-SEC-004 password/email step-up.
 
-**Still open for «auth perimeter closed»:** Phase 8 WS tickets, PEND-SEC-002 devices API, PEND-SEC-004 password/email step-up, SEC-007 TG bot (deferred).
+**Rollback Phase 7 → Phase 6:** `SEC005_PHASE7_ROLLBACK_CONFIRM=1 npm run rollback:sec005-phase7-prod`  
+**Weekly health:** `npm run verify:sec005-prod-health` (expect `mode: phase7`)
 
 **v1 scope:** listener web SPA only.
 

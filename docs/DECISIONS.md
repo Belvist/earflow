@@ -49,6 +49,17 @@
 
 ---
 
+## 2026-06-10 — SEC-005 Phase 7 prod ENFORCE closed on VPS
+
+**Status:** accepted  
+**Area:** auth | streaming | ops  
+**Context:** Phase 6 prod ACCEPT stable; transport perimeter requires ENFORCE so stolen `mp_stream` cookie alone cannot fetch bytes.  
+**Decision:** **Close SEC-005 Phase 7 prod ENFORCE** on `ru-vmv2-mini` 2026-06-10: `run:sec005-phase7-prod-enforce` + `verify:sec005-prod-health` **PASS** — ticket HEAD 200, legacy cookie 401 `STREAM_TICKET_REQUIRED`, bundle `main.4a14585e.js` mint:1, override → `stream-prod-enforce.yml`.  
+**Consequences:** Listener web direct/HLS stream auth closed for cookie-only path. Phase 8 WS still open. Rollback to Phase 6 via `rollback:sec005-phase7-prod`.  
+**Evidence:** user VPS log; automated `enforce-consume.mjs` on prod origins.
+
+---
+
 ## 2026-06-10 — SEC-005 Phase 7 prod ENFORCE rollout tooling
 
 **Status:** accepted  
