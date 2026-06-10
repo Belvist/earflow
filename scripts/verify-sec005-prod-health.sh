@@ -21,11 +21,16 @@ if [[ -n "${SEC005_SPLIT_REASON:-}" ]]; then
   echo "Reason: $SEC005_SPLIT_REASON"
 fi
 echo "gateway STREAM_TICKET_ENABLED='${SEC005_GW_ENABLED:-<unknown>}' mint_live=${SEC005_GW_MINT_LIVE:-unknown}"
-echo "direct-stream ACCEPT='${SEC005_DS_ACCEPT:-<unknown>}' ebap-hls ACCEPT='${SEC005_HLS_ACCEPT:-<unknown>}'"
+echo "direct-stream ACCEPT='${SEC005_DS_ACCEPT:-<unknown>}' ENFORCE='${SEC005_DS_ENFORCE:-<unknown>}'"
+echo "ebap-hls ACCEPT='${SEC005_HLS_ACCEPT:-<unknown>}' ENFORCE='${SEC005_HLS_ENFORCE:-<unknown>}'"
 echo "bundle mint marker on earflow.ru: ${SEC005_BUNDLE_MINT:-unknown}"
 echo ""
 
 case "$SEC005_PROD_MODE" in
+  phase7)
+    echo "Phase 7 ENFORCE active — running verify-stream-ticket-phase7-prod.sh"
+    exec bash "$ROOT/scripts/verify-stream-ticket-phase7-prod.sh"
+    ;;
   phase6)
     echo "Phase 6 ACCEPT active — running verify-stream-ticket-phase6-prod.sh"
     exec bash "$ROOT/scripts/verify-stream-ticket-phase6-prod.sh"
@@ -50,7 +55,9 @@ case "$SEC005_PROD_MODE" in
     echo ""
     echo "Fix (pick one):"
     echo "  Re-apply Phase 6:  SEC005_PHASE6_CONFIRM=1 npm run run:sec005-phase6-prod-accept"
-    echo "  Rollback to norm:   SEC005_ROLLBACK_CONFIRM=1 npm run rollback:sec005-phase6-prod"
+    echo "  Re-apply Phase 7:  SEC005_PHASE7_CONFIRM=1 npm run run:sec005-phase7-prod-enforce"
+    echo "  Rollback Phase 7:  SEC005_PHASE7_ROLLBACK_CONFIRM=1 npm run rollback:sec005-phase7-prod"
+    echo "  Rollback to norm:  SEC005_ROLLBACK_CONFIRM=1 npm run rollback:sec005-phase6-prod"
     echo ""
     echo "Do NOT run restore-prod-after-auth-e2e.sh during Phase 6 soak — it disables gateway mint"
     echo "while frontend may still request tickets (mint 404, broken playback)."
