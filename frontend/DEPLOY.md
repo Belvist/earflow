@@ -39,9 +39,9 @@ docker compose up -d --force-recreate frontend
 
 # проверка build hints (v67+ после merge UI)
 curl -sS https://earflow.ru/ | grep -o 'data-mini-bar-ui="[^"]*"' | head -1
-# ожидаем: data-mini-bar-ui="2026-06-v68-progress-gray-track"
+# ожидаем: data-mini-bar-ui="2026-06-v69-chrome-lower"
 curl -sS https://earflow.ru/ | grep -o 'data-mobile-nav-ui="[^"]*"' | head -1
-# ожидаем: data-mobile-nav-ui="2026-06-v68-solid-nav"
+# ожидаем: data-mobile-nav-ui="2026-06-v69-chrome-lower"
 ```
 
 Если `platform-control.sh: Permission denied`:
