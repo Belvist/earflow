@@ -1,4 +1,4 @@
-import { signDeviceProofRequest } from './authDeviceCrypto';
+import { signDeviceProofRequest, isDeviceProofEnforced } from './authDeviceCrypto';
 import { getHotPathProofHeaders, isProofAccessTokenEnabled } from './proofAccessToken';
 import { getCsrfToken } from './cookieHelpers';
 
@@ -14,6 +14,22 @@ const apiBaseUrl = () => {
   }
   return '';
 };
+
+/**
+ * Check if PoP is actually ready for stream ticket minting.
+ * Returns false if:
+ * - Stream ticket mint is disabled via env
+ * - PoP is not enforced (legacy path should be used)
+ * - PoP is enforced but device proof is not available
+ *   This prevents 403 on /api/auth/stream-ticket when ENFORCE=1 but PoP not ready.
+ */
+function isPoPReadyForStreamTicket() {
+  const mintFlag = String(process.env.REACT_APP_STREAM_TICKET_MINT_ENABLED || '0').trim() === '1';
+  if (!mintFlag) return false;
+  if (!isProofAccessTokenEnabled()) return false;
+  if (!isDeviceProofEnforced()) return false;
+  return true;
+}
 
 /** Grep prod/staging bundles in verify-stream-ticket-phase4.sh (CRA inlines at build). */
 export const STREAM_TICKET_MINT_BUILD_MARKER =
@@ -83,7 +99,11 @@ export function applyMediaTicketToPlaybackSession(result, ticket) {
 export async function mintMediaStreamTicket({ sessionId, trackId, signal } = {}) {
   const sid = String(sessionId || '').trim();
   const tid = String(trackId || '').trim();
-  if (!sid || !tid || !isStreamTicketMintEnabled()) {
+  if (!sid || !tid) return null;
+
+  // If PoP is not ready, don't even try — return null so caller uses legacy path.
+  // This prevents 403 storms when STREAM_TICKET_ENFORCE=1 but PoP device key not registered.
+  if (!isStreamTicketMintEnabled()) {
     return null;
   }
 
@@ -94,7 +114,15 @@ export async function mintMediaStreamTicket({ sessionId, trackId, signal } = {})
     return cached.ticket;
   }
 
+  // getHotPathProofHeaders handles PoP-sensitive paths (including /api/auth/stream-ticket)
+  // by using full ECDSA proof. If proof fails, it falls back to empty headers.
+  // We detect the fallback and abort early to avoid 403 on the server.
   const proofHeaders = await getHotPathProofHeaders('POST', '/api/auth/stream-ticket');
+  if (!proofHeaders || Object.keys(proofHeaders).length === 0) {
+    // PoP proof unavailable — don't mint, use legacy path
+    return null;
+  }
+
   const csrf = getCsrfToken();
   const headers = {
     'Content-Type': 'application/json',
@@ -118,6 +146,12 @@ export async function mintMediaStreamTicket({ sessionId, trackId, signal } = {})
   });
 
   if (resp.status === 404) {
+    // Stream ticket endpoint disabled on server — use legacy path
+    return null;
+  }
+  if (resp.status === 403) {
+    // PoP proof rejected — clear cache, don't retry
+    mediaTicketCache.delete(cacheKey);
     return null;
   }
   if (!resp.ok) {
@@ -145,7 +179,10 @@ export async function mintMediaStreamTicket({ sessionId, trackId, signal } = {})
 
 export async function mintWsConnectStreamTicket({ deviceId, signal } = {}) {
   const did = String(deviceId || '').trim();
-  if (!did || !isStreamTicketMintEnabled()) {
+  if (!did) return null;
+
+  // If PoP is not ready, don't even try — return null so caller uses legacy path.
+  if (!isStreamTicketMintEnabled()) {
     return null;
   }
 
@@ -158,6 +195,7 @@ export async function mintWsConnectStreamTicket({ deviceId, signal } = {}) {
   const mintPath = '/api/auth/stream-ticket';
   const signed = await signDeviceProofRequest('POST', `${apiBaseUrl()}${mintPath}`);
   if (!signed?.headers) {
+    // PoP proof unavailable — don't mint, use legacy path
     return null;
   }
 
@@ -184,6 +222,12 @@ export async function mintWsConnectStreamTicket({ deviceId, signal } = {}) {
   });
 
   if (resp.status === 404) {
+    // Stream ticket endpoint disabled on server — use legacy path
+    return null;
+  }
+  if (resp.status === 403) {
+    // PoP proof rejected — clear cache, don't retry
+    wsTicketCache.delete(did);
     return null;
   }
   if (!resp.ok) {

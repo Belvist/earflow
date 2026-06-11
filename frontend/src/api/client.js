@@ -1143,8 +1143,18 @@ class ApiClient {
       }
 
       if (!resp || !resp.ok) {
-        const err = new HttpError(Number.isFinite(Number(st)) ? Number(st) : 0, { details: data });
-        err.status = Number.isFinite(Number(st)) ? Number(st) : 0;
+        const errStatus = Number.isFinite(Number(st)) ? Number(st) : 0;
+        // 403 Forbidden on HLS session — PoP proof rejected or not provided.
+        // Don't cache, don't retry — caller should handle (degrade to direct or show error).
+        if (errStatus === 403) {
+          const err = new HttpError(403, { details: data });
+          err.status = 403;
+          err.responseStatus = 403;
+          err.code = 'HLS_SESSION_FORBIDDEN';
+          throw err;
+        }
+        const err = new HttpError(errStatus, { details: data });
+        err.status = errStatus;
         err.responseStatus = err.status;
         throw err;
       }

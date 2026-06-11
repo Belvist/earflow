@@ -226,6 +226,12 @@ export default function useDeviceSync({
     const hb403ReconnectTimeoutRef = useRef(null);
     const clientSeqRef = useRef(0);
     const stateRef = useRef(state);
+    /**
+     * Счётчик последовательных auth-ошибок (403/401) на ws-ticket.
+     * При >= 3 подряд — gaveUpRef=true, чтобы не долбить сервер.
+     * Сбрасывается при успешном ws.onopen.
+     */
+    const consecutiveAuthFailureRef = useRef(0);
 
     useEffect(() => { onCommandRef.current = onCommand; }, [onCommand]);
     useEffect(() => { stateRef.current = state; }, [state]);
@@ -457,10 +463,23 @@ export default function useDeviceSync({
                         ticketResp = await apiClient.getDeviceWsTicket(deviceIdRef.current);
                     } catch (e) {
                         const st = e && typeof e === 'object' ? e.status : 0;
-                        if ((st === 403 || st === 404) && allowReregisterOnTicket403) {
-                            deviceIdRef.current = null;
-                            writeStoredDeviceId(null);
-                            return attemptConnection(false);
+                        if (st === 403 || st === 404) {
+                            // Persistent auth failure — increment counter
+                            consecutiveAuthFailureRef.current += 1;
+                            if (consecutiveAuthFailureRef.current >= 3) {
+                                // Give up after 3 consecutive auth failures
+                                gaveUpRef.current = true;
+                                patchState({
+                                    connectionState: 'error',
+                                    error: st === 403 ? 'WS_TICKET_FORBIDDEN' : 'WS_TICKET_NOT_FOUND',
+                                });
+                                return;
+                            }
+                            if (allowReregisterOnTicket403) {
+                                deviceIdRef.current = null;
+                                writeStoredDeviceId(null);
+                                return attemptConnection(false);
+                            }
                         }
                         throw e;
                     }
@@ -491,6 +510,7 @@ export default function useDeviceSync({
                     burstAttemptRef.current = 0;
                     longPauseUntilRef.current = 0;
                     gaveUpRef.current = false;
+                    consecutiveAuthFailureRef.current = 0;
                     patchState({ connectionState: 'connected', error: null, ready: true });
                     startHeartbeat();
                 };

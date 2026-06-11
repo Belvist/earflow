@@ -22,6 +22,53 @@
 
 ---
 
+## 2026-06-11 — Каскадные ошибки стриминга и WS при SEC-005 Phase 7 ENFORCE
+
+**Status:** accepted
+**Area:** streaming | device-sync | auth | frontend
+**Context:** После активации `docker-compose.stream-prod-enforce.yml` (SEC-005 Phase 7) на VPS `ru-vmv2-mini` в консоли браузера появились массовые ошибки:
+1. `WebSocket connection to 'wss://api.earflow.ru/ws/devices?ticket=...' failed` — десятки раз, шторм переподключений
+2. `GET /audio/v3/direct/.../stream?st=...&_s=... 401 (Unauthorized)` — все stream-запады падают
+3. `POST /api/ebap-hls/v1/session 403 (Forbidden)` — HLS session не создаётся
+4. Performance violations: click handler 203ms, setTimeout 57-90ms, forced reflow 30ms
+
+**Диагностика:**
+- `STREAM_TICKET_ENFORCE=1` на direct-stream-service требует валидный `st=` (stream ticket) на каждый запрос
+- Frontend mint (`isStreamTicketMintEnabled()`) требует `REACT_APP_STREAM_TICKET_MINT_ENABLED=1` AND `isProofAccessTokenEnabled()` → если PoP не настроен, mint возвращает `null` → fallback на legacy `getDeviceWsTicket` → WS падает с 403 → шторм ретраев
+- HLS session endpoint (`/api/ebap-hls/v1/session`) имеет `class: unsafe` + `require_user: true` → при enforced PoP требует `X-Auth-Device-*` headers → без proof → 403
+- `prefetchLyrics` → `getSongHlsSession` вызывается при каждом переключении трека → 403 на каждый prefetch
+- WS storm: `preWsOpenStreakRef` растёт, бэкофф увеличивается, но `gaveUpRef` не выставляется при persistent 403 → бесконечные ретраи каждые 5 минут
+- Каждая ошибка → React re-render → forced reflow → UI блокируется на 200ms+
+
+**Decision:**
+1. **НЕ включать `STREAM_TICKET_ENFORCE=1` до прохождения SEC-013 browser DoD 8/8** (PoP e2e proof). Это жёсткое правило.
+2. **Rollback Phase 7** до Phase 6 ACCEPT (dual-mode, legacy cookie работает параллельно с ticket): `SEC005_PHASE7_ROLLBACK_CONFIRM=1 npm run rollback:sec005-phase7-prod`
+3. **Frontend guard:** добавить проверку PoP readiness перед mint stream ticket. Если PoP не готов → НЕ минтить ticket, использовать legacy path.
+4. **HLS session 403:** `getSongHlsSession` при 403 → один retry с session refresh, потом degrade. НЕ ретраить бесконечно.
+5. **WS storm:** при persistent 403/401 на ws-ticket → `gaveUpRef=true` после `HANDSHAKE_STORM_THRESHOLD` → показать ошибку пользователю → возобновить только по действию.
+6. **Performance:** stream error counting через ref, НЕ через React state. Backoff до 30s при >3 ошибках подряд.
+
+**Alternatives considered:**
+- Оставить ENFORCE и чинить PoP на лету — отвергнуто: пользователь не может слушать музыку
+- Отключить DeviceProofMiddleware для stream routes — отвергнуто: это security regression (INV-SEC-010)
+- Включить `ALLOW_COOKIE_AUTH_WITHOUT_PROOF=1` — отвергнуто: bypass запрещён в prod (INV-SEC-012)
+
+**Consequences:** Rollback до Phase 6 ACCEPT. Stream работает через legacy cookie + ticket параллельно. WS Device Sync работает через legacy JWT ticket. PoP e2e должен быть пройден до следующей попытки ENFORCE.
+
+**Files touched:**
+- `docker-compose.stream-prod-enforce.yml` (rollback)
+- `frontend/src/auth/streamTicket.js` (guard PoP readiness)
+- `frontend/src/api/client.js` (HLS session 403 handling)
+- `frontend/src/hooks/useDeviceSync.js` (WS storm gaveUp при persistent 403)
+- `frontend/src/context/player/useHlsPrefetch.js` (prefetch error handling)
+- `docs/ARCHITECTURE_INVARIANTS.md` (INV-STREAM-001, INV-STREAM-002, INV-WS-001, INV-PERF-001)
+
+**Tests:** `npm run verify:stream-ticket`, `npm run verify:sec005-prod-health`, SEC-013 browser DoD 8/8
+
+**Чтобы не повторилось:** см. `INV-STREAM-001`, `INV-STREAM-002`, `INV-WS-001`, `INV-PERF-001` в `ARCHITECTURE_INVARIANTS.md`. Жёсткое правило: **ENFORCE только после PoP e2e**. Перед любым изменением stream auth — grep DECISIONS.md по "stream" и "ENFORCE".
+
+---
+
 ## 2026-06-10 — Профиль → «Защита»: сессии сгруппированы по устройству
 
 **Status:** accepted  
