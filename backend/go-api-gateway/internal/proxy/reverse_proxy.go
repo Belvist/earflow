@@ -94,8 +94,31 @@ func isAuthExchangePath(path string) bool {
 	}
 }
 
+// isPlausibleOpaqueWSTicket matches SEC-005 Phase 8 opaque ws_connect tickets
+// (same shape as device-sync/party verifiers: base64url id, no dots).
+func isPlausibleOpaqueWSTicket(s string) bool {
+	if len(s) < 20 || len(s) > 128 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c >= 'a' && c <= 'z':
+		case c >= 'A' && c <= 'Z':
+		case c >= '0' && c <= '9':
+		case c == '-' || c == '_':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 func isPlausibleWSTicket(raw string) bool {
 	s := strings.TrimSpace(raw)
+	if isPlausibleOpaqueWSTicket(s) {
+		return true
+	}
 	if len(s) < 60 || len(s) > 4096 {
 		return false
 	}
