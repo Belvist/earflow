@@ -172,6 +172,7 @@ type Event struct {
 	Timeline         *PlaybackTimeline `json:"timeline,omitempty"`
 	Lease            *OutputLease      `json:"lease,omitempty"`
 	Transfer         *TransferRecord   `json:"transfer,omitempty"`
+	PlayerState      *PlayerState      `json:"playerState,omitempty"`
 
 	// Command-specific
 	From    *string                `json:"from,omitempty"`
