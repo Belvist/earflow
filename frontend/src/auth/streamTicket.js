@@ -4,7 +4,6 @@ import { getCsrfToken } from './cookieHelpers';
 
 /** In-memory only — never localStorage (SEC-005 red flag). */
 const mediaTicketCache = new Map();
-const wsTicketCache = new Map();
 
 const apiBaseUrl = () => {
   const raw = String(process.env.REACT_APP_API_URL || '').trim();
@@ -57,7 +56,6 @@ export function isStreamTicketMintEnabled() {
 
 export function clearStreamTicketCache() {
   mediaTicketCache.clear();
-  wsTicketCache.clear();
 }
 
 export function attachMediaTicketToUrl(rawUrl, ticket) {
@@ -186,12 +184,8 @@ export async function mintWsConnectStreamTicket({ deviceId, signal } = {}) {
     return null;
   }
 
-  const now = Date.now();
-  const cached = wsTicketCache.get(did);
-  if (cached && cached.expiresAtMs > now + 5000) {
-    return cached.ticket;
-  }
-
+  // ws_connect_ticket — одноразовый (GetDel на стороне device-sync), поэтому
+  // НЕ кэшируем: каждый connect/reconnect минтит свежий тикет.
   const mintPath = '/api/auth/stream-ticket';
   const signed = await signDeviceProofRequest('POST', `${apiBaseUrl()}${mintPath}`);
   if (!signed?.headers) {
@@ -226,8 +220,7 @@ export async function mintWsConnectStreamTicket({ deviceId, signal } = {}) {
     return null;
   }
   if (resp.status === 403) {
-    // PoP proof rejected — clear cache, don't retry
-    wsTicketCache.delete(did);
+    // PoP proof rejected — don't retry
     return null;
   }
   if (!resp.ok) {
@@ -246,10 +239,6 @@ export async function mintWsConnectStreamTicket({ deviceId, signal } = {}) {
     return null;
   }
 
-  const expiresIn = Number(body?.expiresIn);
-  const expiresAtMs =
-    Number.isFinite(expiresIn) && expiresIn > 0 ? now + expiresIn * 1000 : now + 60_000;
-  wsTicketCache.set(did, { ticket, expiresAtMs });
   return ticket;
 }
 
