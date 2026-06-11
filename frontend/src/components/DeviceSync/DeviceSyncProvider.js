@@ -8,11 +8,11 @@ import { usePlayer } from '../../context/PlayerContext';
 import useDeviceSync from '../../hooks/useDeviceSync';
 import {
     SILENT_SHADOW_ALIGN_SEC,
-    SILENT_SHADOW_SEEK_SEC,
     SILENT_SHADOW_TICK_MS,
     buildSilentShadowSnapshot,
     getNowPlayingRevision,
     getServerActiveDeviceId,
+    isDeviceSyncTransferInFlight,
     isSelfActiveDevice,
     normalizeTrackId,
     planSilentShadowReconciliation,
@@ -22,6 +22,7 @@ import {
     readPlayerTrackId,
     readTimelineIsPlaying,
     resolveAuthoritativePlayback,
+    shouldClaimLocalPlayback,
 } from './deviceSyncPlayback';
 import {
     markNowPlayingSnapshotPublished,
@@ -56,12 +57,6 @@ function scheduleDeferredStart(onStart) {
 
 function isPartyRuntimeActive(player) {
     return Boolean(player?.partyMode || player?.activePartyId || player?.party?.id);
-}
-
-function isTransferInFlight(transfer) {
-    if (!transfer || typeof transfer !== 'object') return false;
-    const phase = String(transfer.phase || '').toLowerCase();
-    return phase !== '' && !['reconciled', 'expired', 'failed'].includes(phase);
 }
 
 function buildPublishSnapshot(player, deviceId) {
@@ -196,6 +191,15 @@ export default function DeviceSyncProvider({ children }) {
 
     const device = useDeviceSync({ isAuthenticated: Boolean(isAuthenticated && transportActive), onCommand });
     useEffect(() => { deviceRef.current = device; }, [device]);
+    const {
+        enabled: deviceEnabled,
+        ready: deviceReady,
+        deviceId: localDeviceId,
+        activeRevision,
+        transfer,
+        sendCommand,
+        reportNowPlaying,
+    } = device;
 
     const isActiveOnServer = useMemo(() => {
         return isSelfActiveDevice(device.deviceId, device.devices, device.nowPlaying, device.lease);
@@ -219,7 +223,7 @@ export default function DeviceSyncProvider({ children }) {
         if (isPartyRuntimeActive(playerRef.current)) return;
         if (!serverActiveDeviceId) return;
         if (serverActiveDeviceId === device.deviceId) return;
-        if (isTransferInFlight(device.transfer)) return;
+        if (isDeviceSyncTransferInFlight(device.transfer)) return;
 
         const leaseState = device.lease?.deviceStates?.[device.deviceId];
         if (leaseState && !['SUSPENDED', 'REVOKED', 'LOST', 'INTERRUPTED'].includes(String(leaseState))) {
@@ -396,11 +400,58 @@ export default function DeviceSyncProvider({ children }) {
         lastIsPlaying: null,
         lastPositionSec: -1,
     });
+    const localPlaybackClaimRef = useRef({
+        key: '',
+        atMs: 0,
+    });
 
-    const snapshot = useMemo(() => buildPublishSnapshot(player, device.deviceId), [player, device.deviceId]);
+    const snapshot = useMemo(() => buildPublishSnapshot(player, localDeviceId), [player, localDeviceId]);
+
+    useEffect(() => {
+        const p = playerRef.current;
+        if (!p || isPartyRuntimeActive(p)) return;
+        if (typeof sendCommand !== 'function') return;
+        if (!shouldClaimLocalPlayback({
+            deviceEnabled,
+            deviceReady,
+            deviceId: localDeviceId,
+            isActiveOnServer,
+            transfer,
+            player: p,
+        })) {
+            return;
+        }
+
+        const trackId = readPlayerTrackId(p);
+        const claimKey = [
+            localDeviceId,
+            trackId,
+            serverActiveDeviceId || 'none',
+            activeRevision || 0,
+        ].join(':');
+        const now = Date.now();
+        const lastClaim = localPlaybackClaimRef.current;
+        if (lastClaim.key === claimKey && now - lastClaim.atMs < 5_000) {
+            return;
+        }
+        localPlaybackClaimRef.current = { key: claimKey, atMs: now };
+        sendCommand({ cmd: 'play' });
+    }, [
+        deviceEnabled,
+        deviceReady,
+        localDeviceId,
+        activeRevision,
+        transfer,
+        sendCommand,
+        isActiveOnServer,
+        serverActiveDeviceId,
+        player.isPlaying,
+        player.currentTrack?.id,
+        player.intent,
+    ]);
 
     const publishNowPlayingIfDue = useCallback(() => {
-        if (!device.enabled || !device.ready || !device.deviceId) return;
+        if (!deviceEnabled || !deviceReady || !localDeviceId) return;
         if (!snapshot) return;
         if (isPartyRuntimeActive(playerRef.current)) return;
         if (!isActiveOnServer) return;
@@ -410,8 +461,8 @@ export default function DeviceSyncProvider({ children }) {
         if (!shouldPublishNowPlayingSnapshot(last, snapshot, now)) return;
 
         markNowPlayingSnapshotPublished(last, snapshot, now);
-        device.reportNowPlaying(snapshot);
-    }, [snapshot, device.enabled, device.ready, device.deviceId, device.reportNowPlaying, isActiveOnServer]);
+        reportNowPlaying(snapshot);
+    }, [snapshot, deviceEnabled, deviceReady, localDeviceId, reportNowPlaying, isActiveOnServer]);
 
     // Event-driven only: publish snapshot changes synchronously. No periodic
     // ticker — shouldPublishNowPlayingSnapshot already returns false unless a
@@ -426,4 +477,4 @@ export default function DeviceSyncProvider({ children }) {
         </DeviceSyncContext.Provider>
     );
 }
-
+

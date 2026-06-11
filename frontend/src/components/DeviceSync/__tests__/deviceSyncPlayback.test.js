@@ -2,6 +2,7 @@ import {
     buildSilentShadowSnapshot,
     estimateRemotePositionSec,
     getServerActiveDeviceId,
+    isDeviceSyncTransferInFlight,
     isSelfActiveDevice,
     planSilentShadowReconciliation,
     persistPlaybackResumePoint,
@@ -9,6 +10,7 @@ import {
     readPlayerPositionSec,
     readTimelineIsPlaying,
     resolveAuthoritativePlayback,
+    shouldClaimLocalPlayback,
 } from '../deviceSyncPlayback';
 
 describe('device sync playback helpers', () => {
@@ -89,6 +91,58 @@ describe('device sync playback helpers', () => {
         expect(isSelfActiveDevice('self', [{ id: 'other', isActive: true }], { deviceId: 'other' }, {
             holderDeviceId: 'self',
         })).toBe(true);
+    });
+
+    test('claims local playback only for real local user intent', () => {
+        expect(shouldClaimLocalPlayback({
+            deviceEnabled: true,
+            deviceReady: true,
+            deviceId: 'phone',
+            isActiveOnServer: false,
+            player: {
+                currentTrack: { id: 'track-a' },
+                isPlaying: true,
+                intent: { getWanted: () => true },
+            },
+        })).toBe(true);
+
+        expect(shouldClaimLocalPlayback({
+            deviceEnabled: true,
+            deviceReady: true,
+            deviceId: 'desktop',
+            isActiveOnServer: false,
+            player: {
+                currentTrack: { id: 'track-a' },
+                isPlaying: true,
+                intent: { getWanted: () => false },
+            },
+        })).toBe(false);
+    });
+
+    test('does not claim while already active or transfer is in flight', () => {
+        const player = {
+            currentTrack: { id: 'track-a' },
+            isPlaying: true,
+            intent: { getWanted: () => true },
+        };
+
+        expect(isDeviceSyncTransferInFlight({ phase: 'activate_sent' })).toBe(true);
+        expect(isDeviceSyncTransferInFlight({ phase: 'reconciled' })).toBe(false);
+        expect(shouldClaimLocalPlayback({
+            deviceEnabled: true,
+            deviceReady: true,
+            deviceId: 'phone',
+            isActiveOnServer: true,
+            player,
+        })).toBe(false);
+        expect(shouldClaimLocalPlayback({
+            deviceEnabled: true,
+            deviceReady: true,
+            deviceId: 'phone',
+            isActiveOnServer: false,
+            transfer: { phase: 'activate_sent' },
+            player,
+        })).toBe(false);
     });
 
     test('persists resume point with millisecond precision', () => {

@@ -22,6 +22,20 @@
 
 ---
 
+## 2026-06-11 — DeviceSync local play intent bootstraps backend active device
+
+**Status:** accepted
+**Area:** device-sync | frontend-player
+**Context:** После `player_state` rollout устройства могли быть online, но ни одно не становилось active, если пользователь запускал трек обычным local play/track tap на телефоне. `DeviceSyncProvider` публиковал nowPlaying только когда backend уже считал этот device active, поэтому fresh pair `iPhone + Windows` видел список devices, но не получал playback state на второй клиент.
+**Decision:** Frontend остаётся receiver и не выбирает active locally, но при реальном локальном user-wanted playback (`player.intent.getWanted() === true`, `isPlaying === true`, есть current track) отправляет backend `cmd: play`, когда этот device ещё не active и transfer не in-flight. Backend уже трактует такой command как transfer-on-play/bootstrap и публикует authoritative `player_state`. Remote UI projection не отправляет claim, потому что `projectPlaybackUiState` не выставляет user-wanted playback.
+**Alternatives considered:** (1) Разрешить frontend сразу `reportNowPlaying` до active — отвергнуто, это ломает backend authority. (2) Делать auto-active при register — отвергнуто, online device без явного play не должен захватывать output. (3) Полагаться только на кнопки transfer в DevicesPanel — отвергнуто, обычный tap play должен работать как Spotify Connect.
+**Consequences:** Первый локальный play на телефоне/компьютере bootstrap'ит active device через backend FSM; второй клиент получает `player_state` и silent-shadow UI. Дедупликация на 5 секунд предотвращает повторные play-intent storms до прихода backend frame.
+**Files touched:** `frontend/src/components/DeviceSync/DeviceSyncProvider.js`, `frontend/src/components/DeviceSync/deviceSyncPlayback.js`, `frontend/src/context/PlayerContext.js`, `frontend/src/components/DeviceSync/__tests__/deviceSyncPlayback.test.js`
+**Tests:** `CI=true npm --prefix frontend test -- --watchAll=false --runInBand --runTestsByPath src/components/DeviceSync/__tests__/deviceSyncPlayback.test.js`; `npm --prefix frontend run build`.
+**Чтобы не повторилось:** local playback start is an intent input only; backend remains source of truth for active output (`INV-DS-001`, `INV-DS-002`).
+
+---
+
 ## 2026-06-11 - Native iOS scaffold: single gesture owner and server-authored playback
 
 **Status:** accepted

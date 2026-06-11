@@ -1700,6 +1700,9 @@ export const PlayerProvider = ({
     isPlaying: storeSnapshot.isPlaying,
     isActuallyPlaying: storeSnapshot.fsmState === 'PLAYING',
     localOutputState,
+    intent: {
+      getWanted: () => !!state.userWantsPlaybackRef?.current,
+    },
     isBuffering: storeSnapshot.isBuffering,
     isSeeking: storeSnapshot.isSeeking,
     fsmState: storeSnapshot.fsmState,
@@ -1733,6 +1736,7 @@ export const PlayerProvider = ({
     state.likedIds,
     state.dislikedIds,
     state.userSettings,
+    state.userWantsPlaybackRef,
     localOutputState,
     partyManager.partyMode,
     partyManager.partyInfo,

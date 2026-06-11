@@ -99,6 +99,30 @@ export function isSelfActiveDevice(deviceId, devices, nowPlaying, lease = null) 
     return getServerActiveDeviceId(devices, nowPlaying, lease) === selfId;
 }
 
+export function isDeviceSyncTransferInFlight(transfer) {
+    if (!transfer || typeof transfer !== 'object') return false;
+    const phase = String(transfer.phase || '').toLowerCase();
+    return phase !== '' && !['reconciled', 'expired', 'failed'].includes(phase);
+}
+
+export function shouldClaimLocalPlayback({
+    deviceEnabled = false,
+    deviceReady = false,
+    deviceId = '',
+    isActiveOnServer = false,
+    transfer = null,
+    player = null,
+} = {}) {
+    if (deviceEnabled !== true || deviceReady !== true || !normalizeTrackId(deviceId)) return false;
+    if (isActiveOnServer || isDeviceSyncTransferInFlight(transfer)) return false;
+    if (!player || player.isPlaying !== true) return false;
+    const wantsPlayback = typeof player.intent?.getWanted === 'function'
+        ? player.intent.getWanted() === true
+        : player.isPlaying === true;
+    if (!wantsPlayback) return false;
+    return !!readPlayerTrackId(player);
+}
+
 export function readTimelineIsPlaying(nowPlaying) {
     return nowPlaying?.isPlaying === true;
 }
