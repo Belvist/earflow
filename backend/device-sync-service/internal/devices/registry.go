@@ -972,6 +972,11 @@ func (r *Registry) SendCommand(ctx context.Context, userID, fromDeviceID, to, cm
 		r.recordCommandRejected("payload_too_large")
 		return ErrPayloadTooLarge
 	}
+	if cmd == "set_volume" {
+		if v, ok := numberFromPayload(payload, "volume"); ok {
+			r.setDeviceVolumeForNormalizedUser(ctx, uid, targetID, v)
+		}
+	}
 	nowMs := time.Now().UnixMilli()
 	fromCopy := fromDeviceID
 	toPtr := strPtr(targetID)
@@ -983,6 +988,9 @@ func (r *Registry) SendCommand(ctx context.Context, userID, fromDeviceID, to, cm
 		Cmd:     cmd,
 		Payload: payload,
 	})
+	if cmd == "set_volume" {
+		r.publishPlayerState(ctx, uid)
+	}
 	if r.m != nil {
 		r.m.Commands.WithLabelValues(cmd).Inc()
 	}
@@ -1006,7 +1014,16 @@ func (r *Registry) recordCommandRejected(reason string) {
 // Pub/Sub helper
 // =============================================================================
 
+// publish ships a legacy frame and mirrors it into the unified `player_state`
+// frame (PEND-DS-001). Legacy frames stay for one release for compatibility.
 func (r *Registry) publish(ctx context.Context, uid string, ev Event) {
+	r.publishEvent(ctx, uid, ev)
+	if _, ok := playerStateTriggerFrames[ev.Type]; ok {
+		r.publishPlayerState(ctx, uid)
+	}
+}
+
+func (r *Registry) publishEvent(ctx context.Context, uid string, ev Event) {
 	enc, err := json.Marshal(ev)
 	if err != nil {
 		r.log.Warn("publish marshal failed", slog.Any("err", err))

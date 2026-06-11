@@ -31,15 +31,18 @@
 **WebSocket frames (server → client):**
 
 ```
-init             — полный snapshot при подключении
-devices:update   — изменения в наборе devices (registered/touched/removed)
-devices:active   — сменился active device (содержит {deviceId, activeRevision})
-np:update        — nowPlaying snapshot обновился
-timeline:update  — обновление позиции/состояния timeline
-lease:update     — audio output lease изменился (SUSPENDED/REVOKED/...)
-transfer:update  — phase transfer FSM (start/revoke_ack/activate_ack/reconciled/failed/expired)
+init             — полный snapshot при подключении (включает playerState)
+player_state     — единый union-frame {nowPlaying,timeline,lease,transfer,volumeByDevice} с монотонным frameRev
+devices:update   — изменения в наборе devices (registered/touched/removed) [deprecated 1 релиз]
+devices:active   — сменился active device (содержит {deviceId, activeRevision}) [deprecated 1 релиз]
+np:update        — nowPlaying snapshot обновился [deprecated 1 релиз]
+timeline:update  — обновление позиции/состояния timeline [deprecated 1 релиз]
+lease:update     — audio output lease изменился (SUSPENDED/REVOKED/...) [deprecated 1 релиз]
+transfer:update  — phase transfer FSM (start/revoke_ack/activate_ack/reconciled/failed/expired) [deprecated 1 релиз]
 cmd              — широковещательная команда (от controller к active device)
 ```
+
+`player_state` публикуется автоматически после каждого legacy state-frame (см. `playerStateTriggerFrames` в `internal/devices/playerstate.go`) и после `cmd:set_volume`. `frameRev` — монотонный Redis counter (`user:{uid}:frame:rev`, Persist). Клиент отбрасывает кадры с `frameRev <= last`.
 
 Frame ordering гарантирован per-user через single Redis Pub/Sub channel. Frontend применяет frames без stale-фильтрации (см. `INV-DS-004`).
 
@@ -62,6 +65,8 @@ transfer:{transferId}           — JSON TransferRecord, TTL Transfer.RecordTTL
 user:{uid}:transfer:active      — string transferId (текущий in-flight)
 transfers:active                — Set<transferId> (для retry worker)
 user:{uid}:idempotency:{key}    — string transferId (POST /transfer dedupe)
+user:{uid}:frame:rev            — int64 monotonic frameRev для player_state (Persist'нут)
+user:{uid}:volume:{did}         — string float 0..1 per-device volume, TTL DEVICE_TTL
 ```
 
 **Pub/Sub channel:** `{prefix}dsync:user:{uid}` (все WS-frames эмиттятся сюда).

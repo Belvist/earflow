@@ -322,6 +322,7 @@ type Event struct {
 	Timeline       *devices.PlaybackTimeline `json:"timeline,omitempty"`
 	Lease          *devices.OutputLease      `json:"lease,omitempty"`
 	Transfer       *devices.TransferRecord   `json:"transfer,omitempty"`
+	PlayerState    *devices.PlayerState      `json:"playerState,omitempty"`
 	Accepted       *bool                     `json:"accepted,omitempty"`
 	Reason         string                    `json:"reason,omitempty"`
 	ActiveRevision int64                     `json:"activeRevision,omitempty"`
@@ -379,6 +380,10 @@ func (c *Client) sendInit() error {
 			StateRevision: np.StateRevision,
 		}
 	}
+	playerState, err := c.registry.GetPlayerState(ctx, c.UserID)
+	if err != nil {
+		return err
+	}
 	payload := Event{
 		Type:           "init",
 		At:             time.Now().UnixMilli(),
@@ -388,6 +393,7 @@ func (c *Client) sendInit() error {
 		NP:             np,
 		Timeline:       timeline,
 		Lease:          lease,
+		PlayerState:    playerState,
 		ActiveRevision: activeRevision,
 	}
 	data, err := json.Marshal(payload)
