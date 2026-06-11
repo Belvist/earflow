@@ -48,14 +48,14 @@ func (r *Registry) retryDueTransfers(ctx context.Context) {
 			if r.m != nil {
 				r.m.TransferFailed.Inc()
 			}
-			r.publishTransferUpdate(ctx, transfer.UserID, transfer)
+			r.publishTransferUpdateWithPlayerState(ctx, transfer.UserID, transfer)
 			continue
 		}
 		transfer.RetryCount++
 		transfer.UpdatedAtMs = nowMs
 		r.republishTransferCommands(ctx, transfer)
 		_ = r.saveTransfer(ctx, transfer)
-		r.publishTransferUpdate(ctx, transfer.UserID, transfer)
+		r.publishTransferUpdateWithPlayerState(ctx, transfer.UserID, transfer)
 	}
 }
 

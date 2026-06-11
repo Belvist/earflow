@@ -57,6 +57,9 @@ func TestGetPlayerStateUnifiesSnapshot(t *testing.T) {
 	if ps.ActiveRevision <= 0 {
 		t.Fatalf("expected positive active revision, got %d", ps.ActiveRevision)
 	}
+	if len(ps.Devices) != 1 || ps.Devices[0] == nil || ps.Devices[0].ID != deviceA || !ps.Devices[0].IsActive {
+		t.Fatalf("expected active device in player_state devices, got %+v", ps.Devices)
+	}
 	if ps.NowPlaying == nil || ps.NowPlaying.TrackID != "track-1" {
 		t.Fatalf("expected now playing track-1, got %+v", ps.NowPlaying)
 	}

@@ -32,7 +32,7 @@
 
 ```
 init             — полный snapshot при подключении (включает playerState)
-player_state     — единый union-frame {nowPlaying,timeline,lease,transfer,volumeByDevice} с монотонным frameRev
+player_state     — единый union-frame {devices,nowPlaying,timeline,lease,transfer,volumeByDevice} с монотонным frameRev
 devices:update   — изменения в наборе devices (registered/touched/removed) [deprecated 1 релиз]
 devices:active   — сменился active device (содержит {deviceId, activeRevision}) [deprecated 1 релиз]
 np:update        — nowPlaying snapshot обновился [deprecated 1 релиз]
@@ -42,9 +42,9 @@ transfer:update  — phase transfer FSM (start/revoke_ack/activate_ack/reconcile
 cmd              — широковещательная команда (от controller к active device)
 ```
 
-`player_state` публикуется автоматически после каждого legacy state-frame (см. `playerStateTriggerFrames` в `internal/devices/playerstate.go`) и после `cmd:set_volume`. `frameRev` — монотонный Redis counter (`user:{uid}:frame:rev`, Persist). Клиент отбрасывает кадры с `frameRev <= last`.
+`player_state` публикуется автоматически после legacy device/now-playing/timeline/lease frames (см. `playerStateTriggerFrames` в `internal/devices/playerstate.go`), после сохранённой transfer phase/ack/retry/expire и после `cmd:set_volume`. `frameRev` — монотонный Redis counter (`user:{uid}:frame:rev`, Persist). Клиент отбрасывает кадры с `frameRev <= last`.
 
-Frame ordering гарантирован per-user через single Redis Pub/Sub channel. Frontend применяет frames без stale-фильтрации (см. `INV-DS-004`).
+Frame ordering гарантирован per-user через single Redis Pub/Sub channel. Frontend применяет `player_state` атомарно; deprecated frames остаются fallback только пока соединение не получило полный `player_state` с `devices`.
 
 ## Owns (Redis keys)
 
@@ -114,6 +114,7 @@ Optional (background workers):
 
 ## Recent significant changes
 
+- **2026-06-11** — `player_state` включает `devices`; frontend отключает fragmented fallback после полного unified frame; desktop status dot показывается только при connected + 2 present devices.
 - **2026-05-27** — Этап 1: transfer-on-play на backend, удаление frontend authority. См. `docs/DECISIONS.md`.
 
 ## Tests

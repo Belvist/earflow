@@ -201,7 +201,7 @@ function buildPlayerStatePatch(playerState, lastFrameRevRef, currentState) {
     }
     const activeRevision = readActiveRevision(playerState.activeRevision);
     const currentActiveRevision = readActiveRevision(currentState.activeRevision);
-    return {
+    const patch = {
         nowPlaying: playerState.nowPlaying || null,
         timeline: playerState.timeline || playerState.nowPlaying || null,
         lease: playerState.lease || null,
@@ -211,6 +211,10 @@ function buildPlayerStatePatch(playerState, lastFrameRevRef, currentState) {
             : currentState.volumeByDevice || {},
         activeRevision: activeRevision || currentActiveRevision,
     };
+    if (Array.isArray(playerState.devices)) {
+        patch.devices = dedupeDevicesById(playerState.devices);
+    }
+    return patch;
 }
 
 export default function useDeviceSync({
@@ -254,6 +258,7 @@ export default function useDeviceSync({
     const clientSeqRef = useRef(0);
     /** Последний применённый frameRev `player_state` — отбрасываем устаревшие кадры. */
     const lastFrameRevRef = useRef(0);
+    const playerStateFramesRef = useRef(false);
     const stateRef = useRef(state);
     /**
      * Счётчик последовательных auth-ошибок (403/401) на ws-ticket.
@@ -419,6 +424,7 @@ export default function useDeviceSync({
         connectInFlightRef.current = true;
         try {
             const attemptConnection = async (allowReregisterOnTicket403) => {
+                playerStateFramesRef.current = false;
                 patchState({ connectionState: 'connecting', error: null });
 
                 if (!deviceIdRef.current) {
@@ -455,21 +461,30 @@ export default function useDeviceSync({
                 try {
                     const listed = await apiClient.listDevices();
                     if (mountedRef.current) {
-                        const nextNowPlaying = listed?.nowPlaying || null;
-                        updateSyncDiagnosticsState({
-                            deviceId: deviceIdRef.current,
-                            ownerDeviceId: nextNowPlaying?.deviceId || null,
-                            nowPlayingRevision: readNowPlayingRevision(nextNowPlaying),
-                            nowPlayingUpdatedAtMs: readNowPlayingUpdatedAt(nextNowPlaying),
-                        });
-                        patchState({
-                            devices: dedupeDevicesById(
-                                Array.isArray(listed?.devices) ? listed.devices : []
-                            ),
-                            nowPlaying: nextNowPlaying,
-                            timeline: nextNowPlaying,
-                            lease: listed?.lease || stateRef.current.lease || null,
-                        });
+                        const listedPatch = buildPlayerStatePatch(
+                            listed?.playerState, lastFrameRevRef, stateRef.current
+                        );
+                        if (listedPatch) {
+                            playerStateFramesRef.current = Array.isArray(listed?.playerState?.devices);
+                            patchState(listedPatch);
+                        }
+                        if (!listedPatch || !Array.isArray(listed?.playerState?.devices)) {
+                            const nextNowPlaying = listed?.nowPlaying || null;
+                            updateSyncDiagnosticsState({
+                                deviceId: deviceIdRef.current,
+                                ownerDeviceId: nextNowPlaying?.deviceId || null,
+                                nowPlayingRevision: readNowPlayingRevision(nextNowPlaying),
+                                nowPlayingUpdatedAtMs: readNowPlayingUpdatedAt(nextNowPlaying),
+                            });
+                            patchState({
+                                devices: dedupeDevicesById(
+                                    Array.isArray(listed?.devices) ? listed.devices : []
+                                ),
+                                nowPlaying: nextNowPlaying,
+                                timeline: nextNowPlaying,
+                                lease: listed?.lease || stateRef.current.lease || null,
+                            });
+                        }
                     }
                 } catch {
                     /* WS init will fill the gap */
@@ -557,6 +572,7 @@ export default function useDeviceSync({
                         case 'player_state': {
                             const patch = buildPlayerStatePatch(msg.playerState, lastFrameRevRef, stateRef.current);
                             if (!patch) break;
+                            playerStateFramesRef.current = Array.isArray(msg.playerState?.devices);
                             recordSyncEvent('player_state', {
                                 frameRev: lastFrameRevRef.current,
                                 ownerDeviceId: patch.nowPlaying?.deviceId || null,
@@ -597,9 +613,13 @@ export default function useDeviceSync({
                                 connectionState: 'connected',
                             });
                             lastFrameRevRef.current = 0;
+                            playerStateFramesRef.current = false;
                             const initPlayerStatePatch = buildPlayerStatePatch(
                                 msg.playerState, lastFrameRevRef, stateRef.current
                             );
+                            if (initPlayerStatePatch) {
+                                playerStateFramesRef.current = Array.isArray(msg.playerState?.devices);
+                            }
                             patchState({
                                 devices: dedupeDevicesById(
                                     Array.isArray(msg.devices) ? msg.devices : []
@@ -614,6 +634,7 @@ export default function useDeviceSync({
                             break;
                         }
                         case 'devices:active': {
+                            if (playerStateFramesRef.current) break;
                             const activeRevision = readActiveRevision(msg.activeRevision);
                             const currentActiveRevision = readActiveRevision(stateRef.current.activeRevision);
                             const activeId = typeof msg.deviceId === 'string' ? msg.deviceId : '';
@@ -659,6 +680,7 @@ export default function useDeviceSync({
                             break;
                         }
                         case 'devices:update': {
+                            if (playerStateFramesRef.current) break;
                             if (listDevicesDebounceTRef.current) {
                                 clearTimeout(listDevicesDebounceTRef.current);
                             }
@@ -684,6 +706,7 @@ export default function useDeviceSync({
                             break;
                         }
                         case 'np:update': {
+                            if (playerStateFramesRef.current) break;
                             if (msg.state && typeof msg.state === 'object') {
                                 const activeRevision = readActiveRevision(
                                     msg.activeRevision || msg.state.activeRevision
@@ -717,6 +740,7 @@ export default function useDeviceSync({
                             break;
                         }
                         case 'timeline:update': {
+                            if (playerStateFramesRef.current) break;
                             const activeRevision = readActiveRevision(msg.activeRevision || msg.timeline?.activeRevision);
                             const currentActiveRevision = readActiveRevision(stateRef.current.activeRevision);
                             patchState({
@@ -726,6 +750,7 @@ export default function useDeviceSync({
                             break;
                         }
                         case 'lease:update': {
+                            if (playerStateFramesRef.current) break;
                             const activeRevision = readActiveRevision(msg.activeRevision || msg.lease?.activeRevision);
                             const currentActiveRevision = readActiveRevision(stateRef.current.activeRevision);
                             recordSyncEvent('lease:update', {
@@ -740,6 +765,7 @@ export default function useDeviceSync({
                             break;
                         }
                         case 'transfer:update': {
+                            if (playerStateFramesRef.current) break;
                             const activeRevision = readActiveRevision(msg.activeRevision || msg.transfer?.activeRevision);
                             const currentActiveRevision = readActiveRevision(stateRef.current.activeRevision);
                             recordSyncEvent('transfer:update', {
@@ -939,6 +965,7 @@ export default function useDeviceSync({
                 volumeByDevice: {},
             });
             lastFrameRevRef.current = 0;
+            playerStateFramesRef.current = false;
             return undefined;
         }
         // Новая сессия (после логина/refresh) — обнуляем штрафные счётчики.
@@ -1146,6 +1173,17 @@ export default function useDeviceSync({
         try {
             const listed = await apiClient.listDevices();
             if (!mountedRef.current) return;
+            const listedPatch = buildPlayerStatePatch(
+                listed?.playerState, lastFrameRevRef, stateRef.current
+            );
+            if (listedPatch) {
+                playerStateFramesRef.current = Array.isArray(listed?.playerState?.devices);
+                patchState(listedPatch);
+                if (Array.isArray(listedPatch.devices) && listedPatch.devices.length >= 2) {
+                    void ensureRealtimeConnection();
+                }
+                if (Array.isArray(listed?.playerState?.devices)) return;
+            }
             const list = dedupeDevicesById(
                 Array.isArray(listed?.devices) ? listed.devices : []
             );

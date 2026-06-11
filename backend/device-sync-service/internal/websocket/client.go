@@ -354,32 +354,6 @@ func (c *Client) sendInit() error {
 	ctx, cancel := context.WithTimeout(c.ctx, 5*time.Second)
 	defer cancel()
 
-	devs, np, err := c.registry.ListDevices(ctx, c.UserID)
-	if err != nil {
-		return err
-	}
-	activeRevision, err := c.registry.GetActiveRevision(ctx, c.UserID)
-	if err != nil {
-		return err
-	}
-	lease, err := c.registry.GetOutputLease(ctx, c.UserID)
-	if err != nil {
-		return err
-	}
-	var timeline *devices.PlaybackTimeline
-	if np != nil {
-		timeline = &devices.PlaybackTimeline{
-			TrackID:       np.TrackID,
-			Title:         np.Title,
-			Artist:        np.Artist,
-			Cover:         np.Cover,
-			DurationSec:   np.DurationSec,
-			IsPlaying:     np.IsPlaying,
-			PositionSec:   np.PositionSec,
-			UpdatedAtMs:   np.UpdatedAtMs,
-			StateRevision: np.StateRevision,
-		}
-	}
 	playerState, err := c.registry.GetPlayerState(ctx, c.UserID)
 	if err != nil {
 		return err
@@ -389,12 +363,13 @@ func (c *Client) sendInit() error {
 		At:             time.Now().UnixMilli(),
 		UserID:         c.UserID,
 		DeviceID:       c.DeviceID,
-		Devices:        devs,
-		NP:             np,
-		Timeline:       timeline,
-		Lease:          lease,
+		Devices:        playerState.Devices,
+		NP:             playerState.NowPlaying,
+		Timeline:       playerState.Timeline,
+		Lease:          playerState.Lease,
+		Transfer:       playerState.Transfer,
 		PlayerState:    playerState,
-		ActiveRevision: activeRevision,
+		ActiveRevision: playerState.ActiveRevision,
 	}
 	data, err := json.Marshal(payload)
 	if err != nil {

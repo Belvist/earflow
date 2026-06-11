@@ -181,26 +181,21 @@ func deleteDevice(d Deps) http.HandlerFunc {
 func listDevices(d Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		u := auth.FromContext(r.Context())
-		devs, np, err := d.Registry.ListDevices(r.Context(), u.ID)
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, errorBody(err.Error(), "LIST_FAILED"))
-			return
-		}
-		activeRevision, err := d.Registry.GetActiveRevision(r.Context(), u.ID)
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, errorBody(err.Error(), "LIST_FAILED"))
-			return
-		}
-		lease, err := d.Registry.GetOutputLease(r.Context(), u.ID)
+		playerState, err := d.Registry.GetPlayerState(r.Context(), u.ID)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, errorBody(err.Error(), "LIST_FAILED"))
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
-			"devices":        devs,
-			"nowPlaying":     np,
-			"activeRevision": activeRevision,
-			"lease":          lease,
+			"devices":        playerState.Devices,
+			"nowPlaying":     playerState.NowPlaying,
+			"timeline":       playerState.Timeline,
+			"lease":          playerState.Lease,
+			"transfer":       playerState.Transfer,
+			"activeRevision": playerState.ActiveRevision,
+			"activeDeviceId": playerState.ActiveDeviceID,
+			"volumeByDevice": playerState.VolumeByDevice,
+			"playerState":    playerState,
 		})
 	}
 }

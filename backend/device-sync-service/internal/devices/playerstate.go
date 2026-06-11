@@ -13,7 +13,7 @@ import (
 )
 
 // PlayerState is the unified `player_state` frame: a union of now-playing,
-// timeline, lease, transfer and per-device volume under a single monotonic
+// devices, timeline, lease, transfer and per-device volume under a single monotonic
 // FrameRev. Clients render this one object instead of stitching together the
 // legacy per-aspect frames (which remain published for one release for
 // backwards compatibility).
@@ -22,6 +22,7 @@ type PlayerState struct {
 	At             int64              `json:"at"`
 	ActiveDeviceID string             `json:"activeDeviceId,omitempty"`
 	ActiveRevision int64              `json:"activeRevision"`
+	Devices        []*Device          `json:"devices,omitempty"`
 	NowPlaying     *NowPlaying        `json:"nowPlaying,omitempty"`
 	Timeline       *PlaybackTimeline  `json:"timeline,omitempty"`
 	Lease          *OutputLease       `json:"lease,omitempty"`
@@ -37,8 +38,10 @@ var playerStateTriggerFrames = map[string]struct{}{
 	"devices:update":  {},
 	"devices:active":  {},
 	"lease:update":    {},
-	"transfer:update": {},
 }
+
+// transfer:update is mirrored explicitly after saved phases in transfer_fsm.go
+// so StartTransfer does not emit a unified snapshot for the pre-command phase.
 
 func (r *Registry) keyFrameRevision(uid string) string {
 	return r.cfg.Redis.KeyPrefix + "user:" + uid + ":frame:rev"
@@ -78,7 +81,7 @@ func (r *Registry) playerStateForNormalizedUser(ctx context.Context, uid string)
 	if err != nil && !errors.Is(err, redis.Nil) {
 		return nil, err
 	}
-	np, err := r.GetNowPlaying(ctx, uid)
+	devices, np, err := r.ListDevices(ctx, uid)
 	if err != nil {
 		return nil, err
 	}
@@ -99,6 +102,7 @@ func (r *Registry) playerStateForNormalizedUser(ctx context.Context, uid string)
 		At:             time.Now().UnixMilli(),
 		ActiveDeviceID: activeID,
 		ActiveRevision: activeRevision,
+		Devices:        devices,
 		NowPlaying:     np,
 		Timeline:       timeline,
 		Lease:          lease,

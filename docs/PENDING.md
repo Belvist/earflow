@@ -11,6 +11,23 @@
 
 ---
 
+### PEND-IOS-001 — Native iOS Xcode/Simulator verification gate
+
+**Priority:** high
+**Status:** scaffold implemented locally, macOS/Xcode gate pending
+
+`ios/Earflow` now contains the native SwiftUI scaffold, `EarflowKit` gesture/playback/auth contracts, App Intents, and XCTest/UI test contracts. This Windows workspace has no `swift`, `xcodebuild`, `xcrun`, or Simulator, so the iOS phase is **prepared**, not closed.
+
+**Remaining:**
+1. On macOS with Xcode + XcodeGen: run `npm run verify:ios-native`.
+2. Fix any Swift/XcodeGen compile issues found by the real toolchain.
+3. Run Simulator UI smoke: launch, tab navigation, mini-player tap-open, sheet swipe open/close.
+4. Run real-device smoke before claiming playback/gesture readiness: audio session, lock screen controls, interruptions, haptics, rapid gestures.
+
+**Blocks:** any claim that native iOS app is ready, safe for TestFlight, or gesture-complete.
+
+---
+
 ### PEND-STREAM-001 — Rollback SEC-005 Phase 7 ENFORCE до Phase 6 ACCEPT
 
 **Priority:** critical
@@ -51,7 +68,7 @@
 
 ### PEND-DS-001 — ~~Этап 2: единый `player_state` frame~~ — закрыто 2026-06-11
 
-Реализовано: `player_state` union-frame с монотонным `frameRev`, init включает `playerState`, frontend читает единый объект. Legacy frames оставлены deprecated на 1 релиз. См. `DECISIONS.md` 2026-06-11.
+Реализовано: `player_state` union-frame с `devices` и монотонным `frameRev`, init/list включает `playerState`, frontend читает единый объект и отключает fragmented fallback после полного frame. Legacy frames оставлены deprecated на 1 релиз. См. `DECISIONS.md` 2026-06-11.
 
 ### PEND-DS-002 — ~~Volume per-device на backend~~ — закрыто 2026-06-11
 

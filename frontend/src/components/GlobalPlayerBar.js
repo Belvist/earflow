@@ -19,6 +19,7 @@ import { buildDeviceSyncControlDispatch } from './DeviceSync/deviceSyncControls'
 import { FiSliders } from 'react-icons/fi';
 import { usePlaylistActions } from './hooks/usePlaylistActions';
 import { useCoverAccentColor } from '../utils/useCoverAccentColor';
+import { filterPresentDevices } from '../utils/devicePresence';
 import useRecentlyPlayed from '../hooks/useRecentlyPlayed';
 import { QueuePanel } from './queue-panel';
 import { PanelShell } from './queue-panel/queuePanel.styles';
@@ -310,25 +311,9 @@ const GlobalPlayerBarComponent = ({ onOpenEq }) => {
   const deviceSyncStatus = useMemo(() => {
     if (!DEVICE_SYNC_ENABLED || !deviceSync?.enabled) return null;
     const s = deviceSync.connectionState;
-    if (s === 'disabled') return null;
-    if (s === 'connected') {
+    const presentDevices = filterPresentDevices(deviceSync.devices, deviceSync.deviceId);
+    if (s === 'connected' && presentDevices.length >= 2) {
       return { state: s, label: 'Устройства синхронизированы. Открыть устройства' };
-    }
-    if (s === 'standby') {
-      return { state: s, label: 'Ожидание второго устройства. Открыть устройства' };
-    }
-    if (s === 'disconnected') {
-      return { state: s, label: 'Устройства не подключены. Открыть устройства' };
-    }
-    if (s === 'connecting' || s === 'reconnecting') {
-      return { state: s, label: 'Соединяем устройства. Открыть устройства' };
-    }
-    if (s === 'error') {
-      const e = String(deviceSync.error || '');
-      if (e === 'WS_HANDSHAKE_STORM') {
-        return { state: s, label: 'Синхронизация устройств: много сбоев. Открыть устройства' };
-      }
-      return { state: s, label: `Ошибка синхронизации${e ? ` (${e})` : ''}. Открыть устройства` };
     }
     return null;
   }, [deviceSync]);

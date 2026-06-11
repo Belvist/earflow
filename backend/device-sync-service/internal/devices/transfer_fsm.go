@@ -191,7 +191,7 @@ func (r *Registry) StartTransfer(ctx context.Context, userID, did string, resume
 	if err := r.saveTransfer(ctx, transfer); err != nil {
 		return "", 0, nil, err
 	}
-	r.publishTransferUpdate(ctx, uid, transfer)
+	r.publishTransferUpdateWithPlayerState(ctx, uid, transfer)
 
 	if r.m != nil {
 		r.m.Transfers.Inc()
@@ -276,6 +276,14 @@ func (r *Registry) publishTransferUpdate(ctx context.Context, uid string, transf
 	})
 }
 
+func (r *Registry) publishTransferUpdateWithPlayerState(ctx context.Context, uid string, transfer *TransferRecord) {
+	if transfer == nil {
+		return
+	}
+	r.publishTransferUpdate(ctx, uid, transfer)
+	r.publishPlayerState(ctx, uid)
+}
+
 func (r *Registry) HandleCmdAck(ctx context.Context, userID string, ack CmdAck) (*TransferRecord, error) {
 	uid, err := r.normalizeUserID(userID)
 	if err != nil {
@@ -322,7 +330,7 @@ func (r *Registry) HandleCmdAck(ctx context.Context, userID string, ack CmdAck) 
 			r.m.TransferFailed.Inc()
 		}
 		_ = r.saveTransfer(ctx, transfer)
-		r.publishTransferUpdate(ctx, uid, transfer)
+		r.publishTransferUpdateWithPlayerState(ctx, uid, transfer)
 		return transfer, nil
 	}
 
@@ -355,10 +363,19 @@ func (r *Registry) HandleCmdAck(ctx context.Context, userID string, ack CmdAck) 
 	if err := r.saveTransfer(ctx, transfer); err != nil {
 		return nil, err
 	}
-	r.publishTransferUpdate(ctx, uid, transfer)
+	r.publishTransferUpdateWithPlayerState(ctx, uid, transfer)
 	return transfer, nil
 }
 
 func (r *Registry) HandleOutputReport(ctx context.Context, userID string, report OutputReport) (*OutputLease, error) {
-	return r.SetOutputState(ctx, userID, report.DeviceID, report.State, report.ActiveRevision)
+	lease, err := r.SetOutputState(ctx, userID, report.DeviceID, report.State, report.ActiveRevision)
+	if err != nil {
+		return lease, err
+	}
+	uid, err := r.normalizeUserID(userID)
+	if err != nil {
+		return lease, err
+	}
+	r.publishPlayerState(ctx, uid)
+	return lease, nil
 }
