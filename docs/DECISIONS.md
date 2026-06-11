@@ -22,6 +22,20 @@
 
 ---
 
+## 2026-06-12 — DeviceSync local play payload becomes authoritative through backend FSM
+
+**Status:** accepted
+**Area:** device-sync | frontend-player
+**Context:** После bootstrap active на `cmd:play` оставался Spotify-gap: если телефон запускал новый локальный трек, backend мог сделать телефон active, но transfer брал старый server `nowPlaying` или пустой snapshot. Второй клиент видел devices/transfer, но не получал сразу тот трек, который реально стартовал на телефоне.
+**Decision:** `cmd:play` от non-active device при реальном local user intent несёт `payload.nowPlaying` как candidate snapshot. Backend принимает его только внутри transfer FSM: нормализует поля, выставляет device/active/state revision, пишет `nowPlaying`/`timeline`, lease и публикует unified `player_state`. Frontend не вызывает `reportNowPlaying` до active и не объявляет себя active.
+**Alternatives considered:** (1) Разрешить non-active `PUT /now-playing` — отвергнуто, ломает backend authority. (2) Оставить transfer на старом snapshot и ждать следующего active publish — отвергнуто, даёт видимый lag/не тот трек. (3) Делать optimistic UI на втором клиенте — отвергнуто, снова два источника правды.
+**Consequences:** Local tap на телефоне теперь становится global state одним backend-authored кадром: active device, track, position, timeline и lease приходят вместе. Explicit transfer button без local track payload сохраняет прежнее поведение: переносит текущий server snapshot.
+**Files touched:** `backend/device-sync-service/internal/devices/registry.go`, `backend/device-sync-service/internal/devices/transfer_fsm.go`, `backend/device-sync-service/internal/devices/transfer_fsm_test.go`, `frontend/src/components/DeviceSync/DeviceSyncProvider.js`, `backend/device-sync-service/CONTEXT.md`, `docs/ARCHITECTURE_INVARIANTS.md`
+**Tests:** `cd backend/device-sync-service && go test ./...`; `CI=true npm --prefix frontend test -- --watchAll=false --runInBand --runTestsByPath src/components/DeviceSync/__tests__/deviceSyncPlayback.test.js src/components/DeviceSync/__tests__/deviceSyncControls.test.js`; `npm --prefix frontend run build`.
+**Чтобы не повторилось:** `INV-DS-007` — local play carries candidate snapshot, backend authors it.
+
+---
+
 ## 2026-06-11 — DeviceSync local play intent bootstraps backend active device
 
 **Status:** accepted

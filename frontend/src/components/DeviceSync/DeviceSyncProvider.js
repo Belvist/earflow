@@ -411,6 +411,7 @@ export default function DeviceSyncProvider({ children }) {
         const p = playerRef.current;
         if (!p || isPartyRuntimeActive(p)) return;
         if (typeof sendCommand !== 'function') return;
+        if (!snapshot) return;
         if (!shouldClaimLocalPlayback({
             deviceEnabled,
             deviceReady,
@@ -435,7 +436,16 @@ export default function DeviceSyncProvider({ children }) {
             return;
         }
         localPlaybackClaimRef.current = { key: claimKey, atMs: now };
-        sendCommand({ cmd: 'play' });
+        sendCommand({
+            cmd: 'play',
+            payload: {
+                nowPlaying: {
+                    ...snapshot,
+                    isPlaying: true,
+                    clientEventAtMs: now,
+                },
+            },
+        });
     }, [
         deviceEnabled,
         deviceReady,
@@ -448,6 +458,7 @@ export default function DeviceSyncProvider({ children }) {
         player.isPlaying,
         player.currentTrack?.id,
         player.intent,
+        snapshot,
     ]);
 
     const publishNowPlayingIfDue = useCallback(() => {

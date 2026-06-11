@@ -23,6 +23,10 @@ func (r *Registry) SetActiveDevice(ctx context.Context, userID, did string, resu
 }
 
 func (r *Registry) StartTransfer(ctx context.Context, userID, did string, resumeOverride *bool, idempotencyKey string) (previousActiveID string, activeRevision int64, transfer *TransferRecord, err error) {
+	return r.startTransfer(ctx, userID, did, resumeOverride, idempotencyKey, nil)
+}
+
+func (r *Registry) startTransfer(ctx context.Context, userID, did string, resumeOverride *bool, idempotencyKey string, bootstrapNowPlaying *NowPlaying) (previousActiveID string, activeRevision int64, transfer *TransferRecord, err error) {
 	uid, err := r.normalizeUserID(userID)
 	if err != nil {
 		return "", 0, nil, err
@@ -50,7 +54,10 @@ func (r *Registry) StartTransfer(ctx context.Context, userID, did string, resume
 
 	prev, _ := r.rdb.Get(ctx, r.keyActive(uid)).Result()
 	nowMs := time.Now().UnixMilli()
-	np := r.buildTransferredNowPlaying(ctx, uid, did, nowMs, resumeOverride)
+	np := r.buildBootstrappedNowPlaying(ctx, uid, did, nowMs, resumeOverride, bootstrapNowPlaying)
+	if np == nil {
+		np = r.buildTransferredNowPlaying(ctx, uid, did, nowMs, resumeOverride)
+	}
 	timeline := timelineFromNowPlaying(np)
 
 	pipe := r.rdb.TxPipeline()

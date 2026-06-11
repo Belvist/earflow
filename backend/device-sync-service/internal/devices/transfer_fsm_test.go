@@ -176,6 +176,70 @@ func TestSendCommandTransferOnPlayFromNonActiveDevice(t *testing.T) {
 	}
 }
 
+func TestSendCommandTransferOnPlayBootstrapsLocalNowPlaying(t *testing.T) {
+	reg, cleanup := newTestRegistry(t)
+	defer cleanup()
+	ctx := context.Background()
+	const userID = "user-local-play"
+	deviceA := registerTestDevice(t, reg, userID, "A")
+	deviceB := registerTestDevice(t, reg, userID, "B")
+
+	resume := true
+	if _, _, _, err := reg.StartTransfer(ctx, userID, deviceA, &resume, "boot"); err != nil {
+		t.Fatalf("seed active device: %v", err)
+	}
+	if _, err := reg.PutNowPlaying(ctx, userID, &NowPlaying{
+		TrackID:         "track-old",
+		Title:           "Old Track",
+		Artist:          "Old Artist",
+		DurationSec:     300,
+		IsPlaying:       true,
+		PositionSec:     42,
+		DeviceID:        deviceA,
+		ClientSeq:       1,
+		ClientEventAtMs: time.Now().UnixMilli(),
+	}); err != nil {
+		t.Fatalf("seed now playing: %v", err)
+	}
+
+	payload := map[string]interface{}{
+		"nowPlaying": map[string]interface{}{
+			"trackId":         "track-new",
+			"title":           "New Track",
+			"artist":          "New Artist",
+			"durationSec":     float64(240),
+			"isPlaying":       true,
+			"positionSec":     float64(7),
+			"clientSeq":       float64(2),
+			"clientEventAtMs": float64(time.Now().UnixMilli()),
+		},
+	}
+	if err := reg.SendCommand(ctx, userID, deviceB, "", "play", payload, 0); err != nil {
+		t.Fatalf("play transfer with local nowPlaying payload: %v", err)
+	}
+
+	activeID, err := reg.rdb.Get(ctx, reg.keyActive(userID)).Result()
+	if err != nil {
+		t.Fatalf("read active key: %v", err)
+	}
+	if activeID != deviceB {
+		t.Fatalf("expected active device to be B after transfer-on-play, got %q", activeID)
+	}
+	np, err := reg.GetNowPlaying(ctx, userID)
+	if err != nil {
+		t.Fatalf("read now playing: %v", err)
+	}
+	if np == nil {
+		t.Fatal("expected bootstrapped nowPlaying")
+	}
+	if np.TrackID != "track-new" || np.DeviceID != deviceB || !np.IsPlaying {
+		t.Fatalf("expected local play snapshot to become authoritative, got %+v", np)
+	}
+	if np.StateRevision <= 1 {
+		t.Fatalf("expected state revision to advance from seeded snapshot, got %d", np.StateRevision)
+	}
+}
+
 func TestSendCommandTransferOnPlayWhenNoActiveExists(t *testing.T) {
 	reg, cleanup := newTestRegistry(t)
 	defer cleanup()

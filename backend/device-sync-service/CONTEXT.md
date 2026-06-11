@@ -106,6 +106,7 @@ Optional (background workers):
 ## Caveats / Gotchas
 
 - **`cmd:play` от non-active device — это transfer intent.** Backend сам делает `StartTransfer` (см. `INV-DS-002`, `Registry.SendCommand`). Frontend не должен делать self-transfer.
+- **Local play bootstrap несёт `payload.nowPlaying`.** При обычном tap play на телефоне/ПК frontend отправляет candidate snapshot вместе с `cmd:play`; backend нормализует его внутри transfer FSM и сразу публикует authoritative `player_state` с новым active device и треком. Если payload отсутствует, explicit transfer продолжает брать текущий server snapshot.
 - **`keyActive` имеет TTL = DEVICE_TTL** (по умолчанию ~10 мин). Если active device пропустит heartbeat — ownership сбрасывается, потребуется новый `StartTransfer` от любого живого device.
 - **`keyActiveRevision` Persist'нут** — иначе при reset active мы потеряем монотонный counter и frontend может применить stale frames.
 - **Transfer FSM имеет phases:** `started` → `revoke_sent` → `revoke_acked` → `activate_sent` → `activate_acked` → `reconciled`. Любая phase кроме `reconciled|expired|failed` блокирует следующий transfer от того же пользователя.

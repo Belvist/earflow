@@ -596,6 +596,56 @@ func (r *Registry) buildTransferredNowPlaying(ctx context.Context, uid, did stri
 	return &np
 }
 
+func (r *Registry) buildBootstrappedNowPlaying(ctx context.Context, uid, did string, nowMs int64, resumeOverride *bool, in *NowPlaying) *NowPlaying {
+	if in == nil || strings.TrimSpace(in.TrackID) == "" {
+		return nil
+	}
+
+	clientEventAtMs, clientEventAtValid := normalizeClientEventAtMs(in.ClientEventAtMs, nowMs)
+	clientSeq := normalizeClientSeq(in.ClientSeq)
+	durationSec := clamp64(in.DurationSec, 0, maxUnknownDurationPositionSec)
+	maxPos := durationSec
+	if maxPos <= 0 {
+		maxPos = maxUnknownDurationPositionSec
+	}
+	positionSec := clamp64(in.PositionSec, 0, maxPos)
+	isPlaying := in.IsPlaying
+	if resumeOverride != nil {
+		isPlaying = *resumeOverride
+	}
+	if isPlaying && clientEventAtValid && nowMs > clientEventAtMs {
+		positionSec = clamp64(positionSec+((nowMs-clientEventAtMs)/1000), 0, maxPos)
+	}
+
+	nextRev := int64(1)
+	if raw, err := r.rdb.Get(ctx, r.keyNowPlaying(uid)).Result(); err == nil && raw != "" {
+		var prev NowPlaying
+		if json.Unmarshal([]byte(raw), &prev) == nil && prev.StateRevision > 0 {
+			nextRev = prev.StateRevision + 1
+			if nextRev <= 0 {
+				nextRev = 1
+			}
+		}
+	}
+
+	return &NowPlaying{
+		TrackID:         truncate(in.TrackID, 128),
+		Title:           truncate(in.Title, 200),
+		Artist:          truncate(in.Artist, 200),
+		Cover:           truncate(in.Cover, 512),
+		DurationSec:     durationSec,
+		IsPlaying:       isPlaying,
+		PositionSec:     positionSec,
+		UpdatedAtMs:     nowMs,
+		DeviceID:        did,
+		StateRevision:   nextRev,
+		QueueSource:     truncate(in.QueueSource, 32),
+		QueueName:       truncate(in.QueueName, 120),
+		ClientSeq:       clientSeq,
+		ClientEventAtMs: clientEventAtMs,
+	}
+}
+
 func maxNowPlayingPosition(durationSec int64) int64 {
 	if durationSec > 0 {
 		return durationSec
@@ -904,8 +954,13 @@ func (r *Registry) SendCommand(ctx context.Context, userID, fromDeviceID, to, cm
 	// controller action against the existing owner. Stale ActiveRevision from
 	// the client is irrelevant here — the server is the sole authority.
 	if cmd == "play" && (activeID == "" || activeID != fromDeviceID) {
+		if err := ensureCommandPayloadSize(payload, r.cfg.Device.MaxCommandPayloadBytes); err != nil {
+			r.recordCommandRejected("payload_too_large")
+			return err
+		}
+		bootstrapNowPlaying := commandNowPlayingPayload(payload)
 		resumeTrue := true
-		if _, _, _, terr := r.StartTransfer(ctx, uid, fromDeviceID, &resumeTrue, ""); terr != nil {
+		if _, _, _, terr := r.startTransfer(ctx, uid, fromDeviceID, &resumeTrue, "", bootstrapNowPlaying); terr != nil {
 			return terr
 		}
 		if r.m != nil {
@@ -1104,6 +1159,42 @@ func normalizeCommandPayload(cmd string, payload map[string]interface{}) (map[st
 		return nil, ErrUnknownCommand
 	}
 	return out, nil
+}
+
+func ensureCommandPayloadSize(payload map[string]interface{}, maxBytes int) error {
+	if len(payload) == 0 {
+		return nil
+	}
+	enc, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	if len(enc) > maxBytes {
+		return ErrPayloadTooLarge
+	}
+	return nil
+}
+
+func commandNowPlayingPayload(payload map[string]interface{}) *NowPlaying {
+	if payload == nil {
+		return nil
+	}
+	raw, ok := payload["nowPlaying"]
+	if !ok || raw == nil {
+		return nil
+	}
+	enc, err := json.Marshal(raw)
+	if err != nil {
+		return nil
+	}
+	var np NowPlaying
+	if err := json.Unmarshal(enc, &np); err != nil {
+		return nil
+	}
+	if strings.TrimSpace(np.TrackID) == "" {
+		return nil
+	}
+	return &np
 }
 
 func numberFromPayload(payload map[string]interface{}, key string) (float64, bool) {
