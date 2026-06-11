@@ -22,6 +22,25 @@
 
 ---
 
+## 2026-06-11 — Единый `player_state` frame + per-device volume (PEND-DS-001, PEND-DS-002)
+
+**Status:** accepted
+**Area:** device-sync | frontend-player
+**Context:** Backend публиковал 5 раздельных state-frames (`np:update`, `devices:active`, `devices:update`, `lease:update`, `transfer:update`) с независимыми revision counter-ами — источник микро-флика при transfer (frontend сшивал 4 state-поля из разных кадров). Volume был local state в `PlayerContext` и не синхронизировался между устройствами.
+**Decision:**
+- Введён `player_state` frame — union {`nowPlaying`, `timeline`, `lease`, `transfer`, `activeDeviceId`, `activeRevision`, `volumeByDevice`} с монотонным `frameRev` (Redis `INCR user:{uid}:frame:rev` + `Persist`). Публикуется автоматически после каждого legacy state-frame (`playerStateTriggerFrames` в `playerstate.go`) и после `cmd:set_volume`.
+- Legacy frames остаются deprecated на 1 релиз — старые клиенты продолжают работать.
+- WS `init` включает `playerState` snapshot (без INCR — читается текущий rev).
+- `cmd:set_volume` персистит volume per-device: `user:{uid}:volume:{did}` (string float 0..1, TTL `DEVICE_TTL`).
+- Frontend: `useDeviceSync` обрабатывает `player_state` через `buildPlayerStatePatch` — отбрасывает кадры с `frameRev <= lastFrameRev` (lastFrameRev сбрасывается на init/logout); state получил `volumeByDevice`.
+**Alternatives considered:** заменить legacy frames сразу (отвергнуто — ломает уже задеплоенные клиенты); публиковать один `player_state` на транзакцию transfer вместо после каждого trigger-frame (отвергнуто — потребовало бы транзакционного контекста в Registry; несколько монотонных кадров безопасны, клиент рендерит последний).
+**Consequences:** клиент рендерит один консистентный snapshot — нет микро-флика от сшивания кадров; +1 Redis publish и несколько GET на каждый state-frame (приемлемо при текущей нагрузке); volume синхронизируется между устройствами.
+**Files touched:** `backend/device-sync-service/internal/devices/playerstate.go` (new), `registry.go` (publish → publishEvent + mirror, set_volume persist), `types.go` (Event.PlayerState), `internal/websocket/client.go` (init + Event.PlayerState); `frontend/src/hooks/useDeviceSync.js`.
+**Tests:** `internal/devices/playerstate_test.go` (union snapshot, монотонность frameRev, персист volume через SendCommand); существующие registry/transfer тесты зелёные.
+**Чтобы не повторилось:** не добавлять новые независимые state-frames — новые поля идут в `player_state`; legacy frames удалить в следующем релизе.
+
+---
+
 ## 2026-06-11 — Каскадные ошибки стриминга и WS при SEC-005 Phase 7 ENFORCE
 
 **Status:** accepted
