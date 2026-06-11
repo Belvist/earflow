@@ -11,6 +11,29 @@
 
 ---
 
+### PEND-STREAM-001 — Rollback SEC-005 Phase 7 ENFORCE до Phase 6 ACCEPT
+
+**Priority:** critical
+**Status:** code fixes done, rollback pending on VPS
+
+**Context:** Активирован `docker-compose.stream-prod-enforce.yml` (Phase 7) на VPS. Frontend не может замintить stream ticket (PoP не готов), все stream-запросы получают 401, WS Device Sync штормит с 403.
+
+**Code fixes applied (this session):**
+- `streamTicket.js`: проверка PoP readiness перед mint, обработка 403/404, early return при пустом proof
+- `useDeviceSync.js`: `consecutiveAuthFailureRef` — gaveUp после 3 последовательных auth-ошибок
+- `useHlsPrefetch.js`: error counting через ref, backoff 30s, silent fail при 403
+- `client.js`: HLS 403 → `HLS_SESSION_FORBIDDEN` error code
+
+**Remaining:**
+1. Rollback на VPS: `SEC005_PHASE7_ROLLBACK_CONFIRM=1 npm run rollback:sec005-phase7-prod`
+2. Проверить: `npm run verify:sec005-prod-health` → PASS
+3. Пересобрать frontend с фиксами: `docker compose build --no-cache frontend`
+4. Проверить: stream bytes работают, WS Device Sync работает, нет шторма в консоли
+
+**Blocks:** любая работа со стримингом на prod.
+
+---
+
 ### PEND-WAVE-001 — Server-side waveform peaks for hero / seek UI
 
 **Priority:** medium  
