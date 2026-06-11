@@ -183,8 +183,35 @@ const INITIAL_STATE = Object.freeze({
     lease: null,
     transfer: null,
     activeRevision: 0,
+    volumeByDevice: {},
     error: null,
 });
+
+/**
+ * Unified `player_state` frame (PEND-DS-001): single union object with a
+ * monotonic frameRev. Returns the state patch, or null if the frame is
+ * stale / malformed.
+ */
+function buildPlayerStatePatch(playerState, lastFrameRevRef, currentState) {
+    if (!playerState || typeof playerState !== 'object') return null;
+    const frameRev = Number(playerState.frameRev) || 0;
+    if (frameRev > 0) {
+        if (frameRev <= lastFrameRevRef.current) return null;
+        lastFrameRevRef.current = frameRev;
+    }
+    const activeRevision = readActiveRevision(playerState.activeRevision);
+    const currentActiveRevision = readActiveRevision(currentState.activeRevision);
+    return {
+        nowPlaying: playerState.nowPlaying || null,
+        timeline: playerState.timeline || playerState.nowPlaying || null,
+        lease: playerState.lease || null,
+        transfer: playerState.transfer || null,
+        volumeByDevice: playerState.volumeByDevice && typeof playerState.volumeByDevice === 'object'
+            ? playerState.volumeByDevice
+            : currentState.volumeByDevice || {},
+        activeRevision: activeRevision || currentActiveRevision,
+    };
+}
 
 export default function useDeviceSync({
     isAuthenticated = false,
@@ -225,6 +252,8 @@ export default function useDeviceSync({
     const preWsOpenStreakRef = useRef(0);
     const hb403ReconnectTimeoutRef = useRef(null);
     const clientSeqRef = useRef(0);
+    /** Последний применённый frameRev `player_state` — отбрасываем устаревшие кадры. */
+    const lastFrameRevRef = useRef(0);
     const stateRef = useRef(state);
     /**
      * Счётчик последовательных auth-ошибок (403/401) на ws-ticket.
@@ -525,6 +554,26 @@ export default function useDeviceSync({
                     if (!msg || typeof msg !== 'object' || typeof msg.type !== 'string') return;
 
                     switch (msg.type) {
+                        case 'player_state': {
+                            const patch = buildPlayerStatePatch(msg.playerState, lastFrameRevRef, stateRef.current);
+                            if (!patch) break;
+                            recordSyncEvent('player_state', {
+                                frameRev: lastFrameRevRef.current,
+                                ownerDeviceId: patch.nowPlaying?.deviceId || null,
+                                activeRevision: patch.activeRevision,
+                                trackId: patch.nowPlaying?.trackId || '',
+                                isPlaying: patch.nowPlaying?.isPlaying === true,
+                            });
+                            updateSyncDiagnosticsState({
+                                deviceId: deviceIdRef.current,
+                                ownerDeviceId: patch.nowPlaying?.deviceId || null,
+                                activeRevision: patch.activeRevision,
+                                nowPlayingRevision: readNowPlayingRevision(patch.nowPlaying),
+                                nowPlayingUpdatedAtMs: readNowPlayingUpdatedAt(patch.nowPlaying),
+                            });
+                            patchState(patch);
+                            break;
+                        }
                         case 'init': {
                             const activeRevision = readActiveRevision(
                                 msg.activeRevision || msg.nowPlaying?.activeRevision
@@ -547,6 +596,10 @@ export default function useDeviceSync({
                                 nowPlayingUpdatedAtMs,
                                 connectionState: 'connected',
                             });
+                            lastFrameRevRef.current = 0;
+                            const initPlayerStatePatch = buildPlayerStatePatch(
+                                msg.playerState, lastFrameRevRef, stateRef.current
+                            );
                             patchState({
                                 devices: dedupeDevicesById(
                                     Array.isArray(msg.devices) ? msg.devices : []
@@ -556,6 +609,7 @@ export default function useDeviceSync({
                                 lease: msg.lease || null,
                                 transfer: msg.transfer || null,
                                 activeRevision: activeRevision || currentActiveRevision,
+                                ...(initPlayerStatePatch || {}),
                             });
                             break;
                         }
@@ -882,7 +936,9 @@ export default function useDeviceSync({
                 lease: null,
                 transfer: null,
                 activeRevision: 0,
+                volumeByDevice: {},
             });
+            lastFrameRevRef.current = 0;
             return undefined;
         }
         // Новая сессия (после логина/refresh) — обнуляем штрафные счётчики.

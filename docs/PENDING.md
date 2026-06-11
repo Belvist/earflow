@@ -49,30 +49,13 @@
 
 ## DeviceSync / Playback
 
-### PEND-DS-001 — Этап 2: единый `player_state` frame
+### PEND-DS-001 — ~~Этап 2: единый `player_state` frame~~ — закрыто 2026-06-11
 
-**Priority:** high
-**Status:** not started
+Реализовано: `player_state` union-frame с монотонным `frameRev`, init включает `playerState`, frontend читает единый объект. Legacy frames оставлены deprecated на 1 релиз. См. `DECISIONS.md` 2026-06-11.
 
-Backend сейчас публикует 5 типов frames: `np:update`, `devices:active`, `devices:update`, `lease:update`, `transfer:update` с разными revision counter-ами (`stateRevision`, `activeRevision`, `updatedAtMs`). Это источник микро-флика при transfer.
+### PEND-DS-002 — ~~Volume per-device на backend~~ — закрыто 2026-06-11
 
-**Что нужно:**
-- Ввести `player_state` frame на backend как union всех 5 объектов с единым `frameRev` (монотонный).
-- Старые frames оставить как deprecated на 1 релиз для совместимости.
-- Frontend переписать на чтение одного объекта вместо 4 раздельных state-полей.
-
-**Blocks:** Spotify-parity feel (volume sync, seek sync через все devices).
-
-### PEND-DS-002 — Volume per-device на backend
-
-**Priority:** medium
-**Status:** not started
-
-Сейчас volume — local state в `PlayerContext`, не синхронизируется между устройствами. У Spotify volume хранится per-device в backend `PlayerState`.
-
-**Что нужно:**
-- `cmd:set_volume` уже существует, но backend не персистит `volume_per_device`.
-- Добавить в `PlayerState` (после PEND-DS-001) и публиковать в `player_state` frame.
+Реализовано: `cmd:set_volume` персистит `user:{uid}:volume:{did}` (TTL `DEVICE_TTL`), публикуется в `player_state.volumeByDevice`. См. `DECISIONS.md` 2026-06-11.
 
 ### PEND-DS-003 — Audio output device selector (Spotify-style "Этот компьютер — AirPods Pro")
 
@@ -105,7 +88,7 @@ Backend сейчас публикует 5 типов frames: `np:update`, `devic
 
 После Этапа 1 hook уменьшился, но всё ещё содержит много reconnect/heartbeat/visibility/online логики, которую можно вынести в отдельный модуль `frontend/src/hooks/deviceSyncTransport.js`. Это сделает основной hook читаемым.
 
-**Blocks by:** PEND-DS-001 (после single-frame модели многое упростится).
+**Blocks by:** ~~PEND-DS-001~~ разблокировано 2026-06-11 — `player_state` frame внедрён, можно выносить transport.
 
 ---
 
