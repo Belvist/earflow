@@ -71,11 +71,14 @@ export default function Footer() {
   const securityUrl = normalizeUrl(process.env.REACT_APP_SECURITY_POLICY_URL) || '/security';
   const artistPortalUrl = normalizeUrl(process.env.REACT_APP_ARTIST_PORTAL_URL) || 'https://artists.earflow.ru/';
   const aboutUrl = normalizeUrl(process.env.REACT_APP_ABOUT_URL) || '/about';
+  const musicUrl = '/music';
 
   return (
     <FooterWrapper>
       <FooterInner>
         <FooterLink href={artistPortalUrl} target="_blank" rel="noopener noreferrer">Для артистов</FooterLink>
+        <Separator>YEP</Separator>
+        <FooterLink href={musicUrl}>Музыка</FooterLink>
         <Separator>YEP</Separator>
         <FooterLink href={aboutUrl} rel="noopener noreferrer">О нас</FooterLink>
         <Separator>YEP</Separator>

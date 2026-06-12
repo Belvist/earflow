@@ -17,6 +17,8 @@
   },
   "scripts": {
     "start": "craco start",
+    "build:sitemap": "node scripts/generate-seo-sitemap.mjs",
+    "prebuild": "npm run build:sitemap",
     "build": "cross-env GENERATE_SOURCEMAP=false CI=false ESLINT_NO_DEV_ERRORS=true craco build",
     "build:windows": "cross-env GENERATE_SOURCEMAP=false CI=false ESLINT_NO_DEV_ERRORS=true craco build",
     "build:strict": "cross-env GENERATE_SOURCEMAP=false CI=true craco build",

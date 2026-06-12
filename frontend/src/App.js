@@ -17,6 +17,7 @@ import OfflineBanner from './offline/OfflineBanner';
 import apiClient from './api/client';
 import { isAuthDomain, redirectToAuth, sanitizeReturnTo, shouldSuppressAuthRedirectAfterLogout } from './utils/authRedirect';
 import { setPageMeta } from './utils/seo';
+import { buildMusicSeoMeta } from './seo/musicSeoCatalog';
 // Eager import: один провайдер device-sync вне ленивого Suspense плеера.
 import DeviceSyncProvider from './components/DeviceSync/DeviceSyncProvider';
 import { GestureArbiterProvider } from './gestures/GestureArbiterProvider';
@@ -56,6 +57,7 @@ const AlbumPage = lazyWithRetry(() => import('./components/AlbumPage'), 'AlbumPa
 const AboutPage = lazyWithRetry(() => import('./components/AboutPage'), 'AboutPage');
 const PopularArtistsPage = lazyWithRetry(() => import('./components/PopularArtistsPage'), 'PopularArtistsPage');
 const SearchPage = lazyWithRetry(() => import('./components/SearchPage'), 'SearchPage');
+const MusicSeoPage = lazyWithRetry(() => import('./components/MusicSeoPage'), 'MusicSeoPage');
 const SocialPage = lazyWithRetry(() => import('./components/SocialPage'), 'SocialPage');
 const LegalPage = lazyWithRetry(() => import('./components/LegalPage'), 'LegalPage');
 /**
@@ -484,33 +486,46 @@ const VisuallyHiddenH1 = styled.h1`
 `;
 
 function computePageMeta(pathname, isAuthHost) {
-  if (isAuthHost) return { title: 'Вход — Earflow', description: 'Вход в аккаунт Earflow' };
-  if (pathname === '/') return { title: 'Earflow — музыкальная платформа', description: 'Музыкальная платформа с персональными рекомендациями' };
-  if (pathname.startsWith('/profile') || pathname.startsWith('/account/')) return { title: 'Профиль — Earflow', description: 'Профиль пользователя Earflow' };
+  if (isAuthHost) return { title: 'Вход — Earflow', description: 'Вход в аккаунт Earflow', robots: 'noindex,nofollow' };
+  if (pathname === '/') return { title: 'Earflow — музыкальная платформа', description: 'Музыкальная платформа с персональными рекомендациями', robots: 'index,follow' };
+  if (pathname.startsWith('/profile') || pathname.startsWith('/account/')) return { title: 'Профиль — Earflow', description: 'Профиль пользователя Earflow', robots: 'noindex,nofollow' };
+  if (pathname.startsWith('/playground/')) return { title: 'Playground — Earflow', description: 'Тестовая страница Earflow', robots: 'noindex,nofollow' };
+  if (pathname === '/search') return { title: 'Поиск музыки — Earflow', description: 'Поиск треков, артистов, альбомов и плейлистов в Earflow', robots: 'noindex,follow' };
 
   const parts = (pathname || '').split('/').filter(Boolean);
   const route = parts[0] || '';
+  if (route === 'music') {
+    if (parts.length > 3) {
+      return {
+        title: 'Музыка не найдена — Earflow',
+        description: 'Такой музыкальной страницы пока нет в каталоге Earflow.',
+        canonicalPath: '/music',
+        robots: 'noindex,nofollow',
+      };
+    }
+    return buildMusicSeoMeta({ topicSlug: parts[1], intentSlug: parts[2] });
+  }
 
   const handlers = {
     playlist: (p) => {
       const idOrToken = p[1] ? decodeURIComponent(p[1]) : '';
-      return { title: idOrToken ? `Плейлист ${idOrToken} — Earflow` : 'Плейлист — Earflow', description: 'Плейлист в Earflow' };
+      return { title: idOrToken ? `Плейлист ${idOrToken} — Earflow` : 'Плейлист — Earflow', description: 'Плейлист в Earflow', robots: 'index,follow' };
     },
     artist: (p) => {
       const artist = p[1] ? decodeURIComponent(p[1]) : '';
-      return { title: artist ? `${artist} — Earflow` : 'Артист — Earflow', description: artist ? `Треки и релизы: ${artist}` : 'Страница артиста в Earflow' };
+      return { title: artist ? `${artist} — Earflow` : 'Артист — Earflow', description: artist ? `Треки и релизы: ${artist}` : 'Страница артиста в Earflow', robots: 'index,follow' };
     },
     album: (p) => {
       const artist = p[1] ? decodeURIComponent(p[1]) : '';
       const albumName = p[2] ? decodeURIComponent(p[2]) : '';
       const left = [artist, albumName].filter(Boolean).join(' — ');
-      return { title: left ? `${left} — Earflow` : 'Альбом — Earflow', description: albumName ? `Альбом: ${albumName}` : 'Страница альбома в Earflow' };
+      return { title: left ? `${left} — Earflow` : 'Альбом — Earflow', description: albumName ? `Альбом: ${albumName}` : 'Страница альбома в Earflow', robots: 'index,follow' };
     },
   };
 
   const handler = handlers[route];
   if (handler) return handler(parts);
-  return { title: 'Earflow', description: 'Музыкальная платформа' };
+  return { title: 'Earflow', description: 'Музыкальная платформа', robots: 'index,follow' };
 }
 
 function MainApp() {
@@ -701,10 +716,17 @@ function AppLayout() {
 
   React.useEffect(() => {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://earflow.ru';
-    const canonicalUrl = `${origin}${location.pathname}`;
 
-    const { title, description } = computePageMeta(location.pathname, isAuthDomain());
-    setPageMeta({ title, description, canonicalUrl });
+    const meta = computePageMeta(location.pathname, isAuthDomain());
+    const canonicalPath = meta.canonicalPath || location.pathname;
+    const canonicalUrl = `${origin}${canonicalPath}`;
+    setPageMeta({
+      title: meta.title,
+      description: meta.description,
+      canonicalUrl,
+      robots: meta.robots || 'index,follow',
+      jsonLd: null,
+    });
   }, [location.pathname]);
 
   return (
@@ -736,6 +758,7 @@ function AppLayout() {
               <Routes>
                 <Route path="/" element={<MainApp />} />
                 <Route path="/playground/mobile-player" element={<MobilePlayerPlayground />} />
+                <Route path="/music/*" element={<MusicSeoPage />} />
                 <Route path="/search" element={<SearchPage />} />
                 <Route path="/social" element={<SocialPage />} />
                 <Route path="/p/:slug" element={<PlaylistShareRoute />} />

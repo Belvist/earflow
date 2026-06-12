@@ -98,6 +98,17 @@
 
 ## Frontend
 
+### PEND-SEO-001 — Dynamic sitemap for real catalog entities
+
+**Priority:** high
+**Status:** not started
+
+Static programmatic SEO taxonomy is implemented for `/music/*` and generated into `frontend/public/sitemap.xml`. Remaining SEO scale should come from real backend entities, not doorway pages: public artists, albums, tracks where public pages exist, and public/shared playlists. Needs a backend-aware sitemap job or endpoint with stable canonical URLs, availability filters, and chunked sitemap indexes when URL count grows.
+
+**Blocks:** claiming full catalog indexation coverage beyond the static music taxonomy.
+
+---
+
 ### PEND-FE-001 — `useDeviceSync.js` всё ещё ~1100 строк
 
 **Priority:** medium

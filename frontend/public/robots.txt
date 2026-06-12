@@ -7,5 +7,9 @@ Disallow: /login
 Disallow: /admin
 Disallow: /metrics
 Disallow: /health
+Disallow: /playground/
+Disallow: /search?
+
+Allow: /music
 
 Sitemap: https://earflow.ru/sitemap.xml

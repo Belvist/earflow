@@ -22,6 +22,20 @@
 
 ---
 
+## 2026-06-12 - Programmatic SEO whitelist instead of doorway pages
+
+**Status:** accepted
+**Area:** listener-frontend | seo
+**Context:** The user wants broader Google coverage for music searches. The requested pattern "change one word = new page" is a doorway/spam pattern: it creates duplicates, adds no durable user value, and risks search filters or deindexation.
+**Decision:** Earflow indexable SEO pages are generated only from a controlled music taxonomy (genres, moods, activities, trends) and explicit search-intent pages (slushat-online, plejlisty, novinki, populyarnoe, radio, po-nastroeniyu, poisk). The /music/* route accepts only whitelist slugs; unknown or too-deep paths get robots: noindex,nofollow and canonical /music. Sitemap is generated from the same catalog so indexable URLs cannot drift from code.
+**Alternatives considered:** (1) Generate unlimited pages from arbitrary words - rejected as doorway spam and domain risk. (2) Keep only home plus artist/album pages - rejected because music intent coverage stays too narrow. (3) Index /search?q=... pages - rejected because query pages are unstable and duplicate taxonomy pages.
+**Consequences:** Sitemap now contains 519 URLs: public static pages plus /music, topic pages, and topic+intent pages. Pages get canonical, robots and JSON-LD. The next scale step is a dynamic sitemap for real artists/albums/public playlists from backend catalog (PEND-SEO-001).
+**Files touched:** frontend/src/seo/musicSeoCatalog.json, frontend/src/seo/musicSeoCatalog.js, frontend/src/components/MusicSeoPage.js, frontend/src/utils/seo.js, frontend/src/App.js, frontend/src/components/Footer.js, frontend/scripts/generate-seo-sitemap.mjs, frontend/public/sitemap.xml, frontend/public/robots.txt, frontend/package.json, docs/PENDING.md
+**Tests:** CI=true npm --prefix frontend test -- --watchAll=false --runInBand --runTestsByPath src/seo/musicSeoCatalog.test.js; npm run validate:ai; npm --prefix frontend run build; Playwright smoke on /music, /music/rock/slushat-online, /music/random-word/slushat-online.
+**To prevent repeat:** no doorway pages: only whitelist/real-entity URLs may be indexable; unknown generated slugs must be noindex.
+
+---
+
 ## 2026-06-12 — DeviceSync local play payload becomes authoritative through backend FSM
 
 **Status:** accepted
