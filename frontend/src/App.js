@@ -712,6 +712,8 @@ function AppLayout() {
     location.pathname.startsWith('/album/') ||
     location.pathname === '/profile' ||
     location.pathname.startsWith('/account/');
+  const hideGlobalFooter =
+    location.pathname.startsWith('/social');
   const { isAuthenticated } = useAuth();
 
   React.useEffect(() => {
@@ -760,7 +762,7 @@ function AppLayout() {
                 <Route path="/playground/mobile-player" element={<MobilePlayerPlayground />} />
                 <Route path="/music/*" element={<MusicSeoPage />} />
                 <Route path="/search" element={<SearchPage />} />
-                <Route path="/social" element={<SocialPage />} />
+                <Route path="/social" element={<RequireAuth><SocialPage /></RequireAuth>} />
                 <Route path="/p/:slug" element={<PlaylistShareRoute />} />
                 <Route path="/mix/:token" element={<PublicSharePage />} />
                 <Route path="/playlist/:idOrToken" element={<PlaylistRoute />} />
@@ -783,7 +785,7 @@ function AppLayout() {
           )}
         </RoutedContent>
 
-        {!isAuthDomain() ? <Footer /> : null}
+        {!isAuthDomain() && !hideGlobalFooter ? <Footer /> : null}
       </AppShell>
 
       {!isAuthDomain() ? <MobileBottomNav /> : null}

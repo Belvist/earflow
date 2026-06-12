@@ -385,6 +385,18 @@ routes:
       require_service_token: true
       timeout: 10s
 
+  - id: social
+    match:
+      type: prefix
+      value: /api/social
+    upstream: database
+    policies:
+      class: unsafe
+      require_user: true
+      require_service_token: true
+      rate_limit: social
+      timeout: 10s
+
   # Account security — security-service Go handlers (must win over auth_passthrough).
   - id: auth_2fa_recovery
     match:

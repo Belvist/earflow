@@ -90,6 +90,7 @@ func TestProtectedAPIWithoutProofReturns401(t *testing.T) {
 		"/api/profile",
 		"/api/auth/sessions",
 		"/api/playlists",
+		"/api/social/feed",
 		"/api/devices",
 	}
 	chain := manager.SessionAuthMiddleware()(manager.DeviceProofMiddleware()(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

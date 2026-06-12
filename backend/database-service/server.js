@@ -32,6 +32,7 @@ const likesRouter = require('./routes/likes');
 const dislikesRouter = require('./routes/dislikes');
 const eqRouter = require('./routes/eq');
 const songFeaturesRouter = require('./routes/songFeatures');
+const socialRouter = require('./routes/social');
 
 const app = express();
 const PORT = process.env.PORT || 3003;
@@ -254,6 +255,7 @@ app.use('/api/listens', listensRouter);
 app.use('/api/likes', likesRouter);
 app.use('/api/dislikes', dislikesRouter);
 app.use('/api/eq', eqRouter);
+app.use('/api/social', socialRouter);
 
 /**
  * GET /api/stats

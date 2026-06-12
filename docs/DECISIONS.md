@@ -50,6 +50,20 @@
 
 ---
 
+## 2026-06-12 — Social feed v1: backend-owned posts and render-ready DTO
+
+**Status:** accepted
+**Area:** social | database-service | gateway | listener-frontend
+**Context:** В listener SPA уже была вкладка `/social`, но она была stub-страницей без backend API. Пользователь потребовал полноценную логику на backend и тонкий frontend без локальной бизнес-логики, чтобы не получить второй source of truth для автора, лайков, прав удаления и порядка ленты.
+**Decision:** Social v1 живёт в `database-service` как bounded module: `social_posts` + `social_post_likes`, protected `/api/social/*` через Go gateway (`require_user`, `require_service_token`, `class: unsafe`). Backend берёт viewer identity только из gateway-injected `X-User-Id`, валидирует пост, строит feed cursor, author display, `liked`, `canDelete`, metrics и отдаёт render-ready DTO. Frontend `/social` только грузит DTO, отправляет user intent create/like/unlike/delete и отрисовывает ответ. UX ленты content-first: composer закрыт по умолчанию и раскрывается по явной кнопке, посты идут avatar/content grid в стиле mobile feed, глобальный marketing footer на `/social` скрыт.
+**Alternatives considered:** (1) Новый отдельный `social-service` — отвергнуто для v1: потребовало бы compose/upstream/env/health/Context шире задачи при уже принятой роли `database-service` для catalog/user/social data. (2) Держать mock/local posts во frontend — отвергнуто, это нарушает backend authority и даёт расхождение при multi-device. (3) Пробрасывать `userId` в body/query — отвергнуто как IDOR red flag; viewer только из gateway session.
+**Consequences:** `/social` стал authenticated listener surface; cookie-only запросы к `/api/social/*` требуют PoP как другие protected API. Миграция `004_social_feed.sql` и общий `backend/00-create-tables.sql` закрывают DDL preconditions для `users.photo_url` и `user_settings`, потому что social DTO читает author display/avatar. Комментарии/подписки не публикуются как fake fields в v1; добавлять их отдельным backend-owned контрактом.
+**Files touched:** `backend/database-service/routes/social.js`, `backend/database-service/lib/socialPosts.js`, `backend/database-service/database/init.sql`, `backend/database-service/database/migrations/004_social_feed.sql`, `backend/00-create-tables.sql`, `backend/go-api-gateway/gateway.yaml`, `backend/go-api-gateway/internal/ratelimit/profiles.go`, `frontend/src/components/SocialPage.js`, `frontend/src/components/SocialPage.styles.js`, `frontend/src/api/client.js`, `frontend/src/App.js`, `backend/database-service/CONTEXT.md`, `docs/SOCIAL_FEED.md`
+**Tests:** `npm --prefix backend/database-service run test:social`; `node --check backend/database-service/routes/social.js backend/database-service/lib/socialPosts.js frontend/src/App.js frontend/src/components/SocialPage.js`; `cd backend/go-api-gateway && go test ./...`; `npm --prefix frontend run build`; `CI=true npm --prefix frontend test -- --watchAll=false --runInBand --runTestsByPath src/components/SocialPage.test.js`; `npm run validate:ai`; Playwright smoke on `http://localhost:3004/social` with mocked auth + `/api/social/feed` DTO and like response, including collapsed composer and no global footer.
+**Чтобы не повторилось:** social feed frontend is renderer-only; backend owns feed order, author, permissions, metrics and cursor (`INV-SOCIAL-001`, `INV-SOCIAL-002`).
+
+---
+
 ## 2026-06-11 — DeviceSync local play intent bootstraps backend active device
 
 **Status:** accepted

@@ -12,6 +12,12 @@ func ProfileByName(name string, isProduction bool) (LimitProfile, bool) {
 			max = 120
 		}
 		return LimitProfile{Max: max, Window: time.Minute}, true
+	case "social":
+		max := 1200
+		if isProduction {
+			max = 300
+		}
+		return LimitProfile{Max: max, Window: time.Minute}, true
 	case "artist_search":
 		max := 300
 		if isProduction {
