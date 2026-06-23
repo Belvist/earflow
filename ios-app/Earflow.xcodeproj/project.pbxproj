@@ -78,7 +78,7 @@
 		51D00C33364F4BFFEF9C246E /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		57491921FCD041869DA9C323 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		5955E5E2CD7AECEAAB9C8FE9 /* DomainModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DomainModels.swift; sourceTree = "<group>"; };
-		73A30A0710F829ABE00CEB15 /* EarflowTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = EarflowTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		73A30A0710F829ABE00CEB15 /* EarflowTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EarflowTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		77CDCBC774BDA99FAE114DE1 /* AuthActor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthActor.swift; sourceTree = "<group>"; };
 		7896B48E53DA9C28DB5861F8 /* MiniPlayerBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniPlayerBar.swift; sourceTree = "<group>"; };
 		7C3FBAEC337877998E18D766 /* DeviceProofSigner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceProofSigner.swift; sourceTree = "<group>"; };
@@ -87,7 +87,7 @@
 		9A019AADDF1B64290B7C7730 /* StreamSessionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamSessionService.swift; sourceTree = "<group>"; };
 		9B3D28C9627B405A75F7BED4 /* TrackRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackRowView.swift; sourceTree = "<group>"; };
 		9C2B9EF6E89B44324345F8E8 /* Unbounded[wght].ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Unbounded[wght].ttf"; sourceTree = "<group>"; };
-		9EDDEA7E58459BE9EDCB3614 /* Earflow.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Earflow.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9EDDEA7E58459BE9EDCB3614 /* Earflow.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Earflow.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A63C4109464B55D5A068EB38 /* AnalyticsQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsQueue.swift; sourceTree = "<group>"; };
 		A7C19CCBC8D37417662BB62A /* LogRedactor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogRedactor.swift; sourceTree = "<group>"; };
 		A970BCAC70D1099241D29470 /* SearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchService.swift; sourceTree = "<group>"; };
@@ -453,7 +453,6 @@
 						ProvisioningStyle = Automatic;
 					};
 					ADBC635499B6A20048F1ABED = {
-						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -615,7 +614,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 0.1.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -634,6 +633,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = BN3TN862J3;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Earflow/Supporting/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Earflow;
@@ -723,7 +723,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 0.1.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -759,6 +759,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = BN3TN862J3;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Earflow/Supporting/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Earflow;
