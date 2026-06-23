@@ -450,6 +450,7 @@ CREATE TABLE IF NOT EXISTS social_posts (
   kind VARCHAR(24) NOT NULL DEFAULT 'text' CHECK (kind IN ('text')),
   visibility VARCHAR(24) NOT NULL DEFAULT 'public' CHECK (visibility IN ('public')),
   status VARCHAR(24) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'deleted')),
+  likes_count INTEGER NOT NULL DEFAULT 0 CHECK (likes_count >= 0),
   metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -472,6 +473,8 @@ CREATE INDEX IF NOT EXISTS idx_social_posts_user
   ON social_posts (user_id, created_at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_social_post_likes_user
   ON social_post_likes (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_social_post_likes_user_post
+  ON social_post_likes (user_id, post_id);
 
 -- Tables for ML Recommendations
 CREATE TABLE IF NOT EXISTS user_models (

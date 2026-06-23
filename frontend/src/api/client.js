@@ -43,6 +43,8 @@ const deriveCoverOrigin = () => {
 // Кеш URL обложек для предотвращения повторных вычислений
 const coverUrlCache = new LruCache({ maxEntries: 500, ttlMs: 30 * 60 * 1000 });
 
+const socialFeedCache = new LruCache({ maxEntries: 32, ttlMs: 8000 });
+
 const decodeUtf8 = (buf) => {
   try {
     return new TextDecoder().decode(buf);
@@ -1036,50 +1038,6 @@ class ApiClient {
     });
   }
 
-  async getSocialFeed(params = {}) {
-    const query = new URLSearchParams();
-    if (params.limit !== undefined && params.limit !== null) {
-      query.set('limit', String(params.limit));
-    }
-    if (params.cursor) {
-      query.set('cursor', String(params.cursor));
-    }
-    const qs = query.toString();
-    return await this.request(`/api/social/feed${qs ? `?${qs}` : ''}`, {
-      signal: params.signal,
-      timeoutMs: params.timeoutMs,
-    });
-  }
-
-  async createSocialPost(payload = {}) {
-    return await this.request('/api/social/posts', {
-      method: 'POST',
-      body: JSON.stringify({
-        title: payload.title,
-        body: payload.body,
-      }),
-    });
-  }
-
-  async likeSocialPost(postId) {
-    return await this.request(`/api/social/posts/${encodeURIComponent(postId)}/like`, {
-      method: 'POST',
-      body: JSON.stringify({}),
-    });
-  }
-
-  async unlikeSocialPost(postId) {
-    return await this.request(`/api/social/posts/${encodeURIComponent(postId)}/like`, {
-      method: 'DELETE',
-    });
-  }
-
-  async deleteSocialPost(postId) {
-    return await this.request(`/api/social/posts/${encodeURIComponent(postId)}`, {
-      method: 'DELETE',
-    });
-  }
-
   async getSongHlsSession(songId, options = {}) {
     const trackId = Number(songId);
     if (!Number.isFinite(trackId) || trackId <= 0) {
@@ -1187,18 +1145,8 @@ class ApiClient {
       }
 
       if (!resp || !resp.ok) {
-        const errStatus = Number.isFinite(Number(st)) ? Number(st) : 0;
-        // 403 Forbidden on HLS session — PoP proof rejected or not provided.
-        // Don't cache, don't retry — caller should handle (degrade to direct or show error).
-        if (errStatus === 403) {
-          const err = new HttpError(403, { details: data });
-          err.status = 403;
-          err.responseStatus = 403;
-          err.code = 'HLS_SESSION_FORBIDDEN';
-          throw err;
-        }
-        const err = new HttpError(errStatus, { details: data });
-        err.status = errStatus;
+        const err = new HttpError(Number.isFinite(Number(st)) ? Number(st) : 0, { details: data });
+        err.status = Number.isFinite(Number(st)) ? Number(st) : 0;
         err.responseStatus = err.status;
         throw err;
       }
@@ -2297,6 +2245,70 @@ class ApiClient {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
+  }
+
+  // ==================== SOCIAL FEED ====================
+
+  _clearSocialFeedCache() {
+    socialFeedCache.clear();
+  }
+
+  async getSocialFeed({ limit, cursor, after, signal, cache = true } = {}) {
+    const query = new URLSearchParams();
+    if (limit !== undefined && limit !== null) query.set('limit', String(limit));
+    if (cursor) query.set('cursor', String(cursor));
+    if (after) query.set('after', String(after));
+    const qs = query.toString();
+    const endpoint = `/api/social/feed${qs ? `?${qs}` : ''}`;
+
+    if (cache !== false) {
+      const hit = socialFeedCache.get(endpoint);
+      if (hit) return hit;
+    }
+
+    const data = await this.request(endpoint, {
+      signal,
+      cache: cache === false ? 'no-store' : undefined,
+    });
+
+    if (cache !== false && data && typeof data === 'object') {
+      socialFeedCache.set(endpoint, data);
+    }
+
+    return data;
+  }
+
+  async createSocialPost({ title, body } = {}) {
+    const response = await this.request('/api/social/posts', {
+      method: 'POST',
+      body: JSON.stringify({ title, body }),
+    });
+    this._clearSocialFeedCache();
+    return response;
+  }
+
+  async likeSocialPost(postId) {
+    const response = await this.request(`/api/social/posts/${encodeURIComponent(postId)}/like`, {
+      method: 'POST',
+    });
+    this._clearSocialFeedCache();
+    return response;
+  }
+
+  async unlikeSocialPost(postId) {
+    const response = await this.request(`/api/social/posts/${encodeURIComponent(postId)}/like`, {
+      method: 'DELETE',
+    });
+    this._clearSocialFeedCache();
+    return response;
+  }
+
+  async deleteSocialPost(postId) {
+    const response = await this.request(`/api/social/posts/${encodeURIComponent(postId)}`, {
+      method: 'DELETE',
+    });
+    this._clearSocialFeedCache();
+    return response;
   }
 
   // ==================== PLAYLISTS / QUEUE / PARTY ====================

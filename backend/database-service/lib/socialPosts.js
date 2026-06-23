@@ -5,6 +5,35 @@ const MAX_BODY_LENGTH = 2000;
 const MAX_FEED_LIMIT = 50;
 const DEFAULT_FEED_LIMIT = 20;
 
+/** Backend-owned post lifecycle — frontend must not set or infer status. */
+const POST_STATUS = Object.freeze({
+  ACTIVE: 'active',
+  DELETED: 'deleted',
+});
+
+const POST_STATUS_TRANSITIONS = Object.freeze({
+  [POST_STATUS.ACTIVE]: new Set([POST_STATUS.DELETED]),
+  [POST_STATUS.DELETED]: new Set(),
+});
+
+function canTransitionPostStatus(from, to) {
+  const fromStatus = String(from || '').trim();
+  const toStatus = String(to || '').trim();
+  if (!fromStatus || !toStatus) return false;
+  if (fromStatus === toStatus) return true;
+  const allowed = POST_STATUS_TRANSITIONS[fromStatus];
+  return allowed ? allowed.has(toStatus) : false;
+}
+
+/** Strip client auth/ownership fields — viewer comes from gateway X-User-Id only. */
+function pickCreatePostFields(input) {
+  const src = input && typeof input === 'object' ? input : {};
+  return {
+    title: src.title,
+    body: src.body,
+  };
+}
+
 function parsePositiveInt(value) {
   const s = value === undefined || value === null ? '' : String(value).trim();
   if (!/^\d+$/.test(s)) return null;
@@ -53,7 +82,7 @@ function normalizePostBody(value) {
 }
 
 function validatePostInput(input) {
-  const src = input && typeof input === 'object' ? input : {};
+  const src = pickCreatePostFields(input);
   const title = normalizeTitle(src.title);
   const body = normalizePostBody(src.body);
 
@@ -130,22 +159,16 @@ function toCount(value) {
 function mapSocialPostRow(row) {
   const r = row && typeof row === 'object' ? row : {};
   const displayName = String(r.author_display_name || '').trim() || 'Слушатель';
-  const username = String(r.author_username || '').trim();
   const id = String(r.id || '');
-  const authorId = String(r.user_id || '');
 
   return {
     id,
     title: String(r.title || ''),
     body: String(r.body || ''),
     kind: String(r.kind || 'text'),
-    createdAt: toIso(r.created_at),
     createdAtLabel: formatCreatedAtLabel(r.created_at),
-    updatedAt: toIso(r.updated_at),
     author: {
-      id: authorId,
       displayName,
-      handle: username ? `@${username}` : '',
       avatarUrl: r.avatar_url ? String(r.avatar_url) : null,
       initials: initialsFromName(displayName),
     },
@@ -154,8 +177,17 @@ function mapSocialPostRow(row) {
     },
     viewer: {
       liked: r.liked_by_me === true || r.liked_by_me === 't',
-      canDelete: r.can_delete === true || r.can_delete === 't',
+      canManage: r.can_manage === true || r.can_manage === 't' || r.can_delete === true || r.can_delete === 't',
     },
+  };
+}
+
+function mapSocialReaction(postId, row, liked) {
+  const r = row && typeof row === 'object' ? row : {};
+  return {
+    postId: String(postId || r.post_id || r.id || ''),
+    liked: liked === true,
+    likes: toCount(r.likes_count),
   };
 }
 
@@ -187,6 +219,9 @@ module.exports = {
   MAX_BODY_LENGTH,
   MAX_FEED_LIMIT,
   DEFAULT_FEED_LIMIT,
+  POST_STATUS,
+  canTransitionPostStatus,
+  pickCreatePostFields,
   parsePositiveInt,
   parsePositiveBigIntString,
   normalizeTitle,
@@ -194,6 +229,7 @@ module.exports = {
   validatePostInput,
   parseFeedLimit,
   mapSocialPostRow,
+  mapSocialReaction,
   encodeFeedCursor,
   decodeFeedCursor,
   formatCreatedAtLabel,

@@ -22,139 +22,68 @@
 
 ---
 
-## 2026-06-12 - Programmatic SEO whitelist instead of doorway pages
+## 2026-06-23 — SEC-003 fresh-login tests + artist portal PoP transport
 
 **Status:** accepted
-**Area:** listener-frontend | seo
-**Context:** The user wants broader Google coverage for music searches. The requested pattern "change one word = new page" is a doorway/spam pattern: it creates duplicates, adds no durable user value, and risks search filters or deindexation.
-**Decision:** Earflow indexable SEO pages are generated only from a controlled music taxonomy (genres, moods, activities, trends) and explicit search-intent pages (slushat-online, plejlisty, novinki, populyarnoe, radio, po-nastroeniyu, poisk). The /music/* route accepts only whitelist slugs; unknown or too-deep paths get robots: noindex,nofollow and canonical /music. Sitemap is generated from the same catalog so indexable URLs cannot drift from code.
-**Alternatives considered:** (1) Generate unlimited pages from arbitrary words - rejected as doorway spam and domain risk. (2) Keep only home plus artist/album pages - rejected because music intent coverage stays too narrow. (3) Index /search?q=... pages - rejected because query pages are unstable and duplicate taxonomy pages.
-**Consequences:** Sitemap now contains 519 URLs: public static pages plus /music, topic pages, and topic+intent pages. Pages get canonical, robots and JSON-LD. The next scale step is a dynamic sitemap for real artists/albums/public playlists from backend catalog (PEND-SEO-001).
-**Files touched:** frontend/src/seo/musicSeoCatalog.json, frontend/src/seo/musicSeoCatalog.js, frontend/src/components/MusicSeoPage.js, frontend/src/utils/seo.js, frontend/src/App.js, frontend/src/components/Footer.js, frontend/scripts/generate-seo-sitemap.mjs, frontend/public/sitemap.xml, frontend/public/robots.txt, frontend/package.json, docs/PENDING.md
-**Tests:** CI=true npm --prefix frontend test -- --watchAll=false --runInBand --runTestsByPath src/seo/musicSeoCatalog.test.js; npm run validate:ai; npm --prefix frontend run build; Playwright smoke on /music, /music/rock/slushat-online, /music/random-word/slushat-online.
-**To prevent repeat:** no doorway pages: only whitelist/real-entity URLs may be indexable; unknown generated slugs must be noindex.
+**Area:** auth | security-service | artist-frontend
+**Context:** PEND-SEC-003 backend logic existed but had no unit tests; artist-frontend sent cookie-only API calls while prod gateway enforces PoP + proof access token (known SEC-013 residual risk).
+**Decision:** (1) Backend remains sole authority for fresh-login: `requireStepUpForSensitiveSessionAction` returns `403 FRESH_LOGIN_REQUIRED` for mass revoke when session age <24h and no active step-up — frontend only displays and opens step-up modal. (2) Unit tests in `helpers_sessions_fresh_login_test.go` (miniredis). (3) Artist portal mirrors listener auth transport: `authDeviceCrypto.js`, `proofAccessToken.js`, `authDeviceRegister.js`, attach headers in `transport/http.js`; device register after bootstrap; clear secrets on logout. (4) `verify:auth-kit` checks artist auth artifacts.
+**Alternatives considered:** Share auth modules via monorepo package — deferred (minimal copy, same contract). Frontend-side 24h check — **rejected** (violates backend SOT / INV-ARCH-002).
+**Consequences:** Artist portal prod-safe with PoP; PEND-SEC-003 still open until VPS browser matrix.
+**Files touched:** `backend/security-service/internal/httpapi/helpers_sessions_fresh_login_test.go`, `backend/security-service/internal/store/redis_test_client.go`, `backend/security-service/internal/authz/jwt.go`, `artist-frontend/src/auth/*`, `artist-frontend/src/transport/http.js`, `artist-frontend/src/state/auth/AuthContext.js`, `artist-frontend/Dockerfile`, `scripts/verify-auth-kit.sh`, `docs/PENDING.md`
+**Tests:** `go test ./internal/httpapi/... -run FreshLogin` in security-service; `npm run verify:auth-kit` (source artifacts)
+**Чтобы не повторилось:** never mark SEC-003 closed without browser revoke-others matrix; artist API must attach proof headers when `NODE_ENV=production`
+
+## 2026-06-23 — Global rule: Backend SOT, Frontend thin client (INV-ARCH-002)
+
+**Status:** accepted
+**Area:** cross-cutting | architecture | frontend | backend | gateway
+**Context:** User requirement to make backend-as-source-of-truth a **project-wide** rule (not only social). Social formalization proved the pattern; needed global invariant, doc, always-on agent rule, and validate:ai gates.
+**Decision:** (1) `INV-ARCH-002` in `docs/ARCHITECTURE_INVARIANTS.md` — backend owns logic/state/authz/state machines; frontend renderer + intents only; litmus test = direct API cannot bypass rules. (2) Canonical doc `docs/BACKEND_FRONTEND_BOUNDARY.md` (10 sections). (3) Always-on rules `.cursor/rules/earflow-backend-sot.mdc` + `.windsurf/rules/earflow-backend-sot.mdc`. (4) Wired into `AGENTS.md`, `earflow-context-discipline.mdc`, `earflow-platform.mdc`, `validate-ai-discipline.js`. Domain invariants (`INV-DS-*`, `INV-SOCIAL-*`, etc.) remain as instances, not replacements.
+**Alternatives considered:** Only document in AGENTS prose — rejected (not enforceable). Rename to `INV-BE-003` — rejected (too narrow; rule is cross-cutting like `INV-ARCH-001`).
+**Consequences:** Every new module must follow backend-first order; AI loads boundary doc at level 0; social/DeviceSync become reference implementations.
+**Files touched:** `docs/BACKEND_FRONTEND_BOUNDARY.md`, `docs/ARCHITECTURE_INVARIANTS.md`, `.cursor/rules/earflow-backend-sot.mdc`, `.windsurf/rules/earflow-backend-sot.mdc`, `.cursor/rules/earflow-context-discipline.mdc`, `.windsurf/rules/earflow-context-discipline.mdc`, `.cursor/rules/earflow-platform.mdc`, `AGENTS.md`, `scripts/validate-ai-discipline.js`, `.cursor/skills/earflow-architecture-review/SKILL.md`
+**Tests:** `npm run validate:ai` — asserts INV-ARCH-002 + rule files exist
+**Чтобы не повторилось:** `INV-ARCH-002`; no full-stack feature without `BACKEND_FRONTEND_BOUNDARY.md` checklist; backend before frontend in every module
 
 ---
 
-## 2026-06-12 — DeviceSync local play payload becomes authoritative through backend FSM
+## 2026-06-23 — Social feed: backend-as-SOT architecture formalization
 
 **Status:** accepted
-**Area:** device-sync | frontend-player
-**Context:** После bootstrap active на `cmd:play` оставался Spotify-gap: если телефон запускал новый локальный трек, backend мог сделать телефон active, но transfer брал старый server `nowPlaying` или пустой snapshot. Второй клиент видел devices/transfer, но не получал сразу тот трек, который реально стартовал на телефоне.
-**Decision:** `cmd:play` от non-active device при реальном local user intent несёт `payload.nowPlaying` как candidate snapshot. Backend принимает его только внутри transfer FSM: нормализует поля, выставляет device/active/state revision, пишет `nowPlaying`/`timeline`, lease и публикует unified `player_state`. Frontend не вызывает `reportNowPlaying` до active и не объявляет себя active.
-**Alternatives considered:** (1) Разрешить non-active `PUT /now-playing` — отвергнуто, ломает backend authority. (2) Оставить transfer на старом snapshot и ждать следующего active publish — отвергнуто, даёт видимый lag/не тот трек. (3) Делать optimistic UI на втором клиенте — отвергнуто, снова два источника правды.
-**Consequences:** Local tap на телефоне теперь становится global state одним backend-authored кадром: active device, track, position, timeline и lease приходят вместе. Explicit transfer button без local track payload сохраняет прежнее поведение: переносит текущий server snapshot.
-**Files touched:** `backend/device-sync-service/internal/devices/registry.go`, `backend/device-sync-service/internal/devices/transfer_fsm.go`, `backend/device-sync-service/internal/devices/transfer_fsm_test.go`, `frontend/src/components/DeviceSync/DeviceSyncProvider.js`, `backend/device-sync-service/CONTEXT.md`, `docs/ARCHITECTURE_INVARIANTS.md`
-**Tests:** `cd backend/device-sync-service && go test ./...`; `CI=true npm --prefix frontend test -- --watchAll=false --runInBand --runTestsByPath src/components/DeviceSync/__tests__/deviceSyncPlayback.test.js src/components/DeviceSync/__tests__/deviceSyncControls.test.js`; `npm --prefix frontend run build`.
-**Чтобы не повторилось:** `INV-DS-007` — local play carries candidate snapshot, backend authors it.
+**Area:** social | database-service | gateway | frontend
+**Context:** Social v1 code existed but prod path was incomplete (missing gateway route + API client). User requirement: strict backend-as-source-of-truth — no business logic on frontend, state machine on backend, API as contract.
+**Decision:** (1) Gateway route `social` with `require_user`, `require_service_token`, `rate_limit: social`. (2) `POST_STATUS` + `canTransitionPostStatus` + `pickCreatePostFields` in `socialPosts.js` — client cannot set `user_id`/`status`. (3) Frontend `SocialPage` is renderer-only: applies backend `post`/`reaction`/`deleted` acks, no mock feed, no client ordering, `canManage` from DTO only. (4) `INV-SOCIAL-004` + validate:ai scans + gateway test `TestGatewayYAMLSocialRouteIsProtected`.
+**Alternatives considered:** Optimistic like UI — rejected (violates INV-SOCIAL-001). Frontend delete without backend ack — rejected.
+**Files touched:** `lib/socialPosts.js`, `routes/social.js`, `gateway.yaml`, `frontend/src/api/client.js`, `SocialPage.js`, `validate-ai-discipline.js`, `docs/SOCIAL_FEED.md`, `docs/ARCHITECTURE_INVARIANTS.md`, `CONTEXT.md`
+**Tests:** `test:social` 9/9, `SocialPage.test.js` 4/4, `TestGatewayYAMLSocialRouteIsProtected`, `validate:ai` 0 errors
+**Чтобы не повторилось:** social not shippable without gateway route + client methods + INV-SOCIAL-* in validate:ai
 
 ---
 
-## 2026-06-12 — Social feed v1: backend-owned posts and render-ready DTO
+## 2026-06-23 — Social feed end-to-end wiring (gateway + API client)
 
 **Status:** accepted
-**Area:** social | database-service | gateway | listener-frontend
-**Context:** В listener SPA уже была вкладка `/social`, но она была stub-страницей без backend API. Пользователь потребовал полноценную логику на backend и тонкий frontend без локальной бизнес-логики, чтобы не получить второй source of truth для автора, лайков, прав удаления и порядка ленты.
-**Decision:** Social v1 живёт в `database-service` как bounded module: `social_posts` + `social_post_likes`, protected `/api/social/*` через Go gateway (`require_user`, `require_service_token`, `class: unsafe`). Backend берёт viewer identity только из gateway-injected `X-User-Id`, валидирует пост, строит feed cursor, author display, `liked`, `canDelete`, metrics и отдаёт render-ready DTO. Frontend `/social` только грузит DTO, отправляет user intent create/like/unlike/delete и отрисовывает ответ. UX ленты content-first: composer закрыт по умолчанию и раскрывается по явной кнопке, посты идут avatar/content grid в стиле mobile feed, глобальный marketing footer на `/social` скрыт.
-**Alternatives considered:** (1) Новый отдельный `social-service` — отвергнуто для v1: потребовало бы compose/upstream/env/health/Context шире задачи при уже принятой роли `database-service` для catalog/user/social data. (2) Держать mock/local posts во frontend — отвергнуто, это нарушает backend authority и даёт расхождение при multi-device. (3) Пробрасывать `userId` в body/query — отвергнуто как IDOR red flag; viewer только из gateway session.
-**Consequences:** `/social` стал authenticated listener surface; cookie-only запросы к `/api/social/*` требуют PoP как другие protected API. Миграция `004_social_feed.sql` и общий `backend/00-create-tables.sql` закрывают DDL preconditions для `users.photo_url` и `user_settings`, потому что social DTO читает author display/avatar. Комментарии/подписки не публикуются как fake fields в v1; добавлять их отдельным backend-owned контрактом.
-**Files touched:** `backend/database-service/routes/social.js`, `backend/database-service/lib/socialPosts.js`, `backend/database-service/database/init.sql`, `backend/database-service/database/migrations/004_social_feed.sql`, `backend/00-create-tables.sql`, `backend/go-api-gateway/gateway.yaml`, `backend/go-api-gateway/internal/ratelimit/profiles.go`, `frontend/src/components/SocialPage.js`, `frontend/src/components/SocialPage.styles.js`, `frontend/src/api/client.js`, `frontend/src/App.js`, `backend/database-service/CONTEXT.md`, `docs/SOCIAL_FEED.md`
-**Tests:** `npm --prefix backend/database-service run test:social`; `node --check backend/database-service/routes/social.js backend/database-service/lib/socialPosts.js frontend/src/App.js frontend/src/components/SocialPage.js`; `cd backend/go-api-gateway && go test ./...`; `npm --prefix frontend run build`; `CI=true npm --prefix frontend test -- --watchAll=false --runInBand --runTestsByPath src/components/SocialPage.test.js`; `npm run validate:ai`; Playwright smoke on `http://localhost:3004/social` with mocked auth + `/api/social/feed` DTO and like response, including collapsed composer and no global footer.
-**Чтобы не повторилось:** social feed frontend is renderer-only; backend owns feed order, author, permissions, metrics and cursor (`INV-SOCIAL-001`, `INV-SOCIAL-002`).
+**Area:** social | gateway | frontend
+**Context:** Social backend (`routes/social.js`, DTO, migrations) and `SocialPage` UI existed, but production path was broken: `gateway.yaml` had no `/api/social` route and `frontend/src/api/client.js` lacked `getSocialFeed` / mutation methods. `SocialPage` had mojibake aria labels and inverted pagination merge on «Показать ещё».
+**Decision:** Add gateway route `social` → `database` upstream with `require_user`, `require_service_token`, `rate_limit: social`. Add API client methods with short TTL transport cache + invalidation on mutations. Fix append pagination via `mergeAppendPosts`. Add CI step `test:social`.
+**Files touched:** `backend/go-api-gateway/gateway.yaml`, `frontend/src/api/client.js`, `frontend/src/components/SocialPage.js`, `frontend/src/components/SocialPage.test.js`, `.github/workflows/ci.yml`, `docs/PENDING.md`
+**Tests:** backend 6/6, frontend 4/4, `go test ./...` gateway, `npm run build`, `validate:ai` 0 errors
+**Чтобы не повторилось:** social feature is not shippable until gateway route + `client.js` methods exist; grep both before closing social PEND.
 
 ---
 
-## 2026-06-11 — DeviceSync local play intent bootstraps backend active device
+## 2026-06-16 — Social feed privacy/perf pass: reaction delta and cached public page
 
 **Status:** accepted
-**Area:** device-sync | frontend-player
-**Context:** После `player_state` rollout устройства могли быть online, но ни одно не становилось active, если пользователь запускал трек обычным local play/track tap на телефоне. `DeviceSyncProvider` публиковал nowPlaying только когда backend уже считал этот device active, поэтому fresh pair `iPhone + Windows` видел список devices, но не получал playback state на второй клиент.
-**Decision:** Frontend остаётся receiver и не выбирает active locally, но при реальном локальном user-wanted playback (`player.intent.getWanted() === true`, `isPlaying === true`, есть current track) отправляет backend `cmd: play`, когда этот device ещё не active и transfer не in-flight. Backend уже трактует такой command как transfer-on-play/bootstrap и публикует authoritative `player_state`. Remote UI projection не отправляет claim, потому что `projectPlaybackUiState` не выставляет user-wanted playback.
-**Alternatives considered:** (1) Разрешить frontend сразу `reportNowPlaying` до active — отвергнуто, это ломает backend authority. (2) Делать auto-active при register — отвергнуто, online device без явного play не должен захватывать output. (3) Полагаться только на кнопки transfer в DevicesPanel — отвергнуто, обычный tap play должен работать как Spotify Connect.
-**Consequences:** Первый локальный play на телефоне/компьютере bootstrap'ит active device через backend FSM; второй клиент получает `player_state` и silent-shadow UI. Дедупликация на 5 секунд предотвращает повторные play-intent storms до прихода backend frame.
-**Files touched:** `frontend/src/components/DeviceSync/DeviceSyncProvider.js`, `frontend/src/components/DeviceSync/deviceSyncPlayback.js`, `frontend/src/context/PlayerContext.js`, `frontend/src/components/DeviceSync/__tests__/deviceSyncPlayback.test.js`
-**Tests:** `CI=true npm --prefix frontend test -- --watchAll=false --runInBand --runTestsByPath src/components/DeviceSync/__tests__/deviceSyncPlayback.test.js`; `npm --prefix frontend run build`.
-**Чтобы не повторилось:** local playback start is an intent input only; backend remains source of truth for active output (`INV-DS-001`, `INV-DS-002`).
-
----
-
-## 2026-06-11 - Native iOS scaffold: single gesture owner and server-authored playback
-
-**Status:** accepted
-**Area:** ios | frontend-player | auth | device-sync
-**Context:** Earflow had no native iOS target. The web mobile player already has hard lessons around competing gesture recognizers, frontend playback authority, and auth rollout gates. Starting iOS by copying screens directly would risk a second player state owner, multiple SwiftUI `DragGesture` writers for one sheet, and cookie-only stream/WS regressions.
-**Decision:** Add `ios/Earflow` as a native SwiftUI scaffold generated by XcodeGen, with a pure `EarflowKit` core for tests. The first slice defines `GestureCoordinator`, `GestureContracts`, `PlayerSheetModel`, `PlayerStore`, `AuthProofPolicy`, App Intents, SwiftUI app shell, and XCTest/UI test contracts. Native player rules mirror web invariants: backend `player_state` is the playback source of truth; SwiftUI gestures are event inputs only; `PlayerSheetModel` is the only writer of sheet phase/offset/progress; stream/WS ticket mint requires full proof where sensitive.
-**Alternatives considered:** (1) Wrap the web SPA in a WebView - rejected because native playback, App Intents, lock-screen controls, and gesture correctness would remain second-class. (2) Build screens first and add gesture/auth contracts later - rejected because Earflow regressions came from adding control paths after UX was already layered. (3) Create only docs without code - rejected because the user asked to start implementation, but the code remains scaffold-level until macOS/Xcode verification runs.
-**Consequences:** iOS work starts from testable ownership contracts, not ad hoc SwiftUI state. The scaffold is prepared, not closed: this Windows workspace cannot run `xcodebuild` or Simulator. `PEND-IOS-001` tracks the macOS/Xcode generation/build/simulator gate.
-**Files touched:** `docs/IOS_NATIVE_APP_PLAN.md`, `ios/Earflow/**`, `scripts/verify-ios-native.*`, `package.json`, `.gitignore`, `docs/PENDING.md`
-**Tests:** local static gate only: `npm run validate:ai`; `powershell -ExecutionPolicy Bypass -File scripts/verify-ios-native.ps1 -AllowMissingTools`. Required close gate on macOS: `npm run verify:ios-native`.
-**Чтобы не повторилось:** Apply `INV-ARCH-001`, `INV-DS-001`, `INV-GESTURE-010..012`, `INV-SHEET-001..011`, `INV-SEC-016/017` to native iOS. New iOS gestures must go through `GestureContracts.swift` + `GestureCoordinator`; no second sheet Y driver, no local active-device authority, no security phase closure without real client evidence.
-
----
-
-## 2026-06-11 — Единый `player_state` frame + per-device volume (PEND-DS-001, PEND-DS-002)
-
-**Status:** accepted
-**Area:** device-sync | frontend-player
-**Context:** Backend публиковал 5 раздельных state-frames (`np:update`, `devices:active`, `devices:update`, `lease:update`, `transfer:update`) с независимыми revision counter-ами — источник микро-флика при transfer (frontend сшивал 4 state-поля из разных кадров). Volume был local state в `PlayerContext` и не синхронизировался между устройствами.
-**Decision:**
-- Введён `player_state` frame — union {`devices`, `nowPlaying`, `timeline`, `lease`, `transfer`, `activeDeviceId`, `activeRevision`, `volumeByDevice`} с монотонным `frameRev` (Redis `INCR user:{uid}:frame:rev` + `Persist`). Публикуется автоматически после legacy device/now-playing/timeline/lease frames (`playerStateTriggerFrames` в `playerstate.go`), после сохранённой transfer phase/ack/retry/expire и после `cmd:set_volume`.
-- Legacy frames остаются deprecated на 1 релиз — старые клиенты продолжают работать.
-- WS `init` включает `playerState` snapshot (без INCR — читается текущий rev).
-- `cmd:set_volume` персистит volume per-device: `user:{uid}:volume:{did}` (string float 0..1, TTL `DEVICE_TTL`).
-- Frontend: `useDeviceSync` обрабатывает `player_state` через `buildPlayerStatePatch` — отбрасывает кадры с `frameRev <= lastFrameRev` (lastFrameRev сбрасывается на init/logout), применяет snapshot атомарно и отключает fragmented fallback после полного `player_state` с `devices`; state получил `volumeByDevice`. Desktop status dot показывается только в зелёном `connected` состоянии при минимум двух present devices.
-**Alternatives considered:** заменить legacy frames сразу (отвергнуто — ломает уже задеплоенные клиенты); оставить `transfer:update` в auto-mirror списке (отвергнуто — первый transfer frame уходит до финальной phase отправки команд и создаёт лишний промежуточный unified snapshot).
-**Consequences:** клиент рендерит один консистентный snapshot — нет микро-флика от сшивания кадров; +1 Redis publish и несколько GET на каждый state-frame (приемлемо при текущей нагрузке); volume синхронизируется между устройствами; status dot больше не висит всегда на одном устройстве.
-**Files touched:** `backend/device-sync-service/internal/devices/playerstate.go` (new), `registry.go` (publish → publishEvent + mirror, set_volume persist), `transfer_fsm.go`, `transfer_worker.go`, `types.go` (Event.PlayerState), `internal/httpapi/routes.go`, `internal/websocket/client.go` (init + Event.PlayerState); `frontend/src/hooks/useDeviceSync.js`, `frontend/src/components/GlobalPlayerBar.js`.
-**Tests:** `internal/devices/playerstate_test.go` (union snapshot, монотонность frameRev, персист volume через SendCommand); существующие registry/transfer тесты зелёные.
-**Чтобы не повторилось:** не добавлять новые независимые state-frames — новые поля идут в `player_state`; legacy frames удалить в следующем релизе.
-
----
-
-## 2026-06-11 — Каскадные ошибки стриминга и WS при SEC-005 Phase 7 ENFORCE
-
-**Status:** accepted
-**Area:** streaming | device-sync | auth | frontend
-**Context:** После активации `docker-compose.stream-prod-enforce.yml` (SEC-005 Phase 7) на VPS `ru-vmv2-mini` в консоли браузера появились массовые ошибки:
-1. `WebSocket connection to 'wss://api.earflow.ru/ws/devices?ticket=...' failed` — десятки раз, шторм переподключений
-2. `GET /audio/v3/direct/.../stream?st=...&_s=... 401 (Unauthorized)` — все stream-запады падают
-3. `POST /api/ebap-hls/v1/session 403 (Forbidden)` — HLS session не создаётся
-4. Performance violations: click handler 203ms, setTimeout 57-90ms, forced reflow 30ms
-
-**Диагностика:**
-- `STREAM_TICKET_ENFORCE=1` на direct-stream-service требует валидный `st=` (stream ticket) на каждый запрос
-- Frontend mint (`isStreamTicketMintEnabled()`) требует `REACT_APP_STREAM_TICKET_MINT_ENABLED=1` AND `isProofAccessTokenEnabled()` → если PoP не настроен, mint возвращает `null` → fallback на legacy `getDeviceWsTicket` → WS падает с 403 → шторм ретраев
-- HLS session endpoint (`/api/ebap-hls/v1/session`) имеет `class: unsafe` + `require_user: true` → при enforced PoP требует `X-Auth-Device-*` headers → без proof → 403
-- `prefetchLyrics` → `getSongHlsSession` вызывается при каждом переключении трека → 403 на каждый prefetch
-- WS storm: `preWsOpenStreakRef` растёт, бэкофф увеличивается, но `gaveUpRef` не выставляется при persistent 403 → бесконечные ретраи каждые 5 минут
-- Каждая ошибка → React re-render → forced reflow → UI блокируется на 200ms+
-
-**Decision:**
-1. **НЕ включать `STREAM_TICKET_ENFORCE=1` до прохождения SEC-013 browser DoD 8/8** (PoP e2e proof). Это жёсткое правило.
-2. **Rollback Phase 7** до Phase 6 ACCEPT (dual-mode, legacy cookie работает параллельно с ticket): `SEC005_PHASE7_ROLLBACK_CONFIRM=1 npm run rollback:sec005-phase7-prod`
-3. **Frontend guard:** добавить проверку PoP readiness перед mint stream ticket. Если PoP не готов → НЕ минтить ticket, использовать legacy path.
-4. **HLS session 403:** `getSongHlsSession` при 403 → один retry с session refresh, потом degrade. НЕ ретраить бесконечно.
-5. **WS storm:** при persistent 403/401 на ws-ticket → `gaveUpRef=true` после `HANDSHAKE_STORM_THRESHOLD` → показать ошибку пользователю → возобновить только по действию.
-6. **Performance:** stream error counting через ref, НЕ через React state. Backoff до 30s при >3 ошибках подряд.
-
-**Alternatives considered:**
-- Оставить ENFORCE и чинить PoP на лету — отвергнуто: пользователь не может слушать музыку
-- Отключить DeviceProofMiddleware для stream routes — отвергнуто: это security regression (INV-SEC-010)
-- Включить `ALLOW_COOKIE_AUTH_WITHOUT_PROOF=1` — отвергнуто: bypass запрещён в prod (INV-SEC-012)
-
-**Consequences:** Rollback до Phase 6 ACCEPT. Stream работает через legacy cookie + ticket параллельно. WS Device Sync работает через legacy JWT ticket. PoP e2e должен быть пройден до следующей попытки ENFORCE.
-
-**Files touched:**
-- `docker-compose.stream-prod-enforce.yml` (rollback)
-- `frontend/src/auth/streamTicket.js` (guard PoP readiness)
-- `frontend/src/api/client.js` (HLS session 403 handling)
-- `frontend/src/hooks/useDeviceSync.js` (WS storm gaveUp при persistent 403)
-- `frontend/src/context/player/useHlsPrefetch.js` (prefetch error handling)
-- `docs/ARCHITECTURE_INVARIANTS.md` (INV-STREAM-001, INV-STREAM-002, INV-WS-001, INV-PERF-001)
-
-**Tests:** `npm run verify:stream-ticket`, `npm run verify:sec005-prod-health`, SEC-013 browser DoD 8/8
-
-**Чтобы не повторилось:** см. `INV-STREAM-001`, `INV-STREAM-002`, `INV-WS-001`, `INV-PERF-001` в `ARCHITECTURE_INVARIANTS.md`. Жёсткое правило: **ENFORCE только после PoP e2e**. Перед любым изменением stream auth — grep DECISIONS.md по "stream" и "ENFORCE".
+**Area:** social | database-service | listener-frontend | security
+**Context:** Social v1 returned a full render DTO after every like/unlike and exposed more author fields than the UI needs (`author.id`, `author.handle`, exact timestamps). Create/delete also refetched the whole feed. This produced unnecessary DB reads and a privacy smell: another listener could receive stable internal user identifiers unrelated to rendering.
+**Decision:** Keep backend authority, but reduce hot-path work. `social_posts.likes_count` becomes the hot counter, backfilled by `005_social_feed_likes_count.sql`; like/unlike returns only `{reaction:{postId, liked, likes}}`; feed reads use a short process-local public-page cache and then apply a viewer overlay (`liked`, `canManage`) from the gateway-injected viewer. Public post DTO no longer exposes `author.id`, `author.handle`, `createdAt`, or `updatedAt`; author is display-only (`displayName`, `avatarUrl`, `initials`). Frontend applies backend `post`/`reaction`/`deleted` acknowledgements and does focus/manual newer-post checks with `after`, not polling loops or full reloads after every mutation. Owner controls move to a `...` menu rendered only when backend says `viewer.canManage`.
+**Alternatives considered:** (1) Move likes into React optimistic state — rejected: violates `INV-SOCIAL-001` and creates a second truth source. (2) Gateway response-cache for `/api/social/feed` — rejected for now because feed is viewer-specific after overlay; private cache remains in API client and database-service public-page cache. (3) Add Redis dependency to `database-service` immediately — deferred until horizontal scale; current process-local TTL is simpler and documented as `PEND-SOCIAL-001`.
+**Consequences:** Feed read load becomes one cached public-page read plus one small viewer-like overlay query; reaction mutations avoid full post SELECT and full feed refetch. Deploy requires applying `005_social_feed_likes_count.sql` after `004_social_feed.sql` on existing databases. Multi-replica cache invalidation is not claimed closed.
+**Files touched:** `backend/database-service/routes/social.js`, `backend/database-service/lib/socialPosts.js`, `backend/database-service/database/migrations/005_social_feed_likes_count.sql`, `backend/database-service/database/migrations/004_social_feed.sql`, `backend/database-service/database/init.sql`, `backend/00-create-tables.sql`, `frontend/src/api/client.js`, `frontend/src/components/SocialPage.js`, `frontend/src/components/SocialPage.styles.js`, `frontend/src/components/SocialPage.test.js`, `backend/database-service/CONTEXT.md`, `docs/SOCIAL_FEED.md`, `docs/PENDING.md`
+**Tests:** PASS: `node --check backend/database-service/routes/social.js backend/database-service/lib/socialPosts.js frontend/src/components/SocialPage.js frontend/src/api/client.js`. PENDING: `npm.cmd --prefix backend/database-service run test:social`; `$env:CI='true'; npm.cmd --prefix frontend test -- --watchAll=false --runInBand --runTestsByPath src/components/SocialPage.test.js`; `npm.cmd --prefix frontend run build`; `npm.cmd run validate:ai`; browser smoke `/social` (tracked by `PEND-SOCIAL-002`).
+**Чтобы не повторилось:** social frontend may cache transport responses and apply backend acknowledgements, but must not compute ownership, author identity, counters, feed ordering, or permissions. Shared social cache before multi-replica scale is tracked by `PEND-SOCIAL-001`.
 
 ---
 

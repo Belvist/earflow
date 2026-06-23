@@ -11,49 +11,46 @@
 
 ---
 
-### PEND-IOS-001 — Native iOS Xcode/Simulator verification gate
+### PEND-IOS-001 — Native iOS app scaffold and verification
 
 **Priority:** high
-**Status:** scaffold implemented locally, macOS/Xcode gate pending
+**Status:** scaffold present (2026-06-23); full verification gate not closed
 
-`ios/Earflow` now contains the native SwiftUI scaffold, `EarflowKit` gesture/playback/auth contracts, App Intents, and XCTest/UI test contracts. This Windows workspace has no `swift`, `xcodebuild`, `xcrun`, or Simulator, so the iOS phase is **prepared**, not closed.
+Контекст: native iOS направление — SwiftUI listener app в `ios-app/`. **Scaffold добавлен:** XcodeGen `project.yml`, `Earflow.xcodeproj`, Auth/Network/Playback foundations.
 
-**Remaining:**
-1. On macOS with Xcode + XcodeGen: run `npm run verify:ios-native`.
-2. Fix any Swift/XcodeGen compile issues found by the real toolchain.
-3. Run Simulator UI smoke: launch, tab navigation, mini-player tap-open, sheet swipe open/close.
-4. Run real-device smoke before claiming playback/gesture readiness: audio session, lock screen controls, interruptions, haptics, rapid gestures.
+**Что сделано (Phase 0–1 partial):**
+- `ios-app/` SwiftUI project + `docs/IOS_APP.md` + `ios-app/CONTEXT.md`
+- `AuthActor`, Keychain, P-256 proof signer, proof token cache
+- `GatewayClient` (gateway-only, retry, log redaction)
+- `PlaybackActor`, HLS session via `/api/ebap-hls/v1/session`
+- DeviceSync / Analytics skeletons
+- `npm run verify:ios-native` / `scripts/verify-ios-native.sh`
+- Unit tests: canonical proof string, state enums
 
-**Blocks:** any claim that native iOS app is ready, safe for TestFlight, or gesture-complete.
+**Что не сделано:**
+- Не выполнены генерация проекта (`xcodegen generate` или эквивалент), `xcodebuild build` и `xcodebuild test`.
+- Не выполнены smoke/UI-тесты на iOS Simulator.
+- Не выполнен запуск на реальном iPhone, TestFlight или macOS CI runner.
+- Не реализована полноценная auth-цепочка: login, Keychain/Secure Enclave proof signing, Proof Access Token exchange, refresh/revoke flow.
+- Не реализованы `AVPlayer`, stream/ws ticket consume, background audio и lock screen controls.
+- Не реализован native DeviceSync client (`player_state`, WS ticket, transfer/seek/volume consistency).
+- Не реализованы реальные catalog/search/library/profile screens поверх gateway API.
+- Не реализованы и не проверены App Intents для системных поверхностей iOS.
+- Не выполнена gesture QA: mini tap/open, swipe up, horizontal swipe, dismiss during snap, scroll handoff, rapid open/close, multi-touch/race cases.
+- Не выполнен security audit: отсутствие логирования токенов/тикетов, full proof для чувствительных операций, invalidate/revoke сценарии.
 
----
+**Gate для закрытия:**
+1. На macOS с Xcode и iOS Simulator создать или восстановить native iOS проект.
+2. Зафиксировать воспроизводимую команду верификации (`npm run verify:ios-native` или documented equivalent).
+3. Получить PASS для build/test на Simulator.
+4. Получить PASS для smoke-сценария на реальном iPhone или TestFlight.
+5. Проверить gesture ownership против `docs/GESTURE_ARCHITECTURE.md`, `docs/MOBILE_PLAYER_SHEET_DESIGN.md` и `INV-GESTURE-*` / `INV-SHEET-*`.
 
-### PEND-STREAM-001 — Rollback SEC-005 Phase 7 ENFORCE до Phase 6 ACCEPT
-
-**Priority:** critical
-**Status:** code fixes done, rollback pending on VPS
-
-**Context:** Активирован `docker-compose.stream-prod-enforce.yml` (Phase 7) на VPS. Frontend не может замintить stream ticket (PoP не готов), все stream-запросы получают 401, WS Device Sync штормит с 403.
-
-**Code fixes applied (this session):**
-- `streamTicket.js`: проверка PoP readiness перед mint, обработка 403/404, early return при пустом proof
-- `useDeviceSync.js`: `consecutiveAuthFailureRef` — gaveUp после 3 последовательных auth-ошибок
-- `useHlsPrefetch.js`: error counting через ref, backoff 30s, silent fail при 403
-- `client.js`: HLS 403 → `HLS_SESSION_FORBIDDEN` error code
-
-**Remaining:**
-1. Rollback на VPS: `SEC005_PHASE7_ROLLBACK_CONFIRM=1 npm run rollback:sec005-phase7-prod`
-2. Проверить: `npm run verify:sec005-prod-health` → PASS
-3. Пересобрать frontend с фиксами: `docker compose build --no-cache frontend`
-4. Проверить: stream bytes работают, WS Device Sync работает, нет шторма в консоли
-
-**Blocks:** любая работа со стримингом на prod.
-
----
+**Blocks:** любые заявления “native iOS app готово”, “можно тестировать на iPhone”, “gesture-поведение безопасно проверено” или “App Intents готовы”.
 
 ### PEND-WAVE-001 — Server-side waveform peaks for hero / seek UI
 
-**Priority:** medium  
+**Priority:** medium
 **Status:** in progress (API + transcode-worker; backfill `waveform_status=pending` on existing catalog)
 
 **Implemented:** `waveform_peaks` JSONB on `songs`, generation in `transcode-worker` (ffmpeg), `GET /api/songs/:id/waveform`, frontend `useTrackWaveformPeaks` → API only.
@@ -66,13 +63,71 @@
 
 ## DeviceSync / Playback
 
+Порядок закрытия Spotify-parity записан ниже: live verification → automated two-client gate → server-owned queue/session → удаление legacy frames → audio output selector.
+
 ### PEND-DS-001 — ~~Этап 2: единый `player_state` frame~~ — закрыто 2026-06-11
 
-Реализовано: `player_state` union-frame с `devices` и монотонным `frameRev`, init/list включает `playerState`, frontend читает единый объект и отключает fragmented fallback после полного frame. Legacy frames оставлены deprecated на 1 релиз. См. `DECISIONS.md` 2026-06-11.
+Реализовано: `player_state` union-frame с `devices`, `nowPlaying`, `timeline`, `lease`, `transfer`, `activeDeviceId`, `activeRevision`, `volumeByDevice` и монотонным `frameRev`; init/list включает `playerState`; frontend читает unified frame и отключает fragmented fallback после полного frame. Legacy frames оставлены deprecated на 1 релиз. См. `DECISIONS.md` 2026-06-11 и `backend/device-sync-service/CONTEXT.md`.
 
 ### PEND-DS-002 — ~~Volume per-device на backend~~ — закрыто 2026-06-11
 
-Реализовано: `cmd:set_volume` персистит `user:{uid}:volume:{did}` (TTL `DEVICE_TTL`), публикуется в `player_state.volumeByDevice`. См. `DECISIONS.md` 2026-06-11.
+Реализовано: `cmd:set_volume` персистит `user:{uid}:volume:{did}` (TTL `DEVICE_TTL`) и публикуется в `player_state.volumeByDevice`. См. `DECISIONS.md` 2026-06-11 и `backend/device-sync-service/CONTEXT.md`.
+
+### PEND-DS-004 — Prod two-device Spotify parity verification
+
+**Priority:** critical
+**Status:** not closed
+
+Кодовый путь для Spotify-style DeviceSync подготовлен: backend-owned `player_state`, transfer-on-play, `payload.nowPlaying` bootstrap для local play, per-device volume. Но “уровень Spotify” нельзя закрывать без live матрицы на двух реальных клиентах (Windows desktop + iPhone/Safari/PWA) после VPS deploy.
+
+**Нужно проверить на prod/staging:**
+1. Fresh pair: оба устройства online, active пустой → tap play на iPhone → Windows получает `player_state` с тем же `trackId`, `deviceId=iPhone`, `isPlaying=true`, позицией без старого snapshot.
+2. Reverse: tap play на Windows при active iPhone → iPhone получает revoke/suspend, Windows active, второй клиент видит новый трек.
+3. Passive controls: pause/play/seek/next/previous с non-active клиента управляют active device без self-transfer, кроме `cmd:play` ownership intent.
+4. Volume: `set_volume` меняет только targeted active/per-device volume и не ломает playback state.
+5. Reconnect: reload одного клиента, sleep/wake телефона, краткий WS reconnect → нет duplicate audio, active не мигает, `frameRev` монотонный.
+6. Negative security: non-owned/expired device id не может публиковать nowPlaying или command; protected routes остаются через gateway/PoP.
+
+**Evidence to attach before closing:** DevTools WS frames или server logs с `player_state.frameRev`, `activeDeviceId`, `nowPlaying.trackId`, `transfer.phase`; команды деплоя и commit hash.
+
+### PEND-DS-005 — Server-owned queue/session context
+
+**Priority:** high
+**Status:** not started
+
+Сейчас DeviceSync синхронизирует текущий track/timeline и часть queue metadata (`queueSource`, `queueName`), но не владеет полноценной очередью как Spotify Connect. `next/previous` исполняются на active device, а passive client не получает backend-owned queue cursor/list.
+
+**Что нужно:**
+- Ввести backend-owned playback session/queue snapshot: source type, ordered track ids, current index, shuffle/repeat, queue revision.
+- `cmd:next|previous` должен менять session на backend или требовать ack от active с новым snapshot; не держать разные очереди на клиентах.
+- Frontend должен показывать passive queue как projection server session, без локального пересчёта ownership/order.
+- Добавить tests на stale queue revision, transfer с queue continuity, local play replacing queue.
+
+### PEND-DS-006 — Удалить deprecated fragmented frames после soak
+
+**Priority:** medium
+**Status:** waiting for prod soak
+
+`player_state` уже является основным frame, но legacy `np:update`, `devices:active`, `devices:update`, `timeline:update`, `lease:update`, `transfer:update` ещё оставлены как fallback на один релиз. После подтверждённого prod soak нужно удалить fallback paths, чтобы не осталось двух параллельных state channels.
+
+**Что нужно:**
+- Зафиксировать prod soak без WS regressions.
+- Удалить fragmented fallback из `useDeviceSync.js`.
+- Упростить backend publish path: новые поля только через `player_state`.
+- Обновить `CONTEXT.md`, `DECISIONS.md`, tests.
+
+### PEND-DS-007 — Automated two-client DeviceSync e2e harness
+
+**Priority:** high
+**Status:** not started
+
+Ручная проверка телефона/ПК нужна, но недостаточна. Нужен Playwright/mocked-audio e2e harness с двумя browser contexts под одним user/session, чтобы ловить regressions до VPS.
+
+**Что нужно:**
+- Два клиента с разными `clientKey/deviceId`, один backend stack или test double device-sync-service.
+- Проверки: local play bootstrap, transfer button, passive pause/seek/next, reconnect, stale frame rejection, volumeByDevice.
+- Артефакты: WS frame log + screenshot DevicesPanel/player bar.
+- Встроить в `verify:player-mobile`/`validate:ai` как optional gate или отдельный `verify:device-sync`.
 
 ### PEND-DS-003 — Audio output device selector (Spotify-style "Этот компьютер — AirPods Pro")
 
@@ -98,17 +153,6 @@
 
 ## Frontend
 
-### PEND-SEO-001 — Dynamic sitemap for real catalog entities
-
-**Priority:** high
-**Status:** not started
-
-Static programmatic SEO taxonomy is implemented for `/music/*` and generated into `frontend/public/sitemap.xml`. Remaining SEO scale should come from real backend entities, not doorway pages: public artists, albums, tracks where public pages exist, and public/shared playlists. Needs a backend-aware sitemap job or endpoint with stable canonical URLs, availability filters, and chunked sitemap indexes when URL count grows.
-
-**Blocks:** claiming full catalog indexation coverage beyond the static music taxonomy.
-
----
-
 ### PEND-FE-001 — `useDeviceSync.js` всё ещё ~1100 строк
 
 **Priority:** medium
@@ -116,7 +160,44 @@ Static programmatic SEO taxonomy is implemented for `/music/*` and generated int
 
 После Этапа 1 hook уменьшился, но всё ещё содержит много reconnect/heartbeat/visibility/online логики, которую можно вынести в отдельный модуль `frontend/src/hooks/deviceSyncTransport.js`. Это сделает основной hook читаемым.
 
-**Blocks by:** ~~PEND-DS-001~~ разблокировано 2026-06-11 — `player_state` frame внедрён, можно выносить transport.
+**Blocks by:** ~~PEND-DS-001~~ разблокировано 2026-06-11 — `player_state` внедрён. Теперь можно выносить transport/reconnect/visibility логику из `useDeviceSync.js` без изменения public hook contract.
+
+---
+
+## Social
+
+### PEND-SOCIAL-001 — Shared feed cache invalidation before database-service horizontal scale
+
+**Priority:** medium
+**Status:** not started
+
+Social feed now uses a short process-local public-page cache in `database-service` plus viewer overlay per request. This reduces repeated DB reads without moving ownership to React. If `database-service` is scaled to multiple replicas or social traffic becomes high, move feed page cache/invalidation to Redis or NATS-backed namespace invalidation so create/delete/reaction updates invalidate all replicas.
+
+**Do not:** cache viewer-specific DTOs in shared cache; expose `author.id`/`handle`; reintroduce full feed reload after every like.
+
+### PEND-SOCIAL-002 — Finish verification and VPS rollout for social privacy/perf pass
+
+**Priority:** high
+**Status:** **closed locally (2026-06-23)** — verification ladder PASS; VPS deploy checklist below
+
+**Verified:**
+- `npm --prefix backend/database-service run test:social` — 9/9 PASS (incl. state machine + pickCreatePostFields)
+- `CI=true npm --prefix frontend test -- --watchAll=false --runInBand --runTestsByPath src/components/SocialPage.test.js` — 4/4 PASS
+- `npm --prefix frontend run build` — PASS
+- `npm run validate:ai` — 0 errors
+- `go test ./internal/auth/ -run TestGatewayYAMLSocial` — PASS
+- Gateway route `social` in `gateway.yaml`; API client methods wired in `frontend/src/api/client.js`
+- Backend-SOT: `POST_STATUS`, `pickCreatePostFields`, `INV-SOCIAL-004`; frontend renderer-only
+
+**VPS deploy (ops, not auto-closed here):**
+```bash
+git pull origin main
+psql "$DATABASE_URL" -f backend/database-service/database/migrations/004_social_feed.sql   # if not applied
+psql "$DATABASE_URL" -f backend/database-service/database/migrations/005_social_feed_likes_count.sql
+docker compose build --no-cache frontend api-gateway database-service
+docker compose up -d frontend api-gateway database-service
+```
+Browser smoke `/social`: compact cards, no `author.id`/`handle` in feed JSON, `...` only on own posts, like applies `reaction` without full feed reload.
 
 ---
 
@@ -223,7 +304,7 @@ Real stack: gateway + Redis + security-service + auth login + frontend + `auth-e
 
 **Scale claims:** capacity validated on `ru-vmv2-mini` auth-e2e profile only — see `PEND-SEC-CAPACITY-001` / `reports/auth-capacity-20260608.md`. Do **not** write «готово для миллионов» / «Redis не bottleneck навсегда» / «production scale proven».
 
-**Known risks (accepted for hot-path optimization, not closed):** token replay within TTL (~90s) if XSS/extension steals header; WS/stream still cookie-only (`PEND-SEC-005`); artist-frontend has no proof token cache.
+**Known risks (accepted for hot-path optimization, not closed):** token replay within TTL (~90s) if XSS/extension steals header; WS/stream still cookie-only (`PEND-SEC-005`); ~~artist-frontend has no proof token cache~~ **mitigated 2026-06-23** — artist portal uses same proof token + PoP transport as listener.
 
 **Commits:** `493ba5a`, `5010df1`, `c5c501d` (double-nonce fix), `ac37504` (DoD e2e fixes), capacity tooling `d726935`–`250e256`.
 
@@ -250,9 +331,17 @@ DoD: см. roadmap §2.
 ### PEND-SEC-003 — Fresh-login protection
 
 **Priority:** high  
-**Status:** **implemented (2026-06-09)** — VPS/browser e2e gate pending  
+**Status:** **backend unit tests PASS (2026-06-23 local)** — VPS/browser e2e gate pending  
 
 Mass revoke с сессии <24h без step-up → `FRESH_LOGIN_REQUIRED` (security-service). Step-up via `POST /api/auth/2fa/step-up` unblocks.
+
+**Delivered locally (2026-06-23):**
+- `security-service` unit tests: fresh session → `FRESH_LOGIN_REQUIRED`; step-up active → 200; mature session (>24h) skips fresh guard.
+- Artist portal: PoP device register + proof access token on all API calls (`artist-frontend/src/auth/*`, `transport/http.js`); `FRESH_LOGIN_REQUIRED` → step-up modal (UI only displays backend decision).
+
+**Still required before closed:**
+- VPS/browser matrix: new session → revoke-others → `FRESH_LOGIN_REQUIRED` → step-up → retry → 200.
+- `bash scripts/run-auth-fullstack-e2e.sh` or manual DevTools on auth-e2e with sessions UI.
 
 ### PEND-SEC-004 — MFA step-up modal (UI)
 

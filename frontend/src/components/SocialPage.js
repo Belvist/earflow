@@ -1,5 +1,10 @@
 import React from 'react';
-import { FaHeart, FaPaperPlane, FaPen, FaRegHeart, FaSyncAlt, FaTimes, FaTrash } from 'react-icons/fa';
+/**
+ * Social feed — thin client (INV-SOCIAL-001).
+ * Backend owns: feed order, likes, permissions, author DTO, cursor, post lifecycle.
+ * This module only renders backend DTOs and applies backend acks (post/reaction/deleted).
+ */
+import { FaEllipsisH, FaHeart, FaPaperPlane, FaPen, FaRegHeart, FaSyncAlt, FaTimes, FaTrash } from 'react-icons/fa';
 import apiClient from '../api/client';
 import {
   ActionButton,
@@ -17,12 +22,15 @@ import {
   ComposerHeader,
   ComposerTitle,
   ContentBubble,
-  DeleteButton,
   ErrorPanel,
   Feed,
   HeaderActions,
   IconButton,
   LoadMore,
+  PostMenu,
+  PostMenuButton,
+  PostMenuItem,
+  PostMenuPanel,
   Meta,
   Page,
   Post,
@@ -50,6 +58,50 @@ function readPostsPayload(data) {
   };
 }
 
+function mergePrependPosts(incoming, current) {
+  const next = [];
+  const seen = new Set();
+  for (const post of Array.isArray(incoming) ? incoming : []) {
+    if (!post?.id || seen.has(post.id)) continue;
+    seen.add(post.id);
+    next.push(post);
+  }
+  for (const post of Array.isArray(current) ? current : []) {
+    if (!post?.id || seen.has(post.id)) continue;
+    seen.add(post.id);
+    next.push(post);
+  }
+  return next;
+}
+
+function mergeAppendPosts(current, incoming) {
+  const next = Array.isArray(current) ? [...current] : [];
+  const seen = new Set(next.map((post) => String(post?.id || '')).filter(Boolean));
+  for (const post of Array.isArray(incoming) ? incoming : []) {
+    const id = String(post?.id || '');
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    next.push(post);
+  }
+  return next;
+}
+
+function applyReaction(post, reaction) {
+  // Applies backend reaction delta only — no local like math (INV-SOCIAL-001).
+  if (!post?.id || !reaction || String(post.id) !== String(reaction.postId || '')) return post;
+  return {
+    ...post,
+    metrics: {
+      ...(post.metrics || {}),
+      likes: Number.isFinite(Number(reaction.likes)) && Number(reaction.likes) >= 0 ? Math.floor(Number(reaction.likes)) : 0,
+    },
+    viewer: {
+      ...(post.viewer || {}),
+      liked: reaction.liked === true,
+    },
+  };
+}
+
 export default function SocialPage() {
   const [title, setTitle] = React.useState('');
   const [body, setBody] = React.useState('');
@@ -57,12 +109,33 @@ export default function SocialPage() {
   const [loading, setLoading] = React.useState(true);
   const [loadingMore, setLoadingMore] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
-  const [actionPostId, setActionPostId] = React.useState('');
+  const [busyPostIds, setBusyPostIds] = React.useState(() => new Set());
   const [error, setError] = React.useState('');
   const [composerOpen, setComposerOpen] = React.useState(false);
+  const [openMenuPostId, setOpenMenuPostId] = React.useState('');
   const bodyInputRef = React.useRef(null);
+  const feedRef = React.useRef(feed);
+  const lastAutoRefreshAtRef = React.useRef(0);
 
-  const loadFeed = React.useCallback(async ({ cursor = null, append = false, signal = undefined } = {}) => {
+  React.useEffect(() => {
+    feedRef.current = feed;
+  }, [feed]);
+
+  const setPostBusy = React.useCallback((postId, busy) => {
+    const id = String(postId || '');
+    if (!id) return;
+    setBusyPostIds((current) => {
+      const next = new Set(current);
+      if (busy) {
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const loadFeed = React.useCallback(async ({ cursor = null, append = false, signal = undefined, cache = true } = {}) => {
     if (append) {
       setLoadingMore(true);
     } else {
@@ -71,10 +144,10 @@ export default function SocialPage() {
     setError('');
 
     try {
-      const data = await apiClient.getSocialFeed({ limit: FEED_LIMIT, cursor, signal });
+      const data = await apiClient.getSocialFeed({ limit: FEED_LIMIT, cursor, signal, cache });
       const payload = readPostsPayload(data);
       setFeed((current) => ({
-        posts: append ? [...current.posts, ...payload.posts] : payload.posts,
+        posts: append ? mergeAppendPosts(current.posts, payload.posts) : payload.posts,
         page: payload.page,
       }));
     } catch (e) {
@@ -110,11 +183,78 @@ export default function SocialPage() {
     return () => cancel(raf);
   }, [composerOpen]);
 
-  const replacePost = React.useCallback((post) => {
+  const refreshNewPosts = React.useCallback(async ({ signal = undefined, silent = false } = {}) => {
+    const current = feedRef.current;
+    const topPostId = current.posts[0]?.id || '';
+    if (!topPostId) {
+      await loadFeed({ signal, cache: false });
+      return;
+    }
+
+    if (!silent) setError('');
+    try {
+      const data = await apiClient.getSocialFeed({ limit: FEED_LIMIT, after: topPostId, signal, cache: false });
+      const payload = readPostsPayload(data);
+      if (payload.posts.length > 0) {
+        setFeed((latest) => ({
+          ...latest,
+          posts: mergePrependPosts(payload.posts, latest.posts),
+        }));
+      }
+    } catch (e) {
+      if (!silent && e?.name !== 'AbortError') {
+        setError('Не удалось обновить ленту');
+      }
+    }
+  }, [loadFeed]);
+
+  React.useEffect(() => {
+    const maybeRefresh = () => {
+      if (typeof document !== 'undefined' && document.visibilityState && document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (now - lastAutoRefreshAtRef.current < 45000) return;
+      lastAutoRefreshAtRef.current = now;
+      void refreshNewPosts({ silent: true });
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', maybeRefresh);
+    }
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', maybeRefresh);
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('focus', maybeRefresh);
+      }
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', maybeRefresh);
+      }
+    };
+  }, [refreshNewPosts]);
+
+  const prependPost = React.useCallback((post) => {
     if (!post?.id) return;
     setFeed((current) => ({
       ...current,
-      posts: current.posts.map((item) => (item.id === post.id ? post : item)),
+      posts: mergePrependPosts([post], current.posts),
+    }));
+  }, []);
+
+  const updatePostReaction = React.useCallback((reaction) => {
+    if (!reaction?.postId) return;
+    setFeed((current) => ({
+      ...current,
+      posts: current.posts.map((item) => applyReaction(item, reaction)),
+    }));
+  }, []);
+
+  const removePost = React.useCallback((postId) => {
+    const id = String(postId || '');
+    if (!id) return;
+    setFeed((current) => ({
+      ...current,
+      posts: current.posts.filter((item) => String(item.id) !== id),
     }));
   }, []);
 
@@ -127,11 +267,11 @@ export default function SocialPage() {
     setSubmitting(true);
     setError('');
     try {
-      await apiClient.createSocialPost({ title, body });
+      const response = await apiClient.createSocialPost({ title, body });
       setTitle('');
       setBody('');
       setComposerOpen(false);
-      await loadFeed();
+      prependPost(response?.post);
     } catch {
       setError('Не удалось опубликовать пост');
     } finally {
@@ -141,31 +281,33 @@ export default function SocialPage() {
 
   const handleLikeToggle = async (post) => {
     if (!post?.id) return;
-    setActionPostId(post.id);
+    setPostBusy(post.id, true);
     setError('');
     try {
       const response = post.viewer?.liked
         ? await apiClient.unlikeSocialPost(post.id)
         : await apiClient.likeSocialPost(post.id);
-      replacePost(response?.post);
+      updatePostReaction(response?.reaction);
     } catch {
       setError('Не удалось обновить реакцию');
     } finally {
-      setActionPostId('');
+      setPostBusy(post.id, false);
     }
   };
 
   const handleDelete = async (post) => {
-    if (!post?.id) return;
-    setActionPostId(post.id);
+    // canManage is display hint from backend; delete authz is enforced server-side (INV-SOCIAL-002).
+    if (!post?.id || post.viewer?.canManage !== true) return;
+    setPostBusy(post.id, true);
     setError('');
+    setOpenMenuPostId('');
     try {
-      await apiClient.deleteSocialPost(post.id);
-      await loadFeed();
+      const response = await apiClient.deleteSocialPost(post.id);
+      removePost(response?.id || post.id);
     } catch {
       setError('Не удалось удалить пост');
     } finally {
-      setActionPostId('');
+      setPostBusy(post.id, false);
     }
   };
 
@@ -182,7 +324,7 @@ export default function SocialPage() {
             type="button"
             aria-label="Обновить ленту"
             title="Обновить"
-            onClick={() => loadFeed()}
+            onClick={() => refreshNewPosts()}
             disabled={loading || submitting}
           >
             <FaSyncAlt size={14} />
@@ -252,8 +394,10 @@ export default function SocialPage() {
             const author = post.author || {};
             const viewer = post.viewer || {};
             const metrics = post.metrics || {};
-            const busy = actionPostId === post.id;
-            const fallbackMeta = [author.handle, post.createdAtLabel].filter(Boolean).join(' · ');
+            const busy = busyPostIds.has(String(post.id));
+            const canManage = viewer.canManage === true;
+            const menuOpen = openMenuPostId === post.id;
+            const fallbackMeta = [post.createdAtLabel].filter(Boolean).join(' · ');
             return (
               <Post key={post.id}>
                 <Avatar aria-hidden="true">
@@ -272,6 +416,34 @@ export default function SocialPage() {
                       <Meta>{fallbackMeta}</Meta>
                     ) : null}
                   </AuthorBlock>
+
+                  {canManage ? (
+                    <PostMenu>
+                      <PostMenuButton
+                        type="button"
+                        aria-label="Управление постом"
+                        aria-haspopup="menu"
+                        aria-expanded={menuOpen}
+                        onClick={() => setOpenMenuPostId(menuOpen ? '' : post.id)}
+                        disabled={busy}
+                      >
+                        <FaEllipsisH size={13} />
+                      </PostMenuButton>
+                      {menuOpen ? (
+                        <PostMenuPanel role="menu">
+                          <PostMenuItem
+                            type="button"
+                            role="menuitem"
+                            onClick={() => handleDelete(post)}
+                            disabled={busy}
+                          >
+                            <FaTrash size={12} />
+                            <span>Удалить</span>
+                          </PostMenuItem>
+                        </PostMenuPanel>
+                      ) : null}
+                    </PostMenu>
+                  ) : null}
                 </PostHeader>
 
                 <ContentBubble>
@@ -290,16 +462,6 @@ export default function SocialPage() {
                     {metrics.likes || 0}
                   </ActionButton>
 
-                  {viewer.canDelete ? (
-                    <DeleteButton
-                      type="button"
-                      onClick={() => handleDelete(post)}
-                      disabled={busy}
-                      aria-label="Удалить пост"
-                    >
-                      <FaTrash size={12} />
-                    </DeleteButton>
-                  ) : null}
                 </PostActions>
               </Post>
             );

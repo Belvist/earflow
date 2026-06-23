@@ -27,7 +27,7 @@
 
 Postgres:
   `users`, `user_settings`, `songs`, `playlists`, `playlist_tracks`, `likes`, `dislikes`, `listens`, `user_eq_settings`, catalog/recommendation support tables.
-  `social_posts` — text posts for listener social feed.
+  `social_posts` — text posts for listener social feed, including denormalized `likes_count`.
   `social_post_likes` — one like per user/post.
   `service_sessions` — issued service-token session records.
 
@@ -38,7 +38,7 @@ Postgres:
 
 ## Publishes
 
-None. Social feed v1 is pull-based HTTP; no Redis/NATS/WS frames.
+Process-local short TTL cache for public social feed pages. Social feed remains pull-based HTTP; no Redis/NATS/WS frames.
 
 ## Dependencies
 
@@ -52,14 +52,19 @@ Optional:
 
 ## Caveats / Gotchas
 
-- User identity for `/api/social/*` comes only from gateway-injected `X-User-Id`; body/query user ids are ignored.
-- Social DTO is render-ready: `liked`, `canDelete`, counts, author display and cursor are computed server-side.
+- User identity for `/api/social/*` comes only from gateway-injected `X-User-Id`; body/query user ids are ignored (`pickCreatePostFields`).
+- Post lifecycle: `active → deleted` only via owner delete; `POST_STATUS` + SQL guards in `routes/social.js`.
+- Social DTO is render-ready but privacy-minimized: `liked`, `canManage`, counts, author display and cursor are computed server-side; `author.id`, `author.handle`, exact `updatedAt` are not exposed.
+- Like/unlike returns a `reaction` delta, not the full post DTO. Do not reintroduce full feed reload after reactions.
+- `social_posts.likes_count` is the hot counter; migration `005_social_feed_likes_count.sql` backfills it from `social_post_likes`.
 - Schema bootstrap/migrations must keep `users.photo_url` and `user_settings.display_name`; social author DTO reads them directly.
 - `/api/social/*` must be exposed through gateway with `require_user: true` and `require_service_token: true`; direct browser access is not a supported path.
 - `social_posts.status = deleted` is soft delete; feed queries must filter `status='active'`.
 
 ## Recent significant changes
 
+- 2026-06-23 — Social backend-SOT formalized: state machine, spoofed body strip, gateway route test, validate:ai scans. См. `docs/DECISIONS.md`.
+- 2026-06-16 — Social feed privacy/perf pass: minimal author DTO, `likes_count`, reaction delta, process-local feed cache. См. `docs/DECISIONS.md`.
 - 2026-06-12 — Social feed v1 backend-owned posts/likes/API. См. `docs/DECISIONS.md`.
 
 ## Tests
@@ -73,4 +78,4 @@ npm --prefix backend/database-service run test:social
 - Entrypoint: `backend/database-service/server.js`
 - Social route: `backend/database-service/routes/social.js`
 - Social DTO/validation: `backend/database-service/lib/socialPosts.js`
-- Schema: `backend/database-service/database/migrations/004_social_feed.sql`
+- Schema: `backend/database-service/database/migrations/004_social_feed.sql`, `backend/database-service/database/migrations/005_social_feed_likes_count.sql`
