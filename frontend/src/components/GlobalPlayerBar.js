@@ -26,7 +26,7 @@ import { PanelShell } from './queue-panel/queuePanel.styles';
 import { MOBILE_CHROME_OFFSET_PX } from '../styles/mediaCover';
 import { usePlayerSheet } from '../context/PlayerSheetContext';
 import {
-  DeviceSyncStatusDot, DeviceSyncPanelBody, PartyBadge, PlayerBar, DislikeButtonBar, PlayerBarContent,
+  DeviceSyncStatusDot, DeviceSyncPanelBody, PartyBadge, PlayerBar, PlayerBarDock, DislikeButtonBar, PlayerBarContent,
   ProgressSection, ProgressBar, ProgressFill, TimeDisplay,
   MainPlayerSection, LeftSection, CenterSection, RightSection,
   TrackInfoMini, AlbumCoverMini, TrackDetailsMini, TrackTitleMini, TrackArtistMini,
@@ -324,14 +324,15 @@ const GlobalPlayerBarComponent = ({ onOpenEq }) => {
 
   return (
     <>
-      <PlayerBar
-        data-testid="global-player-bar"
-        initial={{ y: 100, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.3, duration: 0.5 }}
-        $accentBg={accentBg}
-      >
-        <PlayerBarContent>
+      <PlayerBarDock>
+        <PlayerBar
+          data-testid="global-player-bar"
+          initial={{ y: 100, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.3, duration: 0.5 }}
+          $accentBg={accentBg}
+        >
+          <PlayerBarContent>
           <ProgressSection>
             <TimeDisplay>{displayTimeLabel}</TimeDisplay>
             <ProgressBar
@@ -538,7 +539,8 @@ const GlobalPlayerBarComponent = ({ onOpenEq }) => {
             </RightSection>
           </MainPlayerSection>
         </PlayerBarContent>
-      </PlayerBar>
+        </PlayerBar>
+      </PlayerBarDock>
 
       {/* Queue Panel — mobile bottom sheet / desktop side panel (Spotify-style) */}
       {isMobile ? (

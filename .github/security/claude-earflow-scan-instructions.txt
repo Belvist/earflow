@@ -1,0 +1,39 @@
+**Earflow — Gateway & session (Go api-gateway):**
+- CSRF bypass or missing validation on `class: unsafe` mutating routes (POST/PUT/PATCH/DELETE)
+- Client-spoofed identity headers (`X-User-Id`, `X-Service-Token`) trusted without gateway stripping/replacement
+- Weakening rate limits, CSRF checks, or header stripping in `gateway.yaml` / proxy handlers
+- Stream routes (`class: stream`) missing `require_user` or exposing raw MinIO/internal URLs to browsers
+- Auth bypass in custom proxy handlers duplicating policy already defined in yaml
+
+**Earflow — Cookies & tokens:**
+- JWT or refresh tokens stored in localStorage/sessionStorage (must be httpOnly cookies: `mp_auth`, `mp_sid`, `mp_csrf`)
+- Missing Secure/HttpOnly/SameSite on session cookies in prod paths
+- Stream/session tickets logged in plaintext or returned in error responses
+- `STREAM_TICKET_ENFORCE=1` or mint flags enabled without PoP e2e / SEC-013 browser DoD (prepared≠closed)
+
+**Earflow — Backend (Node/Go services):**
+- SQL built via string concatenation with user input (must use parameterized queries)
+- Service-to-service calls without `X-Service-Token` / service JWT validation
+- Trusting client-sent user id instead of gateway-injected session context
+- Missing server-side authz/ownership checks on user-owned resources (IDOR)
+- Upload paths without MIME/size/magic-byte validation; path traversal in object keys
+- Secrets, recovery codes, MFA seeds, or ticket bodies in logs or API responses
+
+**Earflow — Device Sync & playback authority:**
+- Frontend optimistic device ownership (`transferTo(self)`) before backend `cmd:play` intent
+- Frontend rebuilding `devices[].isActive` or `nowPlaying.deviceId` locally instead of server frames
+- REST polling replacing always-on WebSocket after register (authority drift)
+
+**Earflow — Streaming & WebSocket:**
+- HLS/stream 403 infinite retry loops without backoff or session refresh cap
+- WS reconnect storms without `gaveUpRef` / storm threshold after repeated handshake failures
+- Stream error counting via React `useState` causing render loops (should use refs + backoff)
+
+**Earflow — Edge (nginx):**
+- CSP regression (overly permissive `script-src`, missing `object-src 'none'`)
+- CORS allowing untrusted origins with credentials
+- TLS downgrade or missing HSTS in production server blocks
+
+**Earflow — Artist Portal:**
+- Write operations without MFA step-up where required
+- CSRF missing on artist gateway unsafe routes

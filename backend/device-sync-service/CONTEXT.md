@@ -115,6 +115,7 @@ Optional (background workers):
 
 ## Recent significant changes
 
+- **2026-06-12** — local play bootstrap несёт `payload.nowPlaying`; backend нормализует candidate snapshot внутри transfer FSM и публикует authoritative `player_state` с новым active device и треком.
 - **2026-06-11** — `player_state` включает `devices`; frontend отключает fragmented fallback после полного unified frame; desktop status dot показывается только при connected + 2 present devices.
 - **2026-05-27** — Этап 1: transfer-on-play на backend, удаление frontend authority. См. `docs/DECISIONS.md`.
 
@@ -143,4 +144,4 @@ go run ./cmd/device-sync-smoke
 - Auth (JWT + ticket): `internal/auth/`
 - Конфиг: `internal/config/`
 - Архитектурная карта (вся платформа): `docs/earflow-architecture-map.md`
-- Инварианты по DeviceSync: `docs/ARCHITECTURE_INVARIANTS.md` (`INV-DS-001`..`INV-DS-006`)
+- Инварианты по DeviceSync: `docs/ARCHITECTURE_INVARIANTS.md` (`INV-DS-001`..`INV-DS-007`)

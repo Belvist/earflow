@@ -373,18 +373,6 @@ routes:
       require_user: true
       timeout: 20s
 
-  - id: user_alias
-    match:
-      type: prefix
-      value: /api/user
-    upstream: database
-    rewrite: user_alias
-    policies:
-      class: unsafe
-      require_user: true
-      require_service_token: true
-      timeout: 10s
-
   - id: social
     match:
       type: prefix
@@ -395,6 +383,18 @@ routes:
       require_user: true
       require_service_token: true
       rate_limit: social
+      timeout: 10s
+
+  - id: user_alias
+    match:
+      type: prefix
+      value: /api/user
+    upstream: database
+    rewrite: user_alias
+    policies:
+      class: unsafe
+      require_user: true
+      require_service_token: true
       timeout: 10s
 
   # Account security — security-service Go handlers (must win over auth_passthrough).

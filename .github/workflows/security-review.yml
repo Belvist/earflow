@@ -1,0 +1,66 @@
+# AI security review on pull requests — anthropics/claude-code-security-review
+# https://github.com/anthropics/claude-code-security-review
+#
+# Setup (once per repo):
+#   Settings → Secrets and variables → Actions → New repository secret
+#   Name: CLAUDE_API_KEY  (Anthropic key enabled for Claude API + Claude Code)
+#
+# Trust model: run only on trusted PRs. Enable repo setting
+#   "Require approval for all outside collaborators" before workflows on fork PRs.
+#
+# Advisory only: findings are PR comments + artifact; job does not block merge by default.
+
+name: Security Review (Claude)
+
+permissions:
+  contents: read
+  pull-requests: write
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: security-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  claude-security-review:
+    name: claude code security review
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Skip draft PRs and fork PRs (no access to CLAUDE_API_KEY)
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 2
+
+      - name: Claude Code Security Review
+        id: claude-review
+        uses: anthropics/claude-code-security-review@main
+        with:
+          claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
+          comment-pr: true
+          upload-results: true
+          claudecode-timeout: "25"
+          exclude-directories: >-
+            universal_project_agent_pack,
+            cursor-portable-bundle,
+            monitoring,
+            reports,
+            docs,
+            frontend/e2e/report,
+            frontend/test-results,
+            .cursor/skills,
+            .cursor/rules
+          custom-security-scan-instructions: .github/security/claude-earflow-scan-instructions.txt
+          false-positive-filtering-instructions: .github/security/claude-false-positive-filtering.txt
+
+      - name: Report findings count
+        if: always()
+        run: |
+          echo "Claude security findings: ${{ steps.claude-review.outputs.findings-count || 'n/a' }}"

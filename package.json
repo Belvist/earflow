@@ -42,6 +42,7 @@
     "verify:prod-auth-gate": "bash scripts/verify-prod-auth-gate.sh",
     "verify:auth-kit": "bash scripts/verify-auth-kit.sh",
     "rollout:auth-pg-sot": "bash scripts/rollout-auth-pg-sot.sh",
-    "verify:auth-pg-sot": "bash scripts/verify-auth-pg-sot.sh"
+    "verify:auth-pg-sot": "bash scripts/verify-auth-pg-sot.sh",
+    "verify:ios-native": "bash scripts/verify-ios-native.sh"
   }
 }

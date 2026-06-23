@@ -1,49 +1,22 @@
-const getCookie = (name) => {
-    try {
-        const v = typeof document !== 'undefined' ? String(document.cookie || '') : '';
-        if (!v) return '';
+import { isDeviceProofEnforced } from '../auth/authDeviceCrypto';
+import { ensureAuthDeviceRegistered } from '../auth/authDeviceRegister';
+import { getArtistCsrfToken } from '../auth/cookieHelpers';
+import { getHotPathProofHeaders } from '../auth/proofAccessToken';
 
-        const parts = v.split(';');
-        let last = '';
-        for (const p of parts) {
-            const s = p.trim();
-            if (!s) continue;
-            const idx = s.indexOf('=');
-            if (idx <= 0) continue;
-            const k = s.slice(0, idx).trim();
-            if (k !== name) continue;
-            last = s.slice(idx + 1);
-        }
-        if (!last) return '';
-        try {
-            return decodeURIComponent(last);
-        } catch {
-            return last;
-        }
-    } catch {
-        return '';
-    }
-};
+const PROOF_SKIP_PATHS = new Set([
+    '/api/auth/email/login',
+    '/api/auth/email/register',
+    '/api/auth/telegram/login',
+    '/api/auth/csrf',
+    '/api/auth/device/register',
+    '/api/public-config',
+]);
 
-const getArtistCsrfCookieName = () => {
-    try {
-        if (typeof window === 'undefined') return 'mp_csrf_artists';
-        const cfg = window.__EARFLOW_ARTIST_RUNTIME_CONFIG__;
-        const n = cfg && typeof cfg === 'object' ? cfg.csrfCookieName : '';
-        return typeof n === 'string' && n.trim() ? n.trim() : 'mp_csrf_artists';
-    } catch {
-        return 'mp_csrf_artists';
-    }
-};
-
-const getArtistCsrfToken = () => {
-    const primary = getArtistCsrfCookieName();
-    const v = getCookie(primary);
-    if (v) return v;
-    if (primary !== 'mp_csrf') {
-        return getCookie('mp_csrf');
-    }
-    return '';
+const endpointPath = (path) => {
+    const raw = String(path || '').trim();
+    if (!raw) return '';
+    const q = raw.indexOf('?');
+    return q >= 0 ? raw.slice(0, q) : raw;
 };
 
 const isSafeMethod = (method) => {
@@ -61,12 +34,39 @@ const readJson = async (resp) => {
     }
 };
 
+async function attachAuthHeaders(method, path, headers, { skipDeviceProof = false } = {}) {
+    if (skipDeviceProof || !isDeviceProofEnforced()) {
+        return headers;
+    }
+    const normalized = endpointPath(path);
+    if (PROOF_SKIP_PATHS.has(normalized)) {
+        return headers;
+    }
+
+    const absolute = typeof window !== 'undefined' && window.location?.origin
+        ? `${window.location.origin}${normalized}`
+        : normalized;
+
+    let proofHeaders = await getHotPathProofHeaders(method, absolute);
+    if (!proofHeaders || Object.keys(proofHeaders).length === 0) {
+        await ensureAuthDeviceRegistered().catch(() => undefined);
+        proofHeaders = await getHotPathProofHeaders(method, absolute);
+    }
+    if (!proofHeaders || Object.keys(proofHeaders).length === 0) {
+        return headers;
+    }
+    return {
+        ...headers,
+        ...proofHeaders,
+    };
+}
+
 export async function httpJson(path, options = {}) {
     const method = String(options.method || 'GET').toUpperCase();
     const body = options.body !== undefined ? options.body : undefined;
     const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
 
-    const headers = {
+    let headers = {
         ...(isForm ? {} : { Accept: 'application/json' }),
         ...(options.headers || {}),
     };
@@ -77,6 +77,10 @@ export async function httpJson(path, options = {}) {
             headers['X-CSRF-Token'] = csrf;
         }
     }
+
+    headers = await attachAuthHeaders(method, path, headers, {
+        skipDeviceProof: options.skipDeviceProof === true,
+    });
 
     const resp = await fetch(path, {
         method,
@@ -103,7 +107,7 @@ export async function httpJson(path, options = {}) {
 
 export async function httpVoid(path, options = {}) {
     const method = String(options.method || 'POST').toUpperCase();
-    const headers = {
+    let headers = {
         ...(options.headers || {}),
     };
 
@@ -113,6 +117,10 @@ export async function httpVoid(path, options = {}) {
             headers['X-CSRF-Token'] = csrf;
         }
     }
+
+    headers = await attachAuthHeaders(method, path, headers, {
+        skipDeviceProof: options.skipDeviceProof === true,
+    });
 
     const resp = await fetch(path, {
         method,

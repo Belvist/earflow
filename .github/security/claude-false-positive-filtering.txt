@@ -1,0 +1,15 @@
+**Earflow — known safe patterns (do not flag as vulnerabilities):**
+- Cosmetic UI preferences in localStorage via `frontend/src/utils/*` + `useSyncExternalStore` (mini bar variant, play style) — not auth tokens
+- `.env.example` containing placeholder names without real secret values
+- Test/e2e fixtures with fake credentials clearly scoped to CI (`auth-e2e`, playwright mocks)
+- Documentation-only changes under `docs/`, `reports/`, `universal_project_agent_pack/`, `.cursor/rules/`
+- Parameterized SQL with `$1`/`?` placeholders even when query string is built from constants
+- Rate limiting noted as future hardening on internal-only service routes without public exposure
+- `passWithNoTests` or skipped tests in CI config without security impact
+
+**Still report even if common elsewhere:**
+- Real secrets in diff (API keys, JWT secrets, private keys)
+- CSRF disabled or bypassed on cookie-authenticated mutating routes
+- Auth checks removed from protected endpoints
+- SQL concatenation with unsanitized user input
+- JWT/session material in localStorage

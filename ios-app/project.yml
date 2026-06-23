@@ -1,0 +1,61 @@
+name: Earflow
+options:
+  bundleIdPrefix: ru.earflow
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+    TARGETED_DEVICE_FAMILY: "1,2"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+
+targets:
+  Earflow:
+    type: application
+    platform: iOS
+    sources:
+      - path: Earflow
+        excludes:
+          - "**/.DS_Store"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ru.earflow.listener
+        PRODUCT_NAME: Earflow
+        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: Earflow/Supporting/Info.plist
+        INFOPLIST_KEY_CFBundleDisplayName: Earflow
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsArbitraryLoads: NO
+        INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking: YES
+        INFOPLIST_KEY_UIBackgroundModes: audio
+        SWIFT_STRICT_CONCURRENCY: complete
+    scheme:
+      testTargets:
+        - EarflowTests
+      environmentVariables:
+        EARFLOW_API_BASE_URL:
+          value: http://127.0.0.1:18080
+          isEnabled: false
+
+  EarflowTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: EarflowTests
+    dependencies:
+      - target: Earflow
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ru.earflow.listener.tests
+        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+        GENERATE_INFOPLIST_FILE: YES

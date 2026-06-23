@@ -236,6 +236,8 @@ export const PostHeader = styled.div`
   min-height: 56px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 `;
 
 export const Avatar = styled.div`
@@ -270,6 +272,7 @@ export const AvatarImage = styled.img`
 `;
 
 export const AuthorBlock = styled.div`
+  flex: 1 1 auto;
   min-width: 0;
   display: grid;
   gap: 4px;
@@ -308,9 +311,8 @@ export const Meta = styled.div`
 `;
 
 export const ContentBubble = styled.div`
-  grid-column: 1 / -1;
+  grid-column: 2;
   min-width: 0;
-  margin-left: 22px;
   border-radius: 8px;
   background: #2a2a2a;
   padding: 15px 20px;
@@ -318,7 +320,6 @@ export const ContentBubble = styled.div`
   gap: 8px;
 
   @media (max-width: 360px) {
-    margin-left: 12px;
     padding: 14px 16px;
   }
 `;
@@ -334,15 +335,10 @@ export const PostBody = styled.p`
 `;
 
 export const PostActions = styled.div`
-  grid-column: 1 / -1;
-  margin-left: 22px;
+  grid-column: 2;
   display: flex;
   align-items: center;
   gap: 8px;
-
-  @media (max-width: 360px) {
-    margin-left: 12px;
-  }
 `;
 
 export const ActionButton = styled.button`
@@ -371,16 +367,71 @@ export const ActionButton = styled.button`
   }
 `;
 
-export const DeleteButton = styled(ActionButton)`
-  margin-left: auto;
-  min-width: 32px;
-  min-height: 32px;
-  padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(255, 190, 190, 0.9);
+export const PostMenu = styled.div`
+  position: relative;
+  flex: 0 0 auto;
+  align-self: flex-start;
+  margin-top: 2px;
+`;
+
+export const PostMenuButton = styled.button`
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.72);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`;
+
+export const PostMenuPanel = styled.div`
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 4;
+  min-width: 132px;
+  padding: 6px;
+  border-radius: 8px;
+  background: #171717;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+`;
+
+export const PostMenuItem = styled.button`
+  width: 100%;
+  min-height: 34px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 205, 205, 0.94);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 9px;
+  font-family: 'Unbounded', sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
 
   svg {
-    color: rgba(255, 170, 180, 0.92);
+    color: rgba(255, 120, 132, 0.96);
+  }
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.07);
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
   }
 `;
 

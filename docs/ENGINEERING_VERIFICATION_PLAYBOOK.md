@@ -226,6 +226,7 @@
 |------|----------|
 | «Готово» без команд / скриншотов / exit code | Не закрывать |
 | Второй parallel path для того же state | Убрать старый (`INV-ARCH-001`) |
+| Бизнес-логика / status / права на frontend | Перенести на backend (`INV-ARCH-002`, `docs/BACKEND_FRONTEND_BOUNDARY.md`) |
 | `apply*ToDom` / override CSS для одного pref | Forbidden без PEND |
 | e2e overlay без restore | Prod в опасном состоянии |
 | Scale language без capacity report | Запретить формулировку |

@@ -22,6 +22,20 @@
 
 ---
 
+## 2026-06-23 — iOS native: universal_project_agent_pack memory + thin-client discipline
+
+**Status:** accepted
+**Area:** ios | auth | frontend-player
+**Context:** Native iOS listener (`ios-app/`) started as scaffold; user requires production-grade agent discipline per `universal_project_agent_pack` — state machines, API contracts, memory, no smart-client.
+**Decision:** (1) `ios-app/.project-memory/` — living module memory (AGENT_WORKFLOW, CURRENT_STATE, BACKEND_FRONTEND_CONTRACT, STATE_MACHINES, …) aligned with pack templates. (2) Cursor rule `earflow-ios-native.mdc` — mandatory read order + DoD. (3) iOS remains **thin client**: all HTTP via `GatewayClient` → `api.earflow.ru`; `AuthActor` / `PlaybackActor` single owners; no `/api/ios/*`. (4) Phase 2 UI (EmailAuth, 4-tab shell, catalog services) does **not** close `PEND-IOS-001`. (5) Agent updates memory files after each significant iOS task.
+**Alternatives considered:** Repo-root only `.project-memory` for iOS — rejected (monorepo noise); duplicate backend on device — rejected (`INV-ARCH-002`).
+**Consequences:** Agents have binding workflow; `prepared ≠ closed` for iOS prod claims.
+**Files touched:** `ios-app/.project-memory/*`, `.cursor/rules/earflow-ios-native.mdc`, `docs/PENDING.md`, `docs/IOS_APP.md`, `ios-app/CONTEXT.md`
+**Tests:** `xcodebuild` generic iOS Simulator build; `npm run verify:ios-native` when Simulator available
+**Чтобы не повторилось:** iOS tasks must grep `ios-app/.project-memory/AGENT_WORKFLOW.md` before code; no «готово» without memory + build evidence
+
+---
+
 ## 2026-06-23 — SEC-003 fresh-login tests + artist portal PoP transport
 
 **Status:** accepted

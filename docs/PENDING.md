@@ -18,26 +18,31 @@
 
 Контекст: native iOS направление — SwiftUI listener app в `ios-app/`. **Scaffold добавлен:** XcodeGen `project.yml`, `Earflow.xcodeproj`, Auth/Network/Playback foundations.
 
-**Что сделано (Phase 0–1 partial):**
+**Что сделано (Phase 0–2 partial, 2026-06-23):**
 - `ios-app/` SwiftUI project + `docs/IOS_APP.md` + `ios-app/CONTEXT.md`
-- `AuthActor`, Keychain, P-256 proof signer, proof token cache
+- `ios-app/.project-memory/` — agent memory per `universal_project_agent_pack`
+- `.cursor/rules/earflow-ios-native.mdc` — iOS discipline rule
+- `AuthActor`, Keychain, P-256 proof signer, proof token cache; login/register/telegram
 - `GatewayClient` (gateway-only, retry, log redaction)
-- `PlaybackActor`, HLS session via `/api/ebap-hls/v1/session`
-- DeviceSync / Analytics skeletons
+- `PlaybackActor` + `PlaybackCoordinator`, HLS session via `/api/ebap-hls/v1/session`
+- `EarflowLog` + in-app debug journal
+- UI: EmailAuth parity, 4-tab shell, home/search/social/profile, mini player
 - `npm run verify:ios-native` / `scripts/verify-ios-native.sh`
-- Unit tests: canonical proof string, state enums
+- Unit tests: canonical proof string, auth state
+- `xcodebuild` generic iOS Simulator: BUILD SUCCEEDED (2026-06-23)
 
 **Что не сделано:**
-- Не выполнены генерация проекта (`xcodegen generate` или эквивалент), `xcodebuild build` и `xcodebuild test`.
-- Не выполнены smoke/UI-тесты на iOS Simulator.
-- Не выполнен запуск на реальном iPhone, TestFlight или macOS CI runner.
-- Не реализована полноценная auth-цепочка: login, Keychain/Secure Enclave proof signing, Proof Access Token exchange, refresh/revoke flow.
-- Не реализованы `AVPlayer`, stream/ws ticket consume, background audio и lock screen controls.
-- Не реализован native DeviceSync client (`player_state`, WS ticket, transfer/seek/volume consistency).
-- Не реализованы реальные catalog/search/library/profile screens поверх gateway API.
-- Не реализованы и не проверены App Intents для системных поверхностей iOS.
-- Не выполнена gesture QA: mini tap/open, swipe up, horizontal swipe, dismiss during snap, scroll handoff, rapid open/close, multi-touch/race cases.
-- Не выполнен security audit: отсутствие логирования токенов/тикетов, full proof для чувствительных операций, invalidate/revoke сценарии.
+- Не выполнен `xcodebuild test` на конкретном Simulator (только generic build).
+- Не выполнен smoke на реальном iPhone / TestFlight.
+- Device Sync WS — skeleton; нет player_state sync.
+- Analytics flush — skeleton.
+- Background audio / lock screen controls — не полированы.
+- Social — только read feed; нет like/unlike write.
+- Нет playlist/artist/album detail screens.
+- Player sheet упрощён — не соответствует полному `INV-SHEET-*` gate.
+- Не реализованы App Intents.
+- Не выполнена gesture QA matrix для native player.
+- Security audit на device не закрыт.
 
 **Gate для закрытия:**
 1. На macOS с Xcode и iOS Simulator создать или восстановить native iOS проект.

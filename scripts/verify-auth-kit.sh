@@ -73,6 +73,14 @@ else
   fail "FRESH_LOGIN_REQUIRED not found in security-service"
 fi
 
+if [[ -f "$ROOT/artist-frontend/src/auth/proofAccessToken.js" ]] \
+  && [[ -f "$ROOT/artist-frontend/src/auth/authDeviceCrypto.js" ]] \
+  && grep -q 'getHotPathProofHeaders' "$ROOT/artist-frontend/src/transport/http.js" 2>/dev/null; then
+  pass "artist-frontend PoP + proof access token transport"
+else
+  fail "artist-frontend auth transport missing (proofAccessToken / http attach)"
+fi
+
 if grep -q 'REACT_APP_STREAM_TICKET_MINT_ENABLED' "$ROOT/frontend/src/auth/streamTicket.js" 2>/dev/null; then
   pass "stream ticket mint opt-in flag (default off in code)"
 else

@@ -5,8 +5,6 @@ const POLL_INTERVAL_MS = 2000;
 const COOLDOWN_MS = 5000;
 const PREFETCH_THRESHOLD_SEC = 30;
 const PREFETCH_THRESHOLD_RATIO = 0.3;
-const MAX_CONSECUTIVE_ERRORS = 3;
-const ERROR_BACKOFF_MS = 30_000;
 
 function abortSafe(ctrl) {
     try { ctrl.abort(); } catch { }
@@ -16,12 +14,6 @@ function abortSafe(ctrl) {
  * Prefetch warms the next track's signed URL / manifest
  * so that track transition is instant (~100ms vs 1-2s cold).
  * Works for both Direct and HLS protocols.
- *
- * Error handling:
- * - 403/401 on session endpoint: silent fail, no console.error
- * - Consecutive errors tracked via ref (not React state) to avoid re-renders
- * - After MAX_CONSECUTIVE_ERRORS consecutive failures, backs off for ERROR_BACKOFF_MS
- * - Does NOT trigger React re-renders on errors — all error state is in refs
  */
 export const useHlsPrefetch = ({
     apiClient,
@@ -52,8 +44,6 @@ export const useHlsPrefetch = ({
     const inFlightRef = useRef(null);
     const warmedTrackIdRef = useRef(null);
     const lastAttemptAtRef = useRef(0);
-    const consecutiveErrorRef = useRef(0);
-    const backoffUntilRef = useRef(0);
 
     useEffect(() => {
         warmedTrackIdRef.current = null;
@@ -99,15 +89,6 @@ export const useHlsPrefetch = ({
             if (isSeekingRef?.current) return;
             if (switchingUntilRef && Date.now() < (switchingUntilRef.current || 0)) return;
 
-            // Backoff after consecutive errors — no React state update, just skip
-            if (consecutiveErrorRef.current >= MAX_CONSECUTIVE_ERRORS) {
-                const now = Date.now();
-                if (now < backoffUntilRef.current) return;
-                // Backoff expired, reset counter and try again
-                consecutiveErrorRef.current = 0;
-                backoffUntilRef.current = 0;
-            }
-
             const d = Number(duration);
             const t = Number(currentTimeRef?.current ?? 0);
             if (!Number.isFinite(d) || d <= 0) return;
@@ -137,18 +118,9 @@ export const useHlsPrefetch = ({
                     );
                     if (hasValidSession) {
                         warmedTrackIdRef.current = nextTrackId;
-                        consecutiveErrorRef.current = 0;
-                        backoffUntilRef.current = 0;
                     }
                 })
-                .catch(() => {
-                    // Silent fail — no console.error, no React state update.
-                    // Track consecutive errors via ref to implement backoff.
-                    consecutiveErrorRef.current += 1;
-                    if (consecutiveErrorRef.current >= MAX_CONSECUTIVE_ERRORS) {
-                        backoffUntilRef.current = Date.now() + ERROR_BACKOFF_MS;
-                    }
-                })
+                .catch(() => { })
                 .finally(() => {
                     if (inFlightRef.current === controller) {
                         inFlightRef.current = null;

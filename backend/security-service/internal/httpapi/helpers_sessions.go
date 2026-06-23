@@ -209,6 +209,9 @@ func (d Deps) loadPGSessionOrNil(r *http.Request, sid string) *authpg.ActiveSess
 // userMFAStepUpRequired loads MFA flag for session revoke. On transient Postgres errors
 // returns (false, false) so revoke can proceed; on missing user returns (_, true).
 func (d Deps) userMFAStepUpRequired(r *http.Request, userID int64) (mfaEnabled bool, abort bool) {
+	if d.Postgres == nil {
+		return false, false
+	}
 	user, err := d.Postgres.GetUserByID(r.Context(), userID)
 	if err != nil {
 		if err == store.ErrUserNotFound {

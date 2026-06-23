@@ -28,7 +28,12 @@ function mapError(result, fallback) {
     const code = result?.error?.code;
     const status = Number(result?.error?.status) || 0;
 
-    if (type === 'stepup_required') return { stepup: true };
+    if (type === 'stepup_required') {
+        if (code === 'FRESH_LOGIN_REQUIRED') {
+            return { stepup: true, message: 'Новая сессия не может завершать другие без 2FA. Подтвердите кодом.' };
+        }
+        return { stepup: true };
+    }
     if (type === 'mfa_required') return { message: 'Для действия требуется 2FA' };
     if (type === 'unauthorized') return { message: 'Требуется повторный вход' };
     if (type === 'csrf') return { message: 'Защита запроса сработала. Обновите страницу и повторите.' };
