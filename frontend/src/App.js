@@ -34,6 +34,12 @@ import {
   MOBILE_MINI_PLAYER_FLOAT_HEIGHT_PX,
   MOBILE_NAV_TOTAL_HEIGHT_PX,
 } from './components/mobileChromeTokens';
+import {
+  DESKTOP_PLAYER_BAR_BOTTOM_OFFSET_PX,
+  DESKTOP_PLAYER_BAR_CONTENT_GAP_PX,
+  DESKTOP_PLAYER_BAR_SHELL_HEIGHT_PX,
+  DESKTOP_PLAYER_BAR_TOTAL_RESERVE_PX,
+} from './components/desktopPlayerBarTokens';
 
 const SkinProviderWrapper = ({ children }) => {
   const skinValue = useSkinState();
@@ -73,7 +79,10 @@ const GlobalStyle = createGlobalStyle`
     /* Высота плеер-бара для отступов */
     --player-bar-height: 72px;
     --player-bar-height-safe: calc(72px + env(safe-area-inset-bottom, 0px));
-    --desktop-player-bar-height: 67px;
+    --desktop-player-bar-shell-height: ${DESKTOP_PLAYER_BAR_SHELL_HEIGHT_PX}px;
+    --desktop-player-bar-bottom-offset: ${DESKTOP_PLAYER_BAR_BOTTOM_OFFSET_PX}px;
+    --desktop-player-bar-content-gap: ${DESKTOP_PLAYER_BAR_CONTENT_GAP_PX}px;
+    --desktop-player-bar-height: ${DESKTOP_PLAYER_BAR_TOTAL_RESERVE_PX}px;
     --header-height: 56px;
     --right-rail-width: 0px;
     --panel-rail-width: 380px;
@@ -216,13 +225,15 @@ const GlobalStyle = createGlobalStyle`
 
   @media (min-width: 1024px) {
     :root {
-      --desktop-player-bar-height: 71px;
+      --desktop-player-bar-shell-height: ${DESKTOP_PLAYER_BAR_SHELL_HEIGHT_PX}px;
+      --desktop-player-bar-height: ${DESKTOP_PLAYER_BAR_TOTAL_RESERVE_PX}px;
     }
   }
 
   @media (min-width: 1440px) {
     :root {
-      --desktop-player-bar-height: 73px;
+      --desktop-player-bar-shell-height: ${DESKTOP_PLAYER_BAR_SHELL_HEIGHT_PX}px;
+      --desktop-player-bar-height: ${DESKTOP_PLAYER_BAR_TOTAL_RESERVE_PX}px;
     }
   }
 
