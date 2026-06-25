@@ -72,15 +72,50 @@ const DEVICE_SYNC_ENABLED = DEVICE_SYNC_FLAG;
 
 const SETTINGS_TABS = DEVICE_SYNC_ENABLED
   ? [
-    { id: "profile", label: "Профиль", icon: FaUser },
-    { id: "audio", label: "Звук", icon: FaVolumeUp },
-    { id: "sessions", label: "Защита", icon: FaShieldAlt },
-    { id: "devices", label: "Устройства", icon: FaNetworkWired },
+    {
+      id: "profile",
+      label: "Профиль",
+      hint: "Имя, аватар, статистика и интерфейс плеера",
+      icon: FaUser,
+    },
+    {
+      id: "audio",
+      label: "Звук",
+      hint: "Качество, автоплей, кроссфейд и громкость",
+      icon: FaVolumeUp,
+    },
+    {
+      id: "sessions",
+      label: "Безопасность",
+      hint: "Где вы вошли в аккаунт — не путать с синхронизацией воспроизведения",
+      icon: FaShieldAlt,
+    },
+    {
+      id: "devices",
+      label: "Синхронизация",
+      hint: "Spotify Connect: передача музыки между устройствами в реальном времени",
+      icon: FaNetworkWired,
+    },
   ]
   : [
-    { id: "profile", label: "Профиль", icon: FaUser },
-    { id: "audio", label: "Звук", icon: FaVolumeUp },
-    { id: "sessions", label: "Защита", icon: FaShieldAlt },
+    {
+      id: "profile",
+      label: "Профиль",
+      hint: "Имя, аватар, статистика и интерфейс плеера",
+      icon: FaUser,
+    },
+    {
+      id: "audio",
+      label: "Звук",
+      hint: "Качество, автоплей, кроссфейд и громкость",
+      icon: FaVolumeUp,
+    },
+    {
+      id: "sessions",
+      label: "Безопасность",
+      hint: "Сессии входа, пароль и привязка Telegram",
+      icon: FaShieldAlt,
+    },
   ];
 
 const AUDIO_QUALITY = [
@@ -972,24 +1007,25 @@ const ProfilePage = () => {
               exit={{ opacity: 0 }}
               onClick={() => setShowSettings(false)}
             />
-            <Modal
-              as={motion.div}
-              $mobile={isMobile}
-              initial={
-                isMobile
-                  ? { x: "100%" }
-                  : { opacity: 0, scale: 0.98, y: 16 }
-              }
-              animate={
-                isMobile ? { x: 0 } : { opacity: 1, scale: 1, y: 0 }
-              }
-              exit={
-                isMobile
-                  ? { x: "100%" }
-                  : { opacity: 0, scale: 0.98, y: 16 }
-              }
-              transition={{ type: "spring", damping: 28, stiffness: 320 }}
-            >
+            <ModalCenter $mobile={isMobile}>
+              <Modal
+                as={motion.div}
+                $mobile={isMobile}
+                initial={
+                  isMobile
+                    ? { x: "100%" }
+                    : { opacity: 0, scale: 0.98, y: 16 }
+                }
+                animate={
+                  isMobile ? { x: 0 } : { opacity: 1, scale: 1, y: 0 }
+                }
+                exit={
+                  isMobile
+                    ? { x: "100%" }
+                    : { opacity: 0, scale: 0.98, y: 16 }
+                }
+                transition={{ type: "spring", damping: 28, stiffness: 320 }}
+              >
               <ModalHeader>
                 <ModalTitle>Настройки</ModalTitle>
                 <CloseBtn
@@ -1034,6 +1070,28 @@ const ProfilePage = () => {
                   </ModalTabs>
 
                   <ModalBody>
+                {(() => {
+                  const activeTabMeta = SETTINGS_TABS.find(
+                    (t) => t.id === settingsTab,
+                  );
+                  if (!activeTabMeta) return null;
+                  return (
+                    <SettingsPanelHead>
+                      <SettingsPanelTitle>
+                        {activeTabMeta.label}
+                        {settingsTab === "audio" && saved ? (
+                          <SavedTag>
+                            <FaCheck size={10} /> Сохранено
+                          </SavedTag>
+                        ) : null}
+                      </SettingsPanelTitle>
+                      {activeTabMeta.hint ? (
+                        <SettingsPanelHint>{activeTabMeta.hint}</SettingsPanelHint>
+                      ) : null}
+                    </SettingsPanelHead>
+                  );
+                })()}
+
                 {settingsTab === "profile" && (
                   <Section>
                     <Field>
@@ -1107,14 +1165,14 @@ const ProfilePage = () => {
 
                 {settingsTab === "audio" && (
                   <Section>
-                    <SectionTitle>
+                    <MobileSectionTitle>
                       Звук{" "}
                       {saved && (
                         <SavedTag>
                           <FaCheck size={10} /> Сохранено
                         </SavedTag>
                       )}
-                    </SectionTitle>
+                    </MobileSectionTitle>
 
                     <Row>
                       <RowInfo>
@@ -1258,20 +1316,20 @@ const ProfilePage = () => {
 
                 {DEVICE_SYNC_ENABLED && settingsTab === "devices" && (
                   <Section>
-                    <DeviceSyncSection />
+                    <DeviceSyncSection embedded />
                   </Section>
                 )}
 
                 {settingsTab === "sessions" && (
                   <Section>
-                    <SectionTitle>Защита и устройства</SectionTitle>
                     <SecuritySettingsSection />
                   </Section>
                 )}
                   </ModalBody>
                 </ModalMain>
               </ModalLayout>
-            </Modal>
+              </Modal>
+            </ModalCenter>
           </>
         )}
       </AnimatePresence>
@@ -1948,32 +2006,46 @@ const Overlay = styled.div`
   z-index: 10049;
 `;
 
-const Modal = styled.div`
+const ModalCenter = styled.div`
   position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 100%;
-  background: #0a0a0a;
+  inset: 0;
   z-index: 10050;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  pointer-events: none;
+
+  @media (min-width: 768px) {
+    align-items: center;
+    padding: max(24px, env(safe-area-inset-top, 0px)) 16px
+      max(calc(var(--desktop-player-bar-height, 118px) + 16px), env(safe-area-inset-bottom, 0px));
+  }
+`;
+
+const Modal = styled.div`
+  pointer-events: auto;
+  position: relative;
+  width: 100%;
+  max-height: 100%;
+  background: #0a0a0a;
   display: flex;
   flex-direction: column;
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
   overflow: hidden;
 
+  @media (max-width: 767px) {
+    flex: 1;
+    min-height: 0;
+  }
+
   @media (min-width: 768px) {
-    top: max(24px, env(safe-area-inset-top, 0px));
-    right: auto;
-    bottom: max(
-      calc(var(--desktop-player-bar-height, 118px) + 16px),
-      env(safe-area-inset-bottom, 0px)
-    );
-    left: 50%;
-    width: min(920px, calc(100vw - 32px));
-    height: auto;
-    max-height: calc(
-      100vh - var(--desktop-player-bar-height, 118px) - 48px - env(safe-area-inset-top, 0px)
+    width: min(920px, 100%);
+    max-height: min(
+      720px,
+      calc(
+        100vh - var(--desktop-player-bar-height, 118px) - 48px - env(safe-area-inset-top, 0px)
+      )
     );
     border-radius: 20px;
     border: 1px solid rgba(255, 255, 255, 0.08);
@@ -2110,7 +2182,7 @@ const ModalTab = styled.button`
 `;
 
 const ModalBody = styled.div`
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -2120,12 +2192,57 @@ const ModalBody = styled.div`
   padding-bottom: calc(var(--player-bar-height-safe, 0px) + 36px);
 
   @media (min-width: 768px) {
-    padding: 20px 22px;
-    padding-bottom: 22px;
+    padding: 18px 22px 22px;
   }
 `;
 
+const SettingsPanelHead = styled.div`
+  display: none;
+
+  @media (min-width: 768px) {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 18px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+`;
+
+const SettingsPanelTitle = styled.h3`
+  margin: 0;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+`;
+
+const SettingsPanelHint = styled.p`
+  margin: 0;
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 56ch;
+`;
+
 const Section = styled.div``;
+
+const MobileSectionTitle = styled.h3`
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  @media (min-width: 768px) {
+    display: none;
+  }
+`;
 
 const SectionTitle = styled.h3`
   color: #fff;

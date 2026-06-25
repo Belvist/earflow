@@ -11,7 +11,7 @@ import DevicesPanel from './DevicesPanel';
  * behavior, change device-sync-service.
  */
 
-export default function DeviceSyncSection() {
+export default function DeviceSyncSection({ embedded = false }) {
     const { isAuthenticated } = useAuth();
     const device = useDeviceSyncContext();
 
@@ -21,6 +21,7 @@ export default function DeviceSyncSection() {
 
     return (
         <DevicesPanel
+            embedded={embedded}
             devices={device.devices}
             nowPlaying={device.nowPlaying}
             currentDeviceId={device.deviceId}

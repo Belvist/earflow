@@ -39,6 +39,7 @@ export default function DevicesPanel({
     onTransfer,
     onRemove,
     onReconnect,
+    embedded = false,
 }) {
     const raw = Array.isArray(devices) ? devices : [];
     const list = useMemo(
@@ -48,22 +49,43 @@ export default function DevicesPanel({
     const allStale = raw.length > 0 && list.length === 0;
 
     return (
-        <Wrapper>
-            <Header>
-                <Title>Устройства</Title>
-                <ConnectionPill $state={connectionState}>
-                    <PillIcon aria-hidden><FaCircle size={6} /></PillIcon>
-                    <PillLabel>
-                        {connectionState === 'connected' && 'В сети'}
-                        {connectionState === 'standby' && 'Ожидание 2-го'}
-                        {connectionState === 'connecting' && 'Соединяем…'}
-                        {connectionState === 'reconnecting' && 'Соединяем…'}
-                        {connectionState === 'disconnected' && 'Нет сети'}
-                        {connectionState === 'error' && 'Сбой'}
-                        {connectionState === 'disabled' && 'Выкл.'}
-                    </PillLabel>
-                </ConnectionPill>
-            </Header>
+        <Wrapper $embedded={embedded}>
+            {embedded ? (
+                <StatusBar>
+                    <StatusCopy>
+                        Показываем только устройства, где Earflow сейчас открыт.
+                        Это не список входов в аккаунт.
+                    </StatusCopy>
+                    <ConnectionPill $state={connectionState}>
+                        <PillIcon aria-hidden><FaCircle size={6} /></PillIcon>
+                        <PillLabel>
+                            {connectionState === 'connected' && 'Канал активен'}
+                            {connectionState === 'standby' && 'Ожидание 2-го'}
+                            {connectionState === 'connecting' && 'Соединяем…'}
+                            {connectionState === 'reconnecting' && 'Соединяем…'}
+                            {connectionState === 'disconnected' && 'Нет соединения'}
+                            {connectionState === 'error' && 'Сбой канала'}
+                            {connectionState === 'disabled' && 'Выкл.'}
+                        </PillLabel>
+                    </ConnectionPill>
+                </StatusBar>
+            ) : (
+                <Header>
+                    <Title>Устройства</Title>
+                    <ConnectionPill $state={connectionState}>
+                        <PillIcon aria-hidden><FaCircle size={6} /></PillIcon>
+                        <PillLabel>
+                            {connectionState === 'connected' && 'В сети'}
+                            {connectionState === 'standby' && 'Ожидание 2-го'}
+                            {connectionState === 'connecting' && 'Соединяем…'}
+                            {connectionState === 'reconnecting' && 'Соединяем…'}
+                            {connectionState === 'disconnected' && 'Нет сети'}
+                            {connectionState === 'error' && 'Сбой'}
+                            {connectionState === 'disabled' && 'Выкл.'}
+                        </PillLabel>
+                    </ConnectionPill>
+                </Header>
+            )}
 
             {nowPlaying && (nowPlaying.title || nowPlaying.trackId) ? (
                 <NowPlayingCard>
@@ -109,7 +131,7 @@ export default function DevicesPanel({
                         const Icon = KIND_ICON[d.kind] || FaQuestionCircle;
                         const isMe = currentDeviceId && d.id === currentDeviceId;
                         return (
-                            <DeviceRow key={d.id} $active={!!d.isActive}>
+                            <DeviceRow key={d.id} $active={!!d.isActive} $embedded={embedded}>
                                 <DeviceLeft>
                                     <IconCircle $active={!!d.isActive}>
                                         <Icon size={14} />
@@ -117,10 +139,11 @@ export default function DevicesPanel({
                                     <DeviceMeta>
                                         <DeviceName>
                                             {d.name || 'Устройство'}
-                                            {isMe ? <ThisDeviceTag>это устройство</ThisDeviceTag> : null}
+                                            {isMe ? <ThisDeviceTag $active>это устройство</ThisDeviceTag> : null}
+                                            {d.isActive ? <ActiveTag>играет здесь</ActiveTag> : null}
                                         </DeviceName>
                                         <DeviceSub>
-                                            {d.isActive ? 'активно' : 'подключено'}
+                                            {d.isActive ? 'активный плеер' : 'доступно для передачи'}
                                             {d.lastSeenAt ? ` • ${formatRelativeSeconds(d.lastSeenAt)}` : null}
                                         </DeviceSub>
                                     </DeviceMeta>
@@ -160,12 +183,29 @@ export default function DevicesPanel({
 const Wrapper = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: ${(p) => (p.$embedded ? '14px' : '12px')};
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
   font-family: 'Unbounded', sans-serif;
   color: #fff;
+`;
+
+const StatusBar = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+`;
+
+const StatusCopy = styled.p`
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.55);
 `;
 
 const Header = styled.div`
@@ -340,10 +380,10 @@ const DeviceRow = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: ${p => (p.$active ? 'rgba(50, 215, 75, 0.07)' : 'rgba(255, 255, 255, 0.04)')};
-  border: 1px solid ${p => (p.$active ? 'rgba(50, 215, 75, 0.22)' : 'rgba(255, 255, 255, 0.06)')};
+  padding: ${(p) => (p.$embedded ? '12px 14px' : '10px 12px')};
+  border-radius: 14px;
+  background: ${p => (p.$active ? 'rgba(50, 215, 75, 0.08)' : 'rgba(255, 255, 255, 0.04)')};
+  border: 1px solid ${p => (p.$active ? 'rgba(50, 215, 75, 0.24)' : 'rgba(255, 255, 255, 0.06)')};
 `;
 
 const DeviceLeft = styled.div`
@@ -385,13 +425,24 @@ const DeviceName = styled.div`
 
 const ThisDeviceTag = styled.span`
   font-size: 10px;
-  padding: 2px 6px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.7);
-  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: ${(p) => (p.$active ? 'rgba(50, 215, 75, 0.16)' : 'rgba(255, 255, 255, 0.08)')};
+  color: ${(p) => (p.$active ? '#32d74b' : 'rgba(255, 255, 255, 0.7)')};
+  font-weight: 600;
   text-transform: lowercase;
   letter-spacing: 0.2px;
+  flex-shrink: 0;
+`;
+
+const ActiveTag = styled.span`
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(50, 215, 75, 0.16);
+  color: #32d74b;
+  font-weight: 600;
+  flex-shrink: 0;
 `;
 
 const DeviceSub = styled.div`

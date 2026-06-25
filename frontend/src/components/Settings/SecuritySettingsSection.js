@@ -127,6 +127,20 @@ export default function SecuritySettingsSection() {
     loadSessions();
   }, [loadSessions]);
 
+  useEffect(() => {
+    if (groups.length === 0) return;
+    setExpandedKeys((prev) => {
+      const next = new Set(prev);
+      if (currentGroup?.key) next.add(currentGroup.key);
+      groups.forEach((group) => {
+        if (group.sessions.length > 1 || group.duplicateCount > 0) {
+          next.add(group.key);
+        }
+      });
+      return next;
+    });
+  }, [groups, currentGroup?.key]);
+
   const groups = useMemo(() => groupSessionsByDevice(sessions), [sessions]);
   const { currentGroup, otherGroups } = useMemo(() => splitDeviceGroups(groups), [groups]);
   const otherSessionsTotal = useMemo(
@@ -205,7 +219,49 @@ export default function SecuritySettingsSection() {
     const Icon = resolveDeviceIcon(group.deviceType);
     const expanded = expandedKeys.has(group.key);
     const groupBusy = busyKey === `group:${group.key}`;
-    const lastSeen = group.primary?.lastSeenLabel || '';
+    const primarySession = group.primary || group.sessions[0];
+    const lastSeen = primarySession?.lastSeenLabel || '';
+    const createdAt = primarySession?.createdAtLabel || '';
+    const ip = primarySession?.ip || '';
+    const collapsible =
+      group.sessions.length > 1 || group.duplicateCount > 0;
+
+    const metaRow = (
+      <DeviceMeta>
+        {group.current ? (
+          <CurrentPill>
+            <FaCircle size={6} aria-hidden="true" />
+            Это устройство
+          </CurrentPill>
+        ) : null}
+        {lastSeen ? <MetaChip>Активность: {lastSeen}</MetaChip> : null}
+        {createdAt ? <MetaChip $dim>Вход: {createdAt}</MetaChip> : null}
+        {ip ? <MetaChip $dim>{ip}</MetaChip> : null}
+        {group.duplicateCount > 0 ? (
+          <MetaChip $warn>
+            {group.current
+              ? `ещё входов: ${group.duplicateCount}`
+              : `сессий: ${group.sessions.length}`}
+          </MetaChip>
+        ) : null}
+      </DeviceMeta>
+    );
+
+    if (!collapsible) {
+      return (
+        <DeviceCard key={group.key} $current={group.current}>
+          <DeviceHeadStatic>
+            <DeviceIcon aria-hidden="true" $current={group.current}>
+              <Icon size={18} />
+            </DeviceIcon>
+            <DeviceMain>
+              <DeviceName>{group.label}</DeviceName>
+              {metaRow}
+            </DeviceMain>
+          </DeviceHeadStatic>
+        </DeviceCard>
+      );
+    }
 
     return (
       <DeviceCard key={group.key} $current={group.current}>
@@ -219,22 +275,7 @@ export default function SecuritySettingsSection() {
           </DeviceIcon>
           <DeviceMain>
             <DeviceName>{group.label}</DeviceName>
-            <DeviceMeta>
-              {group.current ? (
-                <CurrentPill>
-                  <FaCircle size={6} aria-hidden="true" />
-                  Это устройство
-                </CurrentPill>
-              ) : null}
-              {lastSeen ? <MetaChip>{lastSeen}</MetaChip> : null}
-              {group.duplicateCount > 0 ? (
-                <MetaChip $warn>
-                  {group.current
-                    ? `старых входов: ${group.duplicateCount}`
-                    : `сессий: ${group.sessions.length}`}
-                </MetaChip>
-              ) : null}
-            </DeviceMeta>
+            {metaRow}
           </DeviceMain>
           <DeviceChevron $open={expanded} aria-hidden="true">
             <FaChevronDown size={12} />
@@ -280,8 +321,9 @@ export default function SecuritySettingsSection() {
       {stepUp.error ? <ErrorStrip>{stepUp.error}</ErrorStrip> : null}
 
       <Intro>
-        Каждое устройство показано одной карточкой. Повторные входы с того же браузера
-        собраны внутри — откройте карточку, чтобы посмотреть или завершить их.
+        Здесь только <strong>входы в аккаунт</strong> — браузеры и приложения, где вы
+        авторизованы. Передача музыки между колонками и телефонами — в разделе
+        «Синхронизация».
       </Intro>
 
       {error ? <ErrorStrip>{error}</ErrorStrip> : null}
@@ -294,7 +336,7 @@ export default function SecuritySettingsSection() {
       {currentGroup ? (
         <Block>
           <BlockHead>
-            <BlockTitle>Это устройство</BlockTitle>
+            <BlockTitle>Текущий вход</BlockTitle>
             <RefreshBtn type="button" onClick={loadSessions} disabled={loading || busy}>
               <FaSync size={11} aria-hidden="true" />
               Обновить
@@ -307,7 +349,7 @@ export default function SecuritySettingsSection() {
       {otherGroups.length > 0 ? (
         <Block>
           <BlockHead>
-            <BlockTitle>Другие устройства</BlockTitle>
+            <BlockTitle>Другие входы</BlockTitle>
             <BlockCount>{otherGroups.length}</BlockCount>
           </BlockHead>
           <DeviceList>{otherGroups.map(renderDeviceCard)}</DeviceList>
@@ -360,6 +402,11 @@ const Intro = styled.p`
   color: rgba(255, 255, 255, 0.55);
   font-size: 13px;
   line-height: 1.55;
+
+  strong {
+    color: rgba(255, 255, 255, 0.82);
+    font-weight: 600;
+  }
 `;
 
 const ErrorStrip = styled.div`
@@ -451,6 +498,15 @@ const DeviceHead = styled.button`
   text-align: left;
   font-family: inherit;
   color: inherit;
+`;
+
+const DeviceHeadStatic = styled.div`
+  width: 100%;
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
 `;
 
 const DeviceIcon = styled.div`
