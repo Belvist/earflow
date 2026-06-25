@@ -520,6 +520,12 @@ const DetailRow = styled.div`
   padding: 8px 10px;
   border-radius: 10px;
   background: ${(p) => (p.$current ? 'rgba(29, 185, 84, 0.07)' : 'rgba(0, 0, 0, 0.18)')};
+
+  @media (max-width: 520px) {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
 `;
 
 const DetailMain = styled.div`

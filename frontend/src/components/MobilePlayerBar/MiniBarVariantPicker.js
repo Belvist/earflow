@@ -10,6 +10,10 @@ const Wrap = styled.div`
   grid-template-columns: 1fr 1fr;
   gap: 12px;
   margin-top: 12px;
+
+  @media (max-width: 520px) {
+    grid-template-columns: 1fr;
+  }
 `;
 
 const OptionCard = styled.div`
