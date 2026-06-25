@@ -93,7 +93,7 @@ const SETTINGS_TABS = DEVICE_SYNC_ENABLED
     {
       id: "devices",
       label: "Синхронизация",
-      hint: "Spotify Connect: передача музыки между устройствами в реальном времени",
+      hint: "Подключить — передача музыки между устройствами, как в Spotify",
       icon: FaNetworkWired,
     },
   ]
