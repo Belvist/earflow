@@ -975,32 +975,65 @@ const ProfilePage = () => {
             <Modal
               as={motion.div}
               $mobile={isMobile}
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              initial={
+                isMobile
+                  ? { x: "100%" }
+                  : { opacity: 0, scale: 0.98, y: 16 }
+              }
+              animate={
+                isMobile ? { x: 0 } : { opacity: 1, scale: 1, y: 0 }
+              }
+              exit={
+                isMobile
+                  ? { x: "100%" }
+                  : { opacity: 0, scale: 0.98, y: 16 }
+              }
+              transition={{ type: "spring", damping: 28, stiffness: 320 }}
             >
               <ModalHeader>
                 <ModalTitle>Настройки</ModalTitle>
-                <CloseBtn onClick={() => setShowSettings(false)}>
+                <CloseBtn
+                  type="button"
+                  onClick={() => setShowSettings(false)}
+                  aria-label="Закрыть настройки"
+                >
                   <FaTimes />
                 </CloseBtn>
               </ModalHeader>
 
-              <ModalTabs>
-                {SETTINGS_TABS.map((t) => (
-                  <ModalTab
-                    key={t.id}
-                    $active={settingsTab === t.id}
-                    onClick={() => setSettingsTab(t.id)}
-                  >
-                    <t.icon size={14} />
-                    <span>{t.label}</span>
-                  </ModalTab>
-                ))}
-              </ModalTabs>
+              <ModalLayout>
+                <SettingsNav aria-label="Разделы настроек">
+                  {SETTINGS_TABS.map((t) => (
+                    <SettingsNavItem
+                      key={t.id}
+                      type="button"
+                      $active={settingsTab === t.id}
+                      onClick={() => setSettingsTab(t.id)}
+                    >
+                      <t.icon size={15} />
+                      <span>{t.label}</span>
+                    </SettingsNavItem>
+                  ))}
+                </SettingsNav>
 
-              <ModalBody>
+                <ModalMain>
+                  <ModalTabs role="tablist" aria-label="Разделы настроек">
+                    {SETTINGS_TABS.map((t) => (
+                      <ModalTab
+                        key={t.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={settingsTab === t.id}
+                        $active={settingsTab === t.id}
+                        onClick={() => setSettingsTab(t.id)}
+                      >
+                        <t.icon size={14} />
+                        <span>{t.label}</span>
+                      </ModalTab>
+                    ))}
+                  </ModalTabs>
+
+                  <ModalBody>
                 {settingsTab === "profile" && (
                   <Section>
                     <Field>
@@ -1087,18 +1120,20 @@ const ProfilePage = () => {
                       <RowInfo>
                         <RowName>Качество</RowName>
                       </RowInfo>
-                      <Select
-                        value={settings.audio_quality}
-                        onChange={(e) =>
-                          handleSetting("audio_quality", e.target.value)
-                        }
-                      >
-                        {AUDIO_QUALITY.map((o) => (
-                          <option key={o.value} value={o.value}>
-                            {o.label}
-                          </option>
-                        ))}
-                      </Select>
+                      <RowControl>
+                        <Select
+                          value={settings.audio_quality}
+                          onChange={(e) =>
+                            handleSetting("audio_quality", e.target.value)
+                          }
+                        >
+                          {AUDIO_QUALITY.map((o) => (
+                            <option key={o.value} value={o.value}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </Select>
+                      </RowControl>
                     </Row>
 
                     <Row>
@@ -1106,17 +1141,22 @@ const ProfilePage = () => {
                         <RowName>Нормализация</RowName>
                         <RowDesc>Выравнивает громкость</RowDesc>
                       </RowInfo>
-                      <Toggle
-                        $on={settings.normalize_volume}
-                        onClick={() =>
-                          handleSetting(
-                            "normalize_volume",
-                            !settings.normalize_volume,
-                          )
-                        }
-                      >
-                        <ToggleKnob $on={settings.normalize_volume} />
-                      </Toggle>
+                      <RowControl>
+                        <Toggle
+                          $on={settings.normalize_volume}
+                          onClick={() =>
+                            handleSetting(
+                              "normalize_volume",
+                              !settings.normalize_volume,
+                            )
+                          }
+                          role="switch"
+                          aria-checked={settings.normalize_volume}
+                          tabIndex={0}
+                        >
+                          <ToggleKnob $on={settings.normalize_volume} />
+                        </Toggle>
+                      </RowControl>
                     </Row>
 
                     <Row>
@@ -1124,17 +1164,22 @@ const ProfilePage = () => {
                         <RowName>Автовоспроизведение</RowName>
                         <RowDesc>Следующий трек после окончания</RowDesc>
                       </RowInfo>
-                      <Toggle
-                        $on={settings.autoplay_enabled}
-                        onClick={() =>
-                          handleSetting(
-                            "autoplay_enabled",
-                            !settings.autoplay_enabled,
-                          )
-                        }
-                      >
-                        <ToggleKnob $on={settings.autoplay_enabled} />
-                      </Toggle>
+                      <RowControl>
+                        <Toggle
+                          $on={settings.autoplay_enabled}
+                          onClick={() =>
+                            handleSetting(
+                              "autoplay_enabled",
+                              !settings.autoplay_enabled,
+                            )
+                          }
+                          role="switch"
+                          aria-checked={settings.autoplay_enabled}
+                          tabIndex={0}
+                        >
+                          <ToggleKnob $on={settings.autoplay_enabled} />
+                        </Toggle>
+                      </RowControl>
                     </Row>
 
                     <Row>
@@ -1144,17 +1189,19 @@ const ProfilePage = () => {
                         </RowName>
                         <RowDesc>Плавный переход</RowDesc>
                       </RowInfo>
-                      <Range
-                        type="range"
-                        id="settings-crossfade"
-                        name="settings-crossfade"
-                        min="0"
-                        max="12"
-                        value={settings.crossfade_seconds}
-                        onChange={(e) =>
-                          handleSetting("crossfade_seconds", +e.target.value)
-                        }
-                      />
+                      <RowControl>
+                        <Range
+                          type="range"
+                          id="settings-crossfade"
+                          name="settings-crossfade"
+                          min="0"
+                          max="12"
+                          value={settings.crossfade_seconds}
+                          onChange={(e) =>
+                            handleSetting("crossfade_seconds", +e.target.value)
+                          }
+                        />
+                      </RowControl>
                     </Row>
 
                     <SectionTitle style={{ marginTop: 24 }}>
@@ -1166,17 +1213,22 @@ const ProfilePage = () => {
                         <RowName>История</RowName>
                         <RowDesc>Для рекомендаций</RowDesc>
                       </RowInfo>
-                      <Toggle
-                        $on={settings.listening_history_enabled}
-                        onClick={() =>
-                          handleSetting(
-                            "listening_history_enabled",
-                            !settings.listening_history_enabled,
-                          )
-                        }
-                      >
-                        <ToggleKnob $on={settings.listening_history_enabled} />
-                      </Toggle>
+                      <RowControl>
+                        <Toggle
+                          $on={settings.listening_history_enabled}
+                          onClick={() =>
+                            handleSetting(
+                              "listening_history_enabled",
+                              !settings.listening_history_enabled,
+                            )
+                          }
+                          role="switch"
+                          aria-checked={settings.listening_history_enabled}
+                          tabIndex={0}
+                        >
+                          <ToggleKnob $on={settings.listening_history_enabled} />
+                        </Toggle>
+                      </RowControl>
                     </Row>
 
                     <Row>
@@ -1184,17 +1236,22 @@ const ProfilePage = () => {
                         <RowName>Активность</RowName>
                         <RowDesc>Видят другие</RowDesc>
                       </RowInfo>
-                      <Toggle
-                        $on={settings.show_activity}
-                        onClick={() =>
-                          handleSetting(
-                            "show_activity",
-                            !settings.show_activity,
-                          )
-                        }
-                      >
-                        <ToggleKnob $on={settings.show_activity} />
-                      </Toggle>
+                      <RowControl>
+                        <Toggle
+                          $on={settings.show_activity}
+                          onClick={() =>
+                            handleSetting(
+                              "show_activity",
+                              !settings.show_activity,
+                            )
+                          }
+                          role="switch"
+                          aria-checked={settings.show_activity}
+                          tabIndex={0}
+                        >
+                          <ToggleKnob $on={settings.show_activity} />
+                        </Toggle>
+                      </RowControl>
                     </Row>
                   </Section>
                 )}
@@ -1211,7 +1268,9 @@ const ProfilePage = () => {
                     <SecuritySettingsSection />
                   </Section>
                 )}
-              </ModalBody>
+                  </ModalBody>
+                </ModalMain>
+              </ModalLayout>
             </Modal>
           </>
         )}
@@ -1879,11 +1938,13 @@ const TrackBtn = styled.button`
   }
 `;
 
-// Modal
+// Modal — settings (responsive: mobile sheet / desktop centered dialog)
 const Overlay = styled.div`
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   z-index: 10049;
 `;
 
@@ -1892,13 +1953,32 @@ const Modal = styled.div`
   top: 0;
   right: 0;
   bottom: 0;
-  width: ${(p) => (p.$mobile ? "100%" : "420px")};
+  width: 100%;
   background: #0a0a0a;
   z-index: 10050;
   display: flex;
   flex-direction: column;
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
+  overflow: hidden;
+
+  @media (min-width: 768px) {
+    top: max(24px, env(safe-area-inset-top, 0px));
+    right: auto;
+    bottom: max(
+      calc(var(--desktop-player-bar-height, 118px) + 16px),
+      env(safe-area-inset-bottom, 0px)
+    );
+    left: 50%;
+    width: min(920px, calc(100vw - 32px));
+    height: auto;
+    max-height: calc(
+      100vh - var(--desktop-player-bar-height, 118px) - 48px - env(safe-area-inset-top, 0px)
+    );
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 28px 90px rgba(0, 0, 0, 0.72);
+  }
 `;
 
 const ModalHeader = styled.div`
@@ -1907,6 +1987,7 @@ const ModalHeader = styled.div`
   justify-content: space-between;
   padding: 14px 18px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
 `;
 
 const ModalTitle = styled.h2`
@@ -1927,37 +2008,105 @@ const CloseBtn = styled.button`
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  flex-shrink: 0;
+`;
+
+const ModalLayout = styled.div`
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+
+  @media (min-width: 768px) {
+    flex-direction: row;
+  }
+`;
+
+const SettingsNav = styled.nav`
+  display: none;
+
+  @media (min-width: 768px) {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 210px;
+    flex-shrink: 0;
+    padding: 14px 10px;
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.02);
+    overflow-y: auto;
+  }
+`;
+
+const SettingsNavItem = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 12px;
+  border: none;
+  border-radius: 10px;
+  background: ${(p) => (p.$active ? "rgba(255,255,255,0.1)" : "transparent")};
+  color: ${(p) => (p.$active ? "#fff" : "rgba(255,255,255,0.55)")};
+  font-size: 13px;
+  font-weight: ${(p) => (p.$active ? 600 : 500)};
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: #fff;
+  }
+`;
+
+const ModalMain = styled.div`
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 `;
 
 const ModalTabs = styled.div`
   display: flex;
-  gap: 4px;
+  gap: 8px;
   padding: 10px 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  flex-shrink: 0;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  @media (min-width: 768px) {
+    display: none;
+  }
 `;
 
 const ModalTab = styled.button`
-  flex: 1;
-  display: flex;
+  flex: 0 0 auto;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 9px;
+  gap: 6px;
+  padding: 9px 14px;
   border: none;
-  border-radius: 8px;
-  background: ${(p) => (p.$active ? "rgba(255,255,255,0.1)" : "transparent")};
-  color: ${(p) => (p.$active ? "#fff" : "rgba(255,255,255,0.5)")};
+  border-radius: 999px;
+  white-space: nowrap;
+  background: ${(p) => (p.$active ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.04)")};
+  color: ${(p) => (p.$active ? "#fff" : "rgba(255,255,255,0.55)")};
   font-size: 12px;
+  font-weight: ${(p) => (p.$active ? 600 : 500)};
   font-family: inherit;
   cursor: pointer;
-  span {
-    display: none;
-  }
-  @media (min-width: 360px) {
-    span {
-      display: inline;
-    }
-  }
+  border: 1px solid
+    ${(p) => (p.$active ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.06)")};
 `;
 
 const ModalBody = styled.div`
@@ -1968,12 +2117,11 @@ const ModalBody = styled.div`
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
   padding: 16px;
-  /* Keep the bottom actions (Logout, etc.) above MobileBottomNav + MiniBar. */
   padding-bottom: calc(var(--player-bar-height-safe, 0px) + 36px);
 
   @media (min-width: 768px) {
-    padding: 20px;
-    padding-bottom: 20px;
+    padding: 20px 22px;
+    padding-bottom: 22px;
   }
 `;
 
@@ -2081,19 +2229,38 @@ const LogoutButton = styled.button`
 `;
 
 const Row = styled.div`
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px 16px;
   align-items: center;
-  justify-content: space-between;
-  padding: 12px 0;
+  padding: 14px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+
   &:last-child {
     border-bottom: none;
+  }
+
+  @media (max-width: 520px) {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    align-items: stretch;
   }
 `;
 
 const RowInfo = styled.div`
-  flex: 1;
   min-width: 0;
+`;
+
+const RowControl = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-shrink: 0;
+
+  @media (max-width: 520px) {
+    width: 100%;
+    justify-content: stretch;
+  }
 `;
 
 const RowName = styled.div`
@@ -2111,12 +2278,19 @@ const Select = styled.select`
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
-  padding: 7px 10px;
+  padding: 8px 12px;
   color: #fff;
-  font-size: 12px;
+  font-size: 13px;
   font-family: inherit;
+  min-width: 132px;
+  max-width: 100%;
   option {
     background: #1a1a1a;
+  }
+
+  @media (max-width: 520px) {
+    width: 100%;
+    min-width: 0;
   }
 `;
 
@@ -2145,8 +2319,12 @@ const ToggleKnob = styled.div`
 `;
 
 const Range = styled.input`
-  width: 90px;
+  width: min(140px, 100%);
   accent-color: #fff;
+
+  @media (max-width: 520px) {
+    width: 100%;
+  }
 `;
 
 const UploadHintBtn = styled.button`
@@ -2154,41 +2332,28 @@ const UploadHintBtn = styled.button`
   align-items: center;
   justify-content: center;
   gap: 8px;
-  margin: 20px auto 0;
-  padding: 14px 28px;
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.12) 0%,
-    rgba(255, 255, 255, 0.06) 100%
-  );
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 14px;
+  margin-top: 8px;
+  padding: 12px 18px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
   color: #fff;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
-  transition: all 0.25s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-
-  svg {
-    font-size: 16px;
-  }
+  transition: background 0.2s ease, border-color 0.2s ease;
+  width: 100%;
+  max-width: 280px;
 
   &:hover {
-    background: linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.18) 0%,
-      rgba(255, 255, 255, 0.1) 100%
-    );
-    border-color: rgba(255, 255, 255, 0.3);
-    filter: brightness(1.05);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.22);
   }
 
-  &:active {
-    transform: translateY(0);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 `;
 
