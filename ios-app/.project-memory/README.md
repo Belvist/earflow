@@ -5,8 +5,10 @@
 
 ## Обязательный порядок для агента
 
-1. **`AGENT_WORKFLOW.md`** ← начни здесь
-2. `CURRENT_STATE.md` — что сделано сейчас
+0. **`docs/AGENT_SESSION_HANDOFF.md`** — глобально между чатами
+1. **`HANDOFF.md`** ← **iOS: начни здесь в новом чате**
+2. **`AGENT_WORKFLOW.md`**
+3. `CURRENT_STATE.md` — что сделано сейчас
 3. `BACKEND_FRONTEND_CONTRACT.md` — экран, который меняешь
 4. `STATE_MACHINES.md` + `API_CONTRACTS.md`
 5. Monorepo: `docs/IOS_APP.md`, `docs/PENDING.md` (`PEND-IOS-001`)
@@ -15,6 +17,7 @@
 
 | File | Purpose |
 |------|---------|
+| **`HANDOFF.md`** | **Снимок для нового чата** — auth, фиксы, уроки |
 | `AGENT_WORKFLOW.md` | DoD, запреты, скиллы, обновление памяти |
 | `PROJECT_CONTEXT.md` | Продукт, bundle, домены |
 | `CURRENT_STATE.md` | Фазы, implemented / not implemented |

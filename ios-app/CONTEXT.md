@@ -100,11 +100,8 @@ After work: update `CURRENT_STATE.md`, `CHANGELOG.md`, contracts if API/screens 
 
 ## Phase status (2026-06-23)
 
-
-
-- Phase 0–2: scaffold + EmailAuth UI + catalog shell — **build PASS**
-
-- `PEND-IOS-001`: **open** — see `docs/PENDING.md`
+- Auth implementation: **prepared** in repo (see `IOS_AUTH_CLOSURE_CHECKLIST.md`)
+- `PEND-IOS-001`: **OPEN** — real iPhone smoke required; see `docs/PENDING.md`
 
 
 

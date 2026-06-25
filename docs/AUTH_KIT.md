@@ -54,7 +54,7 @@
 
 ### Level 3 — Operations (будущее)
 
-Passkeys (SEC-006), **TG bot session confirm** (SEC-007 deferred — no email alerts v1), CSP/XSS (SEC-009), risk engine (SEC-008), `pg_only` SoT.
+Passkeys (SEC-006), **TG bot session confirm** (SEC-007 deferred — no email alerts v1), CSP/XSS (SEC-009), risk engine (SEC-008), artist-frontend proof cache, `pg_only` SoT.
 
 ---
 

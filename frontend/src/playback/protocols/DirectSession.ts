@@ -76,15 +76,16 @@ export class DirectSession implements PlaybackSession {
     private offlineObjectUrl: string | null = null;
 
     private readonly loadTimeoutMs = 15_000;
-    private readonly stallThresholdMs = 8000;
+    private readonly stallThresholdMs = 12_000;
     private readonly backgroundStallThresholdMs = 15_000;
     private readonly watchdogIntervalMs = 500;
     private readonly seekTimeoutMs = 8000;
     private readonly recoverCooldownMs = 1200;
 
-    private readonly refreshTimeoutMs = 8000;
-    private readonly recoveryWindowMs = 60_000;
-    private readonly maxRecoveryAttemptsPerWindow = 6;
+    private readonly refreshTimeoutMs = 12_000;
+    private readonly recoveryWindowMs = 120_000;
+    private readonly maxRecoveryAttemptsPerWindow = 12;
+    private readonly maxConsecutiveRecoveryFailures = 5;
 
     private recoveryAttemptAtMs: number[] = [];
     private consecutiveRecoveryFailures = 0;
@@ -381,7 +382,74 @@ export class DirectSession implements PlaybackSession {
     }
 
     private isFatalStatus(status: number): boolean {
-        return status === 401 || status === 403 || status === 404 || status === 410;
+        return status === 403 || status === 410;
+    }
+
+    private isSessionRefreshStatus(status: number): boolean {
+        return status === 401 || status === 404;
+    }
+
+    private normalizePlaybackUrlForCompare(raw: string): string {
+        const base = this.apiClient.streamingBaseUrl || this.apiClient.baseUrl || '';
+        try {
+            const u = new URL(raw, base);
+            u.searchParams.delete('_s');
+            return u.toString();
+        } catch {
+            return raw;
+        }
+    }
+
+    private getStreamTicketParam(raw: string): string | null {
+        const base = this.apiClient.streamingBaseUrl || this.apiClient.baseUrl || '';
+        try {
+            const u = new URL(raw, base);
+            const st = u.searchParams.get('st');
+            return st ? st : null;
+        } catch {
+            return null;
+        }
+    }
+
+    private assignSessionFromResponse(res: {
+        url?: string;
+        expiresAtMs?: number | null;
+        sessionId?: string;
+        playbackToken?: string;
+        tokenExpiresAtMs?: number | null;
+        mime?: string | null;
+        qualities?: QualityOption[] | null;
+    }): void {
+        const url = res && typeof res.url === 'string' ? res.url : '';
+        if (!url) {
+            const e = new Error('DIRECT_SESSION_INVALID');
+            (e as any).status = 502;
+            throw e;
+        }
+        this.url = url;
+        this.expiresAtMs = typeof res.expiresAtMs === 'number' && Number.isFinite(res.expiresAtMs) ? res.expiresAtMs : null;
+        this.playbackSessionId = typeof res.sessionId === 'string' ? res.sessionId : this.playbackSessionId;
+        this.playbackToken = typeof res.playbackToken === 'string' ? res.playbackToken : this.playbackToken;
+        this.tokenExpiresAtMs = typeof res.tokenExpiresAtMs === 'number' && Number.isFinite(res.tokenExpiresAtMs)
+            ? res.tokenExpiresAtMs
+            : this.expiresAtMs;
+        this.mime = res && typeof res.mime === 'string' ? res.mime : null;
+
+        if (Array.isArray(res.qualities)) {
+            this.qualities = res.qualities;
+            const withLoudness = this.qualities?.find((q: QualityOption) => q.loudness && typeof q.loudness.inputLufs === 'number');
+            if (withLoudness?.loudness) {
+                this.loudness = withLoudness.loudness;
+            }
+        }
+
+        this.scheduleRenew();
+    }
+
+    private async refreshSessionFresh(signal: AbortSignal): Promise<void> {
+        this.playbackSessionId = null;
+        const res = await this.apiClient.getSongDirectSession(this.trackId, { signal });
+        this.assignSessionFromResponse(res);
     }
 
     private canAttemptRecovery(nowMs: number): boolean {
@@ -889,30 +957,7 @@ export class DirectSession implements PlaybackSession {
                 trackId: this.trackId,
             })
             : await this.apiClient.getSongDirectSession(this.trackId, { signal });
-        const url = res && typeof res.url === 'string' ? res.url : '';
-        if (!url) {
-            const e = new Error('DIRECT_SESSION_INVALID');
-            (e as any).status = 502;
-            throw e;
-        }
-        this.url = url;
-        this.expiresAtMs = typeof res.expiresAtMs === 'number' && Number.isFinite(res.expiresAtMs) ? res.expiresAtMs : null;
-        this.playbackSessionId = typeof (res as any).sessionId === 'string' ? (res as any).sessionId : this.playbackSessionId;
-        this.playbackToken = typeof (res as any).playbackToken === 'string' ? (res as any).playbackToken : this.playbackToken;
-        this.tokenExpiresAtMs = typeof (res as any).tokenExpiresAtMs === 'number' && Number.isFinite((res as any).tokenExpiresAtMs)
-            ? (res as any).tokenExpiresAtMs
-            : this.expiresAtMs;
-        this.mime = res && typeof res.mime === 'string' ? res.mime : null;
-
-        if (Array.isArray((res as any).qualities)) {
-            this.qualities = (res as any).qualities;
-            const withLoudness = this.qualities?.find((q: QualityOption) => q.loudness && typeof q.loudness.inputLufs === 'number');
-            if (withLoudness?.loudness) {
-                this.loudness = withLoudness.loudness;
-            }
-        }
-
-        this.scheduleRenew();
+        this.assignSessionFromResponse(res);
     }
 
     private async refreshSessionWithTimeout(parentSignal: AbortSignal): Promise<void> {
@@ -1278,71 +1323,43 @@ export class DirectSession implements PlaybackSession {
             return;
         }
 
+        const restoreSeconds = this.resolveRestoreSeconds(Number(this.audio.currentTime));
+        const wasPlaying = !this.audio.paused;
+
         this.recovering = true;
         this.lastRecoverAtMs = now;
         this.noteRecoveryAttempt(now);
+        const parentCtrl = new AbortController();
         try {
-            const restoreSeconds = this.resolveRestoreSeconds(Number(this.audio.currentTime));
-            const wasPlaying = !this.audio.paused;
-
-            const oldUrl = this.activeStreamUrl || this.url;
-
-            const parentCtrl = new AbortController();
-            await this.refreshSessionWithTimeout(parentCtrl.signal);
-            this.applyQualitySelection();
-
-            const absoluteUrl = this.resolveActiveUrl();
-            if (!absoluteUrl) throw new Error('DIRECT_URL_INVALID');
-
-            const newUrl = this.activeStreamUrl || this.url;
-            const shouldSwap = oldUrl !== newUrl;
-            if (opts?.renewOnly === true && !shouldSwap) {
-                this.consecutiveRecoveryFailures = 0;
-                return;
-            }
-
-            this.emitBuffering(true);
-
-            if (this.isDocumentVisible() || !isIosWebKit()) {
-                try { this.audio.pause(); } catch { }
-            }
-
-            this.configureCrossOrigin(absoluteUrl);
-
-            if (this.isProtectedHlsSession()) {
-                await this.attachProtectedHls(absoluteUrl, parentCtrl.signal);
-            } else {
-                this.destroyHls();
-                this.audio.preload = 'auto';
-                this.audio.src = absoluteUrl;
-                this.audio.load();
-            }
-
-            await this.applyRestorePosition(restoreSeconds);
-
-            if (wasPlaying) {
-                if (!this.isDocumentVisible()) {
-                    this.pendingPlay = true;
-                    this.tryDrainPendingPlay();
-                } else {
-                    await this.audio.play().catch(() => undefined);
-                }
-            }
-
+            await this.reloadStreamAfterSessionRefresh(parentCtrl.signal, restoreSeconds, wasPlaying, opts);
             this.consecutiveRecoveryFailures = 0;
         } catch (e) {
             const st = this.getErrorStatus(e);
-            if (st != null && this.isFatalStatus(st)) {
-                if ((st === 401 || st === 403) && !this.authRetryAttempted) {
-                    const recovered = await this.tryAuthRefreshAndRetry(opts);
-                    if (recovered) return;
+
+            if (st === 401 && !this.authRetryAttempted) {
+                const recovered = await this.tryAuthRefreshAndRetry(opts);
+                if (recovered) return;
+            }
+
+            if (st != null && this.isSessionRefreshStatus(st)) {
+                try {
+                    await this.refreshSessionFresh(parentCtrl.signal);
+                    await this.reloadStreamAfterSessionRefresh(parentCtrl.signal, restoreSeconds, wasPlaying, opts, {
+                        skipSessionRefresh: true,
+                    });
+                    this.consecutiveRecoveryFailures = 0;
+                    return;
+                } catch {
                 }
+            }
+
+            if (st != null && this.isFatalStatus(st)) {
                 this.emitFatalOnce('DIRECT_RECOVERY_FATAL');
                 return;
             }
 
             this.consecutiveRecoveryFailures = Math.min(20, this.consecutiveRecoveryFailures + 1);
-            if (this.consecutiveRecoveryFailures >= 3) {
+            if (this.consecutiveRecoveryFailures >= this.maxConsecutiveRecoveryFailures) {
                 this.emitFatalOnce('DIRECT_RECOVERY_FAILED');
                 return;
             }
@@ -1352,6 +1369,60 @@ export class DirectSession implements PlaybackSession {
         } finally {
             this.resetProgressTracking();
             this.recovering = false;
+        }
+    }
+
+    private async reloadStreamAfterSessionRefresh(
+        signal: AbortSignal,
+        restoreSeconds: number,
+        wasPlaying: boolean,
+        opts?: { renewOnly?: boolean },
+        reloadOpts?: { skipSessionRefresh?: boolean },
+    ): Promise<void> {
+        const oldUrl = this.activeStreamUrl || this.url || '';
+
+        if (!reloadOpts?.skipSessionRefresh) {
+            await this.refreshSessionWithTimeout(signal);
+        }
+        this.applyQualitySelection();
+
+        const absoluteUrl = this.resolveActiveUrl();
+        if (!absoluteUrl) throw new Error('DIRECT_URL_INVALID');
+
+        const newUrl = this.activeStreamUrl || this.url || '';
+        const urlChanged = this.normalizePlaybackUrlForCompare(oldUrl) !== this.normalizePlaybackUrlForCompare(newUrl);
+        const ticketChanged = this.getStreamTicketParam(oldUrl) !== this.getStreamTicketParam(newUrl);
+
+        if (opts?.renewOnly === true && !urlChanged && !ticketChanged) {
+            return;
+        }
+
+        this.emitBuffering(true);
+
+        if (this.isDocumentVisible() || !isIosWebKit()) {
+            try { this.audio.pause(); } catch { }
+        }
+
+        this.configureCrossOrigin(absoluteUrl);
+
+        if (this.isProtectedHlsSession()) {
+            await this.attachProtectedHls(absoluteUrl, signal);
+        } else {
+            this.destroyHls();
+            this.audio.preload = 'auto';
+            this.audio.src = absoluteUrl;
+            this.audio.load();
+        }
+
+        await this.applyRestorePosition(restoreSeconds);
+
+        if (wasPlaying) {
+            if (!this.isDocumentVisible()) {
+                this.pendingPlay = true;
+                this.tryDrainPendingPlay();
+            } else {
+                await this.audio.play().catch(() => undefined);
+            }
         }
     }
 }

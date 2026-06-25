@@ -65,6 +65,12 @@ function delayMs(ms: number, signal: AbortSignal): Promise<void> {
     });
 }
 
+function isRecoverablePlaybackError(error: unknown): boolean {
+    const msg = error instanceof Error ? String(error.message || '') : '';
+    if (!msg) return false;
+    return /DIRECT_RECOVERY|HLS_RECOVERY|PLAYBACK_FAILED|PLAYBACK_START_TIMEOUT|DIRECT_LOAD_TIMEOUT|DIRECT_SESSION_INVALID/i.test(msg);
+}
+
 export class PlayerCore {
     private deps: PlayerCoreDeps;
     private readonly queue = new SerialCommandQueue();
@@ -210,6 +216,7 @@ export class PlayerCore {
         this.maybeActivateAudio(opts.requiresGesture);
         if (!isBackground()) this.deps.audio.primeFadeFromSilence?.();
 
+        let firstError: unknown = null;
         try {
             await this.deps.playback.play(track);
             this.deps.audio.fadeIn?.(opts.fadeInMs);
@@ -218,13 +225,15 @@ export class PlayerCore {
             setTimeout(() => this.firePrefetchNextTracks(), 0);
             return;
         } catch (e) {
+            firstError = e;
             if (isAbortError(e)) {
                 this.deps.store?.patch({ isBuffering: false });
                 throw e;
             }
         }
 
-        if (isIosSafari() && typeof this.deps.playback.hardReset === 'function') {
+        const shouldHardReset = isIosSafari() || isRecoverablePlaybackError(firstError);
+        if (shouldHardReset && typeof this.deps.playback.hardReset === 'function') {
             await this.deps.playback.hardReset('play_failed').catch(() => undefined);
             if (signal.aborted) {
                 this.deps.store?.patch({ isBuffering: false });

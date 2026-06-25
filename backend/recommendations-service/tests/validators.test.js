@@ -16,6 +16,8 @@ const {
   validateProgress,
   validateFeedbackPayload,
   validateBatchFeedbackPayload,
+  validateSimilarPayload,
+  validateRadioPayload,
   sanitizeUserId,
   sanitizeSessionId,
 } = require('../lib/validators');
@@ -170,6 +172,27 @@ describe('Validators', () => {
 
     it('should round to 3 decimal places', () => {
       assert.strictEqual(validateProgress(0.12345), 0.123);
+    });
+  });
+
+  describe('validateSimilarPayload', () => {
+    it('should validate track seed similar payload', () => {
+      const payload = validateSimilarPayload(42, { trackId: 100, limit: 10 });
+      assert.strictEqual(payload.userId, 42);
+      assert.strictEqual(payload.trackId, 100);
+      assert.strictEqual(payload.limit, 10);
+    });
+  });
+
+  describe('validateRadioPayload', () => {
+    it('should validate radio payload with optional sessionId', () => {
+      const payload = validateRadioPayload(7, {
+        trackId: 55,
+        sessionId: '7.abc123.def456',
+      });
+      assert.strictEqual(payload.userId, 7);
+      assert.strictEqual(payload.trackId, 55);
+      assert.strictEqual(payload.sessionId, '7.abc123.def456');
     });
   });
 

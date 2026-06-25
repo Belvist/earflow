@@ -23,6 +23,8 @@ targets:
       - path: Earflow
         excludes:
           - "**/.DS_Store"
+    resources:
+      - path: Earflow/Resources/Fonts/Unbounded.ttf
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ru.earflow.listener
@@ -42,10 +44,6 @@ targets:
     scheme:
       testTargets:
         - EarflowTests
-      environmentVariables:
-        EARFLOW_API_BASE_URL:
-          value: http://127.0.0.1:18080
-          isEnabled: false
 
   EarflowTests:
     type: bundle.unit-test

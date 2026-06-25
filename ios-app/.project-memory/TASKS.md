@@ -13,6 +13,8 @@ Priority: **P0** blockers · **P1** product · **P2** polish
 
 ## P1 — Phase 3 product parity
 
+- [x] **P1** Home mobile UX Phase 1 — hero, queue list, playlist rails, skeleton
+- [x] **P1** Mini player + sheet Phase 1 — progress, seek, backdrop polish
 - [ ] **P1** Playlist / album / artist detail screens
 - [ ] **P1** Social like/unlike (`POST /api/social/posts/:id/like`) — backend DTO driven
 - [ ] **P1** Profile full (`/api/profile`) + listener settings sync

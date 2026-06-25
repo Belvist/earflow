@@ -52,8 +52,7 @@ Optional:
 
 ## Caveats / Gotchas
 
-- User identity for `/api/social/*` comes only from gateway-injected `X-User-Id`; body/query user ids are ignored (`pickCreatePostFields`).
-- Post lifecycle: `active → deleted` only via owner delete; `POST_STATUS` + SQL guards in `routes/social.js`.
+- User identity for `/api/social/*` comes only from gateway-injected `X-User-Id`; body/query user ids are ignored.
 - Social DTO is render-ready but privacy-minimized: `liked`, `canManage`, counts, author display and cursor are computed server-side; `author.id`, `author.handle`, exact `updatedAt` are not exposed.
 - Like/unlike returns a `reaction` delta, not the full post DTO. Do not reintroduce full feed reload after reactions.
 - `social_posts.likes_count` is the hot counter; migration `005_social_feed_likes_count.sql` backfills it from `social_post_likes`.
@@ -63,7 +62,6 @@ Optional:
 
 ## Recent significant changes
 
-- 2026-06-23 — Social backend-SOT formalized: state machine, spoofed body strip, gateway route test, validate:ai scans. См. `docs/DECISIONS.md`.
 - 2026-06-16 — Social feed privacy/perf pass: minimal author DTO, `likes_count`, reaction delta, process-local feed cache. См. `docs/DECISIONS.md`.
 - 2026-06-12 — Social feed v1 backend-owned posts/likes/API. См. `docs/DECISIONS.md`.
 

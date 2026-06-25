@@ -13,10 +13,6 @@ const RECO_CACHE_TTL_MS = 5 * 60 * 1000;
 // refreshRecommendations, т.е. не чаще 15 c и с учётом backoff при 429).
 // Effective hidden-tab staleness threshold: 5 minutes.
 const RECO_STALENESS_AFTER_MS = 5 * 60 * 1000;
-const RECO_SKIP_BURST_WINDOW_MS = 90 * 1000;
-const RECO_SKIP_BURST_THRESHOLD = 3;
-const RECO_SKIP_REFRESH_DELAY_MS = 1200;
-const RECO_SKIP_REFRESH_MIN_INTERVAL_MS = 90 * 1000;
 const RECO_REFRESH_COOLDOWN_MS = 60 * 1000;
 
 const normalizeInitOptions = (options) => {
@@ -149,6 +145,30 @@ const normalizeRecommendationMeta = (meta) => {
   };
 };
 
+const normalizeClientActions = (actions) => {
+  if (!actions || typeof actions !== 'object' || Array.isArray(actions)) {
+    return { refreshRecommended: false, skipBurstMode: false };
+  }
+  return {
+    refreshRecommended: actions.refreshRecommended === true,
+    skipBurstMode: actions.skipBurstMode === true,
+  };
+};
+
+const normalizeSessionState = (state) => {
+  if (!state || typeof state !== 'object' || Array.isArray(state)) return null;
+  const raw = typeof state.state === 'string' ? state.state.trim() : '';
+  const allowed = ['idle', 'active', 'skip_burst', 'expired'];
+  if (!allowed.includes(raw)) return null;
+  const skipBurstCount = Number(state.skipBurstCount);
+  return {
+    state: raw,
+    skipBurstCount: Number.isFinite(skipBurstCount) && skipBurstCount >= 0 ? Math.floor(skipBurstCount) : 0,
+    skipBurstMode: state.skipBurstMode === true,
+    sessionValid: state.sessionValid === true,
+  };
+};
+
 const mergeUniqueTracks = (baseTracks, incomingTracks, max = 180) => {
   const out = [];
   const seen = new Set();
@@ -202,8 +222,6 @@ export const useRecommendations = (userId, options = {}) => {
   const refreshInFlightRef = useRef(false);
   const refreshBackoffUntilRef = useRef(0);
   const refreshRecommendationsRef = useRef(null);
-  const skipBurstRef = useRef({ count: 0, firstAt: 0, lastRefreshAt: 0 });
-  const realtimeRefreshTimerRef = useRef(0);
   const prevUserIdRef = useRef('');
   const hydrationDoneRef = useRef(false);
   const hydrationHadSessionRef = useRef(false);
@@ -245,12 +263,6 @@ export const useRecommendations = (userId, options = {}) => {
     lastRefreshAtRef.current = 0;
     refreshInFlightRef.current = false;
     refreshBackoffUntilRef.current = 0;
-    skipBurstRef.current = { count: 0, firstAt: 0, lastRefreshAt: 0 };
-    if (realtimeRefreshTimerRef.current) {
-      try { window.clearTimeout(realtimeRefreshTimerRef.current); } catch { }
-      realtimeRefreshTimerRef.current = 0;
-    }
-
     playedTrackIds.current = new Set();
     currentBatch.current = [];
 
@@ -422,17 +434,13 @@ export const useRecommendations = (userId, options = {}) => {
     const controller = startAbortableRequest('init');
 
     try {
-      const numericUserId = normalizeUserId(userId);
-
       const makeRequest = () => apiClient.request('/api/recommendations/init', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: numericUserId,
           preferences,
           forceNew,
           limit: initLimit,
-          excludeIds: Array.from(playedTrackIds.current).slice(-500),
         }),
         signal: controller.signal
       });
@@ -529,52 +537,14 @@ export const useRecommendations = (userId, options = {}) => {
     initializeSession({}, { limit: 40 });
   }, [userId, sessionId, initializeSession, hydrationDone, autoInitialize]);
 
-  const scheduleRealtimeRefreshAfterNegativeFeedback = useCallback(() => {
-    const now = Date.now();
-    const burst = skipBurstRef.current || { count: 0, firstAt: 0, lastRefreshAt: 0 };
-
-    if (!burst.firstAt || now - burst.firstAt > RECO_SKIP_BURST_WINDOW_MS) {
-      burst.firstAt = now;
-      burst.count = 1;
-    } else {
-      burst.count = (Number.isFinite(Number(burst.count)) ? Number(burst.count) : 0) + 1;
-    }
-
-    skipBurstRef.current = burst;
-
-    if (burst.count < RECO_SKIP_BURST_THRESHOLD) {
-      return;
-    }
-
-    if (burst.lastRefreshAt && now - burst.lastRefreshAt < RECO_SKIP_REFRESH_MIN_INTERVAL_MS) {
-      return;
-    }
-
-    burst.count = 0;
-    burst.firstAt = 0;
-    burst.lastRefreshAt = now;
-    skipBurstRef.current = burst;
-
-    const run = () => {
-      realtimeRefreshTimerRef.current = 0;
-      const refresh = refreshRecommendationsRef.current;
-      if (typeof refresh === 'function') {
-        void refresh(false, { preserveExisting: true, reason: 'negative_feedback_burst' });
-      }
-    };
-
-    try {
-      if (typeof window === 'undefined') {
-        run();
-        return;
-      }
-      if (realtimeRefreshTimerRef.current) {
-        window.clearTimeout(realtimeRefreshTimerRef.current);
-      }
-      realtimeRefreshTimerRef.current = window.setTimeout(run, RECO_SKIP_REFRESH_DELAY_MS);
-    } catch {
-      run();
-    }
+  const scheduleBackendRefresh = useCallback((options = {}) => {
+    const refresh = refreshRecommendationsRef.current;
+    if (typeof refresh !== 'function') return;
+    void refresh(false, {
+      preserveExisting: options.preserveExisting === true,
+      bypassCooldown: options.bypassCooldown === true,
+      reason: typeof options.reason === 'string' ? options.reason : 'backend_signal',
+    });
   }, []);
 
   const recordFeedback = useCallback(async (trackId, action, duration = 0, progress = 0, envelope = null) => {
@@ -584,11 +554,6 @@ export const useRecommendations = (userId, options = {}) => {
 
     const numericTrackId = parseInt(String(trackId), 10);
     if (!Number.isFinite(numericTrackId) || numericTrackId <= 0) {
-      return;
-    }
-
-    const numericUserId = parseInt(String(userId), 10);
-    if (!Number.isFinite(numericUserId) || numericUserId <= 0) {
       return;
     }
 
@@ -611,14 +576,13 @@ export const useRecommendations = (userId, options = {}) => {
       ? envelope.context
       : null;
 
-    const shouldRefreshAfterFeedback = action === 'skip' || action === 'dislike';
+    const shouldWatchBackendRefresh = action === 'skip' || action === 'dislike';
 
     try {
       const makeRequest = () => apiClient.request('/api/recommendations/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: numericUserId,
           sessionId: sessionId || null,
           trackId: numericTrackId,
           action,
@@ -631,23 +595,27 @@ export const useRecommendations = (userId, options = {}) => {
           context,
         })
       });
+      let response;
       try {
-        await makeRequest();
+        response = await makeRequest();
       } catch (requestErr) {
         if (isAuthDegradedStatus(getErrorStatus(requestErr)) && await recoverAuthDegraded()) {
-          await makeRequest();
+          response = await makeRequest();
         } else {
           throw requestErr;
         }
       }
+
+      if (shouldWatchBackendRefresh && response && typeof response === 'object') {
+        const clientActions = normalizeClientActions(response.clientActions);
+        if (clientActions.refreshRecommended) {
+          scheduleBackendRefresh({ preserveExisting: true, reason: 'feedback_skip_burst' });
+        }
+      }
     } catch (err) {
       void err;
-    } finally {
-      if (shouldRefreshAfterFeedback) {
-        scheduleRealtimeRefreshAfterNegativeFeedback();
-      }
     }
-  }, [userId, sessionId, scheduleRealtimeRefreshAfterNegativeFeedback, recoverAuthDegraded]);
+  }, [userId, sessionId, scheduleBackendRefresh, recoverAuthDegraded]);
 
   const getNextBatch = useCallback(async (batchSize = 10) => {
     if (!userId || loadingRef.current) return [];
@@ -662,20 +630,12 @@ export const useRecommendations = (userId, options = {}) => {
     const controller = startAbortableRequest('next');
 
     try {
-      const numericUserId = parseInt(String(userId), 10);
-      if (!Number.isFinite(numericUserId) || numericUserId <= 0) {
-        throw new Error(`Invalid userId: ${userId}`);
-      }
-
-      const excludeIds = Array.from(playedTrackIds.current).slice(-500);
       const makeRequest = () => apiClient.request('/api/recommendations/next', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: numericUserId,
           sessionId,
           count: batchSize,
-          excludeIds,
         }),
         signal: controller.signal
       });
@@ -770,21 +730,13 @@ export const useRecommendations = (userId, options = {}) => {
     const controller = startAbortableRequest('infinite');
 
     try {
-      const numericUserId = parseInt(String(userId), 10);
-      if (!Number.isFinite(numericUserId) || numericUserId <= 0) {
-        throw new Error(`Invalid userId: ${userId}`);
-      }
-
-      const excludeIds = Array.from(playedTrackIds.current).slice(-500);
       const makeRequest = () => apiClient.request('/api/recommendations/infinite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: numericUserId,
           sessionId,
           offset,
           limit,
-          excludeIds,
         }),
         signal: controller.signal
       });
@@ -870,16 +822,10 @@ export const useRecommendations = (userId, options = {}) => {
     if (!sessionId || !userId || !currentBatch.current.length) return;
 
     try {
-      const numericUserId = parseInt(String(userId), 10);
-      if (!Number.isFinite(numericUserId) || numericUserId <= 0) {
-        return;
-      }
-
       await apiClient.request('/api/recommendations/batch-complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: numericUserId,
           sessionId,
           batchId: `batch_${Date.now()}`,
           interactions
@@ -920,10 +866,6 @@ export const useRecommendations = (userId, options = {}) => {
 
     const oldSessionId = resetExcludes ? null : sessionId;
 
-    if (resetExcludes) {
-      playedTrackIds.current.clear();
-    }
-
     const prevTracks = tracks;
     const prevOffset = offset;
     const prevHasMore = hasMore;
@@ -933,15 +875,11 @@ export const useRecommendations = (userId, options = {}) => {
     const controller = startAbortableRequest('refresh');
 
     try {
-      const numericUserId = parseInt(String(userId), 10);
-
       const makeRequest = () => apiClient.request('/api/recommendations/refresh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: numericUserId,
           sessionId: oldSessionId,
-          excludeIds: Array.from(playedTrackIds.current).slice(-500),
         }),
         signal: controller.signal
       });
@@ -1103,10 +1041,6 @@ export const useRecommendations = (userId, options = {}) => {
   useEffect(() => {
     const controllers = activeRequestControllersRef.current;
     return () => {
-      if (realtimeRefreshTimerRef.current) {
-        try { window.clearTimeout(realtimeRefreshTimerRef.current); } catch { }
-        realtimeRefreshTimerRef.current = 0;
-      }
       if (controllers && typeof controllers.values === 'function') {
         for (const ctrl of controllers.values()) {
           try {

@@ -294,24 +294,35 @@ function validateContext(value) {
 }
 
 /**
+ * Auth user is the only SoT for reco user id. Client body userId is rejected if mismatched.
+ * @param {number} authUserId
+ * @param {object} body
+ * @returns {number}
+ */
+function resolveAuthUserId(authUserId, body) {
+  const uid = toPositiveInt(authUserId, 'userId', { required: true });
+  const bodyUserId = toPositiveInt(body?.userId, 'userId');
+  if (bodyUserId !== null && bodyUserId !== uid) {
+    throw new ValidationError('userId mismatch with authenticated user', 'userId');
+  }
+  return uid;
+}
+
+/**
+ * Exclude lists are owned by the reco session (server). Client-supplied excludeIds are ignored.
+ */
+function serverOwnedExcludeIds() {
+  return [];
+}
+
+/**
  * Валидирует payload для /init endpoint
  * @param {number} authUserId - ID пользователя из токена
  * @param {object} body - Request body
  * @returns {object}
  */
 function validateInitPayload(authUserId, body) {
-  const userId = toPositiveInt(body.userId, 'userId');
-
-  // Если userId передан, он должен совпадать с authUserId
-  if (userId !== null && userId !== authUserId) {
-    throw new ValidationError('userId mismatch with authenticated user', 'userId');
-  }
-
-  const finalUserId = userId || authUserId;
-
-  if (!finalUserId || finalUserId <= 0) {
-    throw new ValidationError('Valid userId is required', 'userId');
-  }
+  const finalUserId = resolveAuthUserId(authUserId, body || {});
 
   // Preferences - опциональный объект
   let preferences = null;
@@ -330,15 +341,7 @@ function validateInitPayload(authUserId, body) {
     max: config.recommendations.maxBatchSize,
   });
 
-  const excludeIdsRaw = toArray(body.excludeIds, 'excludeIds', {
-    maxLength: config.recommendations.maxRequestExcludeIds,
-  }) || [];
-
-  const excludeIds = excludeIdsRaw
-    .map((id) => Number.parseInt(id, 10))
-    .filter((id) => Number.isFinite(id) && id > 0);
-
-  return { userId: finalUserId, preferences, forceNew, limit, excludeIds };
+  return { userId: finalUserId, preferences, forceNew, limit, excludeIds: serverOwnedExcludeIds() };
 }
 
 /**
@@ -348,13 +351,7 @@ function validateInitPayload(authUserId, body) {
  * @returns {object}
  */
 function validateNextPayload(authUserId, body) {
-  const userId = toPositiveInt(body.userId, 'userId');
-
-  if (userId !== null && userId !== authUserId) {
-    throw new ValidationError('userId mismatch with authenticated user', 'userId');
-  }
-
-  const finalUserId = userId || authUserId;
+  const finalUserId = resolveAuthUserId(authUserId, body || {});
 
   const sessionId = assertSafeToken(toString(body.sessionId, 'sessionId', {
     required: true,
@@ -367,15 +364,7 @@ function validateNextPayload(authUserId, body) {
     max: config.recommendations.maxBatchSize,
   }) || config.recommendations.defaultBatchSize;
 
-  const excludeIdsRaw = toArray(body.excludeIds, 'excludeIds', {
-    maxLength: config.recommendations.maxRequestExcludeIds,
-  }) || [];
-
-  const excludeIds = excludeIdsRaw
-    .map((id) => Number.parseInt(id, 10))
-    .filter((id) => Number.isFinite(id) && id > 0);
-
-  return { userId: finalUserId, sessionId, count, excludeIds };
+  return { userId: finalUserId, sessionId, count, excludeIds: serverOwnedExcludeIds() };
 }
 
 /**
@@ -385,13 +374,7 @@ function validateNextPayload(authUserId, body) {
  * @returns {object}
  */
 function validateInfinitePayload(authUserId, body) {
-  const userId = toPositiveInt(body.userId, 'userId');
-
-  if (userId !== null && userId !== authUserId) {
-    throw new ValidationError('userId mismatch with authenticated user', 'userId');
-  }
-
-  const finalUserId = userId || authUserId;
+  const finalUserId = resolveAuthUserId(authUserId, body || {});
 
   const sessionIdRaw = toString(body.sessionId, 'sessionId', {
     minLength: 1,
@@ -406,15 +389,7 @@ function validateInfinitePayload(authUserId, body) {
     max: config.recommendations.maxBatchSize,
   }) || config.recommendations.defaultBatchSize;
 
-  const excludeIdsRaw = toArray(body.excludeIds, 'excludeIds', {
-    maxLength: config.recommendations.maxRequestExcludeIds,
-  }) || [];
-
-  const excludeIds = excludeIdsRaw
-    .map((id) => Number.parseInt(id, 10))
-    .filter((id) => Number.isFinite(id) && id > 0);
-
-  return { userId: finalUserId, sessionId, offset, limit, excludeIds };
+  return { userId: finalUserId, sessionId, offset, limit, excludeIds: serverOwnedExcludeIds() };
 }
 
 /**
@@ -424,13 +399,7 @@ function validateInfinitePayload(authUserId, body) {
  * @returns {object}
  */
 function validateFeedbackPayload(authUserId, body) {
-  const userId = toPositiveInt(body.userId, 'userId');
-
-  if (userId !== null && userId !== authUserId) {
-    throw new ValidationError('userId mismatch with authenticated user', 'userId');
-  }
-
-  const finalUserId = userId || authUserId;
+  const finalUserId = resolveAuthUserId(authUserId, body || {});
 
   const sessionIdRaw = toString(body.sessionId, 'sessionId', {
     maxLength: 200,
@@ -458,13 +427,7 @@ function validateFeedbackPayload(authUserId, body) {
  * @returns {object}
  */
 function validateBatchFeedbackPayload(authUserId, body) {
-  const userId = toPositiveInt(body.userId, 'userId');
-
-  if (userId !== null && userId !== authUserId) {
-    throw new ValidationError('userId mismatch with authenticated user', 'userId');
-  }
-
-  const finalUserId = userId || authUserId;
+  const finalUserId = resolveAuthUserId(authUserId, body || {});
 
   const sessionIdRaw = toString(body.sessionId, 'sessionId', {
     maxLength: 200,
@@ -560,6 +523,22 @@ function validatePlaybackRate(value) {
   return rate;
 }
 
+function validateSimilarPayload(authUserId, body) {
+  const userId = resolveAuthUserId(authUserId, body || {});
+  const trackId = toPositiveInt(body?.trackId, 'trackId', { required: true });
+  const limit = toPositiveInt(body?.limit, 'limit', { min: 1, max: 50 }) || 20;
+  return { userId, trackId, limit };
+}
+
+function validateRadioPayload(authUserId, body) {
+  const userId = resolveAuthUserId(authUserId, body || {});
+  const trackId = toPositiveInt(body?.trackId, 'trackId', { required: true });
+  const limit = toPositiveInt(body?.limit, 'limit', { min: 1, max: 50 }) || 20;
+  const sessionIdRaw = toString(body?.sessionId, 'sessionId', { maxLength: 200 });
+  const sessionId = sessionIdRaw ? assertSafeToken(sessionIdRaw, 'sessionId') : null;
+  return { userId, trackId, limit, sessionId };
+}
+
 function validatePlaybackRatePreferencePayload(authUserId, body) {
   const userId = toPositiveInt(body.userId, 'userId');
   if (userId !== null && userId !== authUserId) {
@@ -627,6 +606,8 @@ module.exports = {
   validateInfinitePayload,
   validateFeedbackPayload,
   validateBatchFeedbackPayload,
+  validateSimilarPayload,
+  validateRadioPayload,
   validatePlaybackRatePreferencePayload,
   sanitizeUserId,
   sanitizeSessionId,

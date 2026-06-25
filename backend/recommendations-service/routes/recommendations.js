@@ -15,6 +15,8 @@ const {
   validateFeedbackPayload,
   validateBatchFeedbackPayload,
   validatePlaybackRatePreferencePayload,
+  validateSimilarPayload,
+  validateRadioPayload,
   sanitizeSessionId,
 } = require('../lib/validators');
 const redis = require('../lib/redis');
@@ -31,6 +33,8 @@ const {
 const engineV2 = require('../services/engineV2');
 const { infiniteFeedV2 } = require('../services/engineV2/infinite');
 const { explainInfiniteV2 } = require('../services/engineV2/explain');
+const { applyFeedbackRealtime } = require('../services/sessionStateMachine');
+const { query } = require('../lib/database');
 
 const logger = createLogger('recommendations-routes');
 const router = express.Router();
@@ -82,28 +86,7 @@ async function recordRecommendationSideEffects(userId, sessionId, tracks, contex
   }
 }
 
-function sessionIntentWeight(payload) {
-  const action = typeof payload?.action === 'string' ? payload.action : '';
-  const durationSeconds = Math.max(0, Number(payload?.duration) || 0) / 1000;
-  const progress = Number(payload?.progress);
-  const positiveByDuration = durationSeconds >= config.engineV2.onlineIntentPositivePlayMinSeconds;
-  const positiveByProgress = Number.isFinite(progress) && progress >= config.engineV2.onlineIntentPositivePlayMinProgress;
-  const lateSkip = Number.isFinite(progress) && progress >= config.engineV2.onlineIntentLateSkipMinProgress;
-
-  if (action === 'like') return { polarity: 'positive', weight: config.engineV2.onlineIntentLikeWeight };
-  if (action === 'complete') return { polarity: 'positive', weight: config.engineV2.onlineIntentCompleteWeight };
-  if (action === 'dislike') return { polarity: 'negative', weight: config.engineV2.onlineIntentDislikeWeight };
-  if (action === 'skip' && lateSkip) return { polarity: 'positive', weight: config.engineV2.onlineIntentLateSkipWeight };
-  if (action === 'skip') return { polarity: 'negative', weight: config.engineV2.onlineIntentShortSkipWeight };
-
-  if (action === 'play' && (positiveByDuration || positiveByProgress)) {
-    return { polarity: 'positive', weight: config.engineV2.onlineIntentLongPlayWeight };
-  }
-
-  return null;
-}
-
-async function refreshV2(userId, preferences, limit, excludeIds = [], previousSessionId = null) {
+async function refreshV2(userId, preferences, limit, previousSessionId = null) {
   let migratedExcludeIds = [];
   if (previousSessionId && typeof previousSessionId === 'string') {
     try {
@@ -117,13 +100,8 @@ async function refreshV2(userId, preferences, limit, excludeIds = [], previousSe
   }
 
   const migrated = Array.isArray(migratedExcludeIds) ? migratedExcludeIds : [];
-  const request = Array.isArray(excludeIds) ? excludeIds : [];
-  const mergedExcludeIds = migrated.slice();
-  if (request.length > 0) {
-    mergedExcludeIds.push(...request);
-  }
 
-  const result = await engineV2.initSessionV2(userId, preferences, true, limit, mergedExcludeIds);
+  const result = await engineV2.initSessionV2(userId, preferences, true, limit, migrated);
   const tracks = Array.isArray(result.tracks) ? result.tracks : [];
 
   sessionsCreated.inc();
@@ -448,63 +426,18 @@ router.post('/feedback', feedbackLimiter, async (req, res, next) => {
   try {
     const payload = validateFeedbackPayload(req.user.id, req.body || {});
 
-    // Realtime anti-repeat: сразу помечаем трек как «недавно взаимодействовали»
-    // и добавляем временный blacklist при skip.
+    let ack = { sessionState: null, clientActions: { refreshRecommended: false, skipBurstMode: false } };
     try {
-      const trackId = payload.trackId;
-      const sessionId = typeof payload.sessionId === 'string' ? payload.sessionId.trim() : '';
-      const sessionOk = sessionId
-        ? await redis.touchEphemeralSession(payload.userId, sessionId, config.engineV2.sessionTtlSeconds)
-        : false;
-      const intent = sessionIntentWeight(payload);
-
-      if (payload.action === 'skip') {
-        const writes = [redis.markSkipTrack(payload.userId, trackId)];
-        if (intent?.polarity === 'negative') {
-          writes.push(redis.incrementSkipBurst(payload.userId));
-        }
-        await Promise.all(writes);
-        if (sessionOk) {
-          await redis.appendSessionExcludeIds(
-            sessionId,
-            [trackId],
-            config.recommendations.maxExcludeIds,
-            config.engineV2.sessionTtlSeconds
-          );
-        }
-      } else if (payload.action === 'dislike') {
-        await Promise.all([
-          redis.markDislikeTrack(payload.userId, trackId),
-          redis.markRecentTrack(payload.userId, trackId),
-        ]);
-
-        if (sessionOk) {
-          await redis.appendSessionExcludeIds(
-            sessionId,
-            [trackId],
-            config.recommendations.maxExcludeIds,
-            config.engineV2.sessionTtlSeconds
-          );
-        }
-      } else {
-        await redis.markRecentTrack(payload.userId, trackId);
-      }
-
-      if (sessionOk && intent) {
-        await redis.appendSessionIntentTrack(
-          sessionId,
-          trackId,
-          intent.polarity,
-          intent.weight,
-          config.engineV2.sessionTtlSeconds
-        );
-      }
+      ack = await applyFeedbackRealtime(payload.userId, payload.sessionId, {
+        trackId: payload.trackId,
+        action: payload.action,
+        duration: payload.duration,
+        progress: payload.progress,
+      });
     } catch (err) {
-      // Не блокируем основной feedback pipeline, если Redis временно недоступен
       logError(err, 'realtime-exclusion-feedback');
     }
 
-    // Добавляем в очередь (Redis Stream)
     const event = {
       type: 'single',
       userId: payload.userId,
@@ -523,7 +456,11 @@ router.post('/feedback', feedbackLimiter, async (req, res, next) => {
 
     await redis.enqueueFeedback(event);
 
-    res.json({ success: true });
+    res.json({
+      success: true,
+      sessionState: ack.sessionState,
+      clientActions: ack.clientActions,
+    });
   } catch (err) {
     next(err);
   }
@@ -538,61 +475,20 @@ router.post('/batch-complete', feedbackLimiter, async (req, res, next) => {
   try {
     const payload = validateBatchFeedbackPayload(req.user.id, req.body || {});
 
+    let lastAck = { sessionState: null, clientActions: { refreshRecommended: false, skipBurstMode: false } };
     try {
-      const sessionId = typeof payload.sessionId === 'string' ? payload.sessionId.trim() : '';
-      const sessionOk = sessionId
-        ? await redis.touchEphemeralSession(payload.userId, sessionId, config.engineV2.sessionTtlSeconds)
-        : false;
-
       for (const interaction of payload.interactions) {
-        const trackId = interaction.trackId;
-        const intent = sessionIntentWeight(interaction);
-        if (interaction.action === 'skip') {
-          const writes = [redis.markSkipTrack(payload.userId, trackId)];
-          if (intent?.polarity === 'negative') {
-            writes.push(redis.incrementSkipBurst(payload.userId));
-          }
-          await Promise.all(writes);
-          if (sessionOk) {
-            await redis.appendSessionExcludeIds(
-              sessionId,
-              [trackId],
-              config.recommendations.maxExcludeIds,
-              config.engineV2.sessionTtlSeconds
-            );
-          }
-        } else if (interaction.action === 'dislike') {
-          await Promise.all([
-            redis.markDislikeTrack(payload.userId, trackId),
-            redis.markRecentTrack(payload.userId, trackId),
-          ]);
-          if (sessionOk) {
-            await redis.appendSessionExcludeIds(
-              sessionId,
-              [trackId],
-              config.recommendations.maxExcludeIds,
-              config.engineV2.sessionTtlSeconds
-            );
-          }
-        } else {
-          await redis.markRecentTrack(payload.userId, trackId);
-        }
-
-        if (sessionOk && intent) {
-          await redis.appendSessionIntentTrack(
-            sessionId,
-            trackId,
-            intent.polarity,
-            intent.weight,
-            config.engineV2.sessionTtlSeconds
-          );
-        }
+        lastAck = await applyFeedbackRealtime(payload.userId, payload.sessionId, {
+          trackId: interaction.trackId,
+          action: interaction.action,
+          duration: interaction.duration,
+          progress: interaction.progress,
+        });
       }
     } catch (err) {
       logError(err, 'realtime-exclusion-batch-feedback');
     }
 
-    // Добавляем в очередь (Redis Stream)
     const event = {
       type: 'batch',
       userId: payload.userId,
@@ -612,6 +508,8 @@ router.post('/batch-complete', feedbackLimiter, async (req, res, next) => {
     res.json({
       success: true,
       interactionsProcessed: payload.interactions.length,
+      sessionState: lastAck.sessionState,
+      clientActions: lastAck.clientActions,
     });
   } catch (err) {
     next(err);
@@ -626,29 +524,14 @@ router.post('/batch-complete', feedbackLimiter, async (req, res, next) => {
  */
 router.post('/similar', apiLimiter, async (req, res, next) => {
   try {
-    const { trackId, limit = 20 } = req.body || {};
+    const payload = validateSimilarPayload(req.user.id, req.body || {});
+    const { deliverSimilarTracks } = require('../services/engineV2/trackSeed');
 
-    if (!trackId || !Number.isInteger(Number(trackId)) || Number(trackId) <= 0) {
-      const error = new Error('Invalid trackId');
-      error.statusCode = 400;
-      throw error;
-    }
+    const result = await deliverSimilarTracks(payload.userId, payload.trackId, payload.limit);
 
-    const validLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
+    recommendationsServed.inc({ endpoint: 'similar', source: 'engine-v2-track-seed' });
 
-    const { getSimilarTracks } = require('../workers/algorithms/personalRecommendations');
-    const { getTracksWithCache } = require('../services/tracksCacheService');
-
-    const similarIds = await getSimilarTracks(Number(trackId), validLimit);
-    const tracks = await getTracksWithCache(similarIds);
-
-    recommendationsServed.inc({ endpoint: 'similar', source: 'content-based' });
-
-    res.json({
-      tracks,
-      sourceTrackId: Number(trackId),
-      count: tracks.length,
-    });
+    res.json(result);
   } catch (err) {
     next(err);
   }
@@ -656,107 +539,28 @@ router.post('/similar', apiLimiter, async (req, res, next) => {
 
 /**
  * POST /api/recommendations/radio
- * Радио на основе трека - бесконечная очередь похожих треков
- * Комбинирует похожие по audio features + артист/жанр
- * Rate limited per-user
+ * Радио на основе трека — Engine V2 track seed + rankPipeline
  */
 router.post('/radio', apiLimiter, async (req, res, next) => {
   try {
-    const { trackId, excludeIds = [], limit = 20 } = req.body || {};
+    const payload = validateRadioPayload(req.user.id, req.body || {});
+    const { deliverRadioTracks } = require('../services/engineV2/trackSeed');
 
-    if (!trackId || !Number.isInteger(Number(trackId)) || Number(trackId) <= 0) {
-      const error = new Error('Invalid trackId');
-      error.statusCode = 400;
-      throw error;
-    }
+    const result = await deliverRadioTracks(
+      payload.userId,
+      payload.trackId,
+      payload.limit,
+      payload.sessionId
+    );
 
-    const validLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
-    const validExcludeIds = Array.isArray(excludeIds)
-      ? excludeIds.filter(id => Number.isInteger(Number(id)) && Number(id) > 0).map(Number)
-      : [];
-
-    const { query } = require('../lib/database');
-    const { getTracksWithCache } = require('../services/tracksCacheService');
-
-    // Получаем данные о исходном треке
-    const sourceResult = await query(`
-      SELECT s.artist, s.genre, sf.energy, sf.valence, sf.danceability, sf.tempo
-      FROM songs s
-      LEFT JOIN song_features sf ON s.id = sf.song_id
-      WHERE s.id = $1
-    `, [Number(trackId)]);
-
-    if (sourceResult.rows.length === 0) {
-      const error = new Error('Track not found');
-      error.statusCode = 404;
-      throw error;
-    }
-
-    const source = sourceResult.rows[0];
-
-    // Комбинированный запрос: похожие по артисту/жанру + audio features
-    const radioResult = await query(`
-      WITH exclude_ids AS (
-        SELECT unnest($2::int[]) AS id
-      ),
-      scored AS (
-        SELECT 
-          s.id,
-          -- Бонус за того же артиста
-          CASE WHEN s.artist = $3 THEN 0.4 ELSE 0 END +
-          -- Бонус за тот же жанр
-          CASE WHEN s.genre = $4 THEN 0.2 ELSE 0 END +
-          -- Схожесть по audio features (если доступны)
-          CASE 
-            WHEN sf.energy IS NOT NULL AND $5::numeric IS NOT NULL THEN
-              0.4 * (1.0 - (
-                ABS(COALESCE(sf.energy, 0.5) - COALESCE($5::numeric, 0.5)) * 0.3 +
-                ABS(COALESCE(sf.valence, 0.5) - COALESCE($6::numeric, 0.5)) * 0.3 +
-                ABS(COALESCE(sf.danceability, 0.5) - COALESCE($7::numeric, 0.5)) * 0.2 +
-                LEAST(ABS(COALESCE(sf.tempo, 120) - COALESCE($8::numeric, 120)) / 60.0, 1.0) * 0.2
-              ))
-            ELSE 0.1
-          END +
-          -- Небольшой random для разнообразия
-          RANDOM() * 0.1 AS score
-        FROM songs s
-        LEFT JOIN song_features sf ON s.id = sf.song_id
-        LEFT JOIN exclude_ids ex ON s.id = ex.id
-        WHERE ex.id IS NULL
-          AND s.id != $1
-      )
-      SELECT id
-      FROM scored
-      ORDER BY score DESC
-      LIMIT $9
-    `, [
-      Number(trackId),
-      validExcludeIds.length > 0 ? validExcludeIds : [0],
-      source.artist,
-      source.genre,
-      source.energy,
-      source.valence,
-      source.danceability,
-      source.tempo,
-      validLimit,
-    ]);
-
-    const trackIds = radioResult.rows.map(r => r.id);
-    const tracks = await getTracksWithCache(trackIds);
-
-    recommendationsServed.inc({ endpoint: 'radio', source: 'hybrid' });
+    recommendationsServed.inc({ endpoint: 'radio', source: 'engine-v2-track-seed' });
 
     logEvent('radio-generated', {
-      sourceTrackId: Number(trackId),
-      tracksCount: tracks.length,
+      sourceTrackId: payload.trackId,
+      tracksCount: result.count,
     });
 
-    res.json({
-      tracks,
-      sourceTrackId: Number(trackId),
-      count: tracks.length,
-      hasMore: tracks.length === validLimit,
-    });
+    res.json(result);
   } catch (err) {
     next(err);
   }
@@ -777,12 +581,6 @@ router.post('/refresh', refreshLimiter, async (req, res, next) => {
     const limit = Number(req.body?.limit ?? config.recommendations.defaultBatchSize);
     const preferences = req.body?.preferences || {};
 
-    const excludeIdsRaw = Array.isArray(req.body?.excludeIds) ? req.body.excludeIds : [];
-    const excludeIds = excludeIdsRaw
-      .map((id) => Number.parseInt(id, 10))
-      .filter((id) => Number.isFinite(id) && id > 0)
-      .slice(0, config.recommendations.maxRequestExcludeIds);
-
     const previousSessionIdRaw = req.body?.sessionId ? String(req.body.sessionId) : '';
     let previousSessionId = null;
     if (previousSessionIdRaw) {
@@ -793,7 +591,7 @@ router.post('/refresh', refreshLimiter, async (req, res, next) => {
       }
     }
 
-    const result = await refreshV2(userId, preferences, limit, excludeIds, previousSessionId);
+    const result = await refreshV2(userId, preferences, limit, previousSessionId);
 
     return res.json(result);
   } catch (err) {
@@ -838,12 +636,7 @@ router.get('/mood-radar', apiLimiter, async (req, res, next) => {
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    const db = redis.getDbPool ? redis.getDbPool() : null;
-    if (!db) {
-      return res.status(503).json({ error: 'Database unavailable' });
-    }
-
-    const moodResult = await db.query(`
+    const moodResult = await query(`
       SELECT sm.mood, SUM(sm.confidence) / COUNT(*)::real AS avg_confidence, COUNT(*) AS track_count
       FROM song_moods sm
       JOIN user_history uh ON uh.song_id = sm.song_id
@@ -852,7 +645,7 @@ router.get('/mood-radar', apiLimiter, async (req, res, next) => {
       ORDER BY avg_confidence DESC
     `, [userId]);
 
-    const profileResult = await db.query(
+    const profileResult = await query(
       'SELECT mood_vector FROM user_mood_profile WHERE user_id = $1',
       [userId]
     );
@@ -895,12 +688,7 @@ router.get('/mood-tracks/:mood', apiLimiter, async (req, res, next) => {
       return res.status(400).json({ error: 'Invalid mood', allowed });
     }
 
-    const db = redis.getDbPool ? redis.getDbPool() : null;
-    if (!db) {
-      return res.status(503).json({ error: 'Database unavailable' });
-    }
-
-    const result = await db.query(`
+    const result = await query(`
       SELECT s.id, s.title, s.artist, s.album, s.duration, s.genre, s.cover_path,
              sm.confidence AS mood_confidence
       FROM song_moods sm

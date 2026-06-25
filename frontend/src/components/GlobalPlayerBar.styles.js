@@ -1,13 +1,5 @@
 import styled, { keyframes, css } from "styled-components";
 import { motion } from "framer-motion";
-import {
-  DESKTOP_PLAYER_BAR_BOTTOM_OFFSET_PX,
-  DESKTOP_PLAYER_BAR_MAX_WIDTH_PX,
-  DESKTOP_PLAYER_BAR_MIN_WIDTH_PX,
-  DESKTOP_PLAYER_BAR_RADIUS_PX,
-  DESKTOP_PLAYER_BAR_SHELL_HEIGHT_PX,
-  DESKTOP_PLAYER_BAR_WIDTH_PERCENT,
-} from "./desktopPlayerBarTokens";
 
 const deviceSyncTone = {
   connected: '#32d74b',
@@ -107,45 +99,25 @@ export const PartyBadge = styled(motion.button)`
   }
 `;
 
-/** Full-width dock — centers the floating pill; no hit target outside the pill. */
-export const PlayerBarDock = styled.div`
+export const PlayerBar = styled(motion.div)`
   position: fixed;
-  bottom: ${DESKTOP_PLAYER_BAR_BOTTOM_OFFSET_PX}px;
+  bottom: 0;
   left: 0;
   right: 0;
+  width: 100%;
+  max-width: 100vw;
+  box-sizing: border-box;
+  background: ${(p) => p.$accentBg || "rgba(0, 0, 0, 0.98)"};
+  padding: 0;
   z-index: 50;
   display: none;
-  justify-content: center;
-  align-items: flex-end;
-  pointer-events: none;
-  padding: 0 max(16px, env(safe-area-inset-left, 0px))
-    max(0px, env(safe-area-inset-bottom, 0px))
-    max(16px, env(safe-area-inset-right, 0px));
-  box-sizing: border-box;
-
-  @media (min-width: 768px) {
-    display: flex;
-  }
-`;
-
-export const PlayerBar = styled(motion.div)`
-  pointer-events: auto;
-  width: ${DESKTOP_PLAYER_BAR_WIDTH_PERCENT}%;
-  min-width: min(${DESKTOP_PLAYER_BAR_MIN_WIDTH_PX}px, 94vw);
-  max-width: min(${DESKTOP_PLAYER_BAR_MAX_WIDTH_PX}px, 94vw);
-  box-sizing: border-box;
-  background: ${(p) => p.$accentBg || "rgba(14, 14, 16, 0.96)"};
-  padding: 0;
-  border-radius: ${DESKTOP_PLAYER_BAR_RADIUS_PX}px;
+  border-radius: 0;
   overflow: hidden;
   transition: background 0.45s ease;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow:
-    0 10px 40px rgba(0, 0, 0, 0.55),
-    0 2px 12px rgba(0, 0, 0, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  backdrop-filter: saturate(1.12);
-  -webkit-backdrop-filter: saturate(1.12);
+
+  @media (min-width: 768px) {
+    display: block;
+  }
 `;
 
 export const DislikeButtonBar = styled(motion.button)`
@@ -192,22 +164,30 @@ export const PlayerBarContent = styled.div`
   display: flex;
   flex-direction: column;
   width: 100%;
-  min-height: ${DESKTOP_PLAYER_BAR_SHELL_HEIGHT_PX}px;
+  min-height: var(--desktop-player-bar-height, 78px);
   margin: 0 auto;
 `;
 
 export const ProgressSection = styled.div`
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 14px 0;
+  gap: 8px;
+  padding: 7px 10px 0;
   width: 100%;
+  max-width: min(88vw, 1400px);
   box-sizing: border-box;
+  align-self: center;
   pointer-events: auto;
 
-  @media (min-width: 1200px) {
-    padding: 9px 18px 0;
-    gap: 12px;
+  @media (min-width: 1024px) {
+    padding: 8px 14px 0;
+    gap: 10px;
+    max-width: min(86vw, 1460px);
+  }
+
+  @media (min-width: 1440px) {
+    padding: 8px 18px 0;
+    max-width: min(84vw, 1520px);
   }
 `;
 
@@ -291,15 +271,19 @@ export const MainPlayerSection = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 14px 12px;
-  gap: 10px;
+  padding: 8px 10px 8px;
+  gap: 8px;
   overflow: visible;
   min-width: 0;
   max-width: 100%;
 
-  @media (min-width: 1200px) {
-    padding: 7px 18px 14px;
-    gap: 12px;
+  @media (min-width: 1024px) {
+    padding: 9px 14px 9px;
+    gap: 10px;
+  }
+
+  @media (min-width: 1440px) {
+    padding: 9px 18px 9px;
   }
 `;
 
@@ -309,16 +293,47 @@ export const LeftSection = styled.div`
   align-self: center;
   flex: 1 1 0;
   min-width: 0;
-  max-width: 38%;
+  max-width: min(36vw, 300px);
   overflow: hidden;
+
+  @media (min-width: 900px) {
+    flex: 1 1 160px;
+    max-width: 300px;
+  }
+
+  @media (min-width: 1200px) {
+    flex: 0 0 320px;
+    max-width: 360px;
+  }
+
+  @media (min-width: 1440px) {
+    flex: 0 0 360px;
+    max-width: 400px;
+  }
 `;
 
 export const CenterSection = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: 38vw;
+
+  @media (min-width: 900px) {
+    min-width: 180px;
+    max-width: 320px;
+  }
+
+  @media (min-width: 1200px) {
+    min-width: 260px;
+    max-width: 420px;
+  }
+
+  @media (min-width: 1440px) {
+    min-width: 320px;
+    max-width: 480px;
+  }
 `;
 
 export const RightSection = styled.div`
@@ -327,15 +342,28 @@ export const RightSection = styled.div`
   justify-content: flex-end;
   flex: 1 1 0;
   min-width: 0;
-  max-width: 42%;
+  max-width: min(46vw, 280px);
   gap: 2px;
-  padding-right: 2px;
+  padding-right: 4px;
   overflow: visible;
   flex-wrap: nowrap;
 
+  @media (min-width: 900px) {
+    max-width: 300px;
+    gap: 3px;
+    padding-right: 8px;
+  }
+
   @media (min-width: 1200px) {
+    max-width: 360px;
     gap: 4px;
-    padding-right: 4px;
+    padding-right: 10px;
+  }
+
+  @media (min-width: 1440px) {
+    max-width: 420px;
+    gap: 5px;
+    padding-right: 12px;
   }
 `;
 
@@ -432,10 +460,10 @@ export const PlayerControlsBar = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
 
   @media (min-width: 1200px) {
-    gap: 12px;
+    gap: 14px;
   }
 `;
 
@@ -506,47 +534,52 @@ export const ModeOneBadge = styled.span`
 `;
 
 export const PlayPauseButton = styled(motion.button)`
-  background: transparent;
+  background: white;
   border: none;
-  color: white;
+  color: black;
   border-radius: 50%;
-  width: 32px;
-  height: 32px;
-  font-size: 16px;
+  width: 30px;
+  height: 30px;
+  font-size: 13px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
   flex-shrink: 0;
 
   & > svg {
     display: block;
-    width: 1em;
-    height: 1em;
+    width: 42%;
+    height: 42%;
     transform: ${(props) =>
     props.$isPlaying ? "translateX(0)" : "translateX(1px)"};
     flex-shrink: 0;
   }
 
   &:hover {
-    opacity: 0.88;
-    transform: scale(1.06);
+    transform: scale(1.05);
   }
 
   &:active {
-    transform: scale(0.94);
+    transform: scale(0.95);
+  }
+
+  @media (min-width: 900px) {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
   }
 
   @media (min-width: 1200px) {
     width: 34px;
     height: 34px;
-    font-size: 17px;
+    font-size: 14px;
   }
 `;
 
 export const VolumeSlider = styled.input`
-  width: 56px;
+  width: 44px;
   min-width: 28px;
   flex-shrink: 1;
   appearance: none;
@@ -563,12 +596,12 @@ export const VolumeSlider = styled.input`
   transition: width 0.2s ease;
 
   @media (min-width: 900px) {
-    width: 72px;
+    width: 60px;
     height: 4px;
   }
 
   @media (min-width: 1200px) {
-    width: 88px;
+    width: 80px;
   }
 
   &::-webkit-slider-thumb {
@@ -598,15 +631,15 @@ export const VolumeSlider = styled.input`
   }
 
   @media (min-width: 1024px) {
-    width: 88px;
+    width: 80px;
   }
 
   @media (min-width: 1200px) {
-    width: 96px;
+    width: 100px;
   }
 
   @media (min-width: 1440px) {
-    width: 108px;
+    width: 120px;
   }
 `;
 
@@ -695,7 +728,7 @@ export const RecommendationsPanel = styled(motion.div)`
   position: fixed;
   top: 72px;
   right: ${(props) => props.$offset || "20px"};
-  bottom: calc(var(--desktop-player-bar-height, 118px) + 12px);
+  bottom: 120px;
   width: 360px;
   max-width: 90vw;
   background: radial-gradient(

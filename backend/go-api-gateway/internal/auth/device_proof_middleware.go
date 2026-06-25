@@ -23,6 +23,8 @@ func deviceProofBypassPaths() map[string]struct{} {
 		"/api/auth/telegram/login":  {},
 		"/api/auth/csrf":            {},
 		"/api/auth/device/register": {},
+		"/api/auth/native/finalize": {},
+		"/api/auth/native/exchange": {},
 		"/api/public-config":        {},
 		"/api/version":              {},
 		"/health":                   {},

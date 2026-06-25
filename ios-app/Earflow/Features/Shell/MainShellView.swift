@@ -29,49 +29,110 @@ enum AppTab: String, CaseIterable, Identifiable {
 
 struct MainShellView: View {
     @EnvironmentObject private var dependencies: AppDependencies
-    @State private var selectedTab: AppTab = .home
+    @EnvironmentObject private var playbackCoordinator: PlaybackCoordinator
+    @EnvironmentObject private var authPresentation: AppAuthPresentation
+    let mode: AppShellMode
+    let authState: AuthState
+
+    @State private var showMfaStepUp = false
+
+    private var selectedTab: Binding<AppTab> {
+        Binding(
+            get: { dependencies.shellNavigation.selectedTab },
+            set: { dependencies.shellNavigation.selectedTab = $0 }
+        )
+    }
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            Group {
-                switch selectedTab {
-                case .home: HomeView()
-                case .social: SocialView()
-                case .search: SearchView()
-                case .profile: ProfileView()
+            VStack(spacing: 0) {
+                if let sessionBannerMessage {
+                    SessionEndedBanner(message: sessionBannerMessage) {
+                        authPresentation.presentLogin(reason: sessionBannerMessage)
+                    }
                 }
+                Group {
+                    switch dependencies.shellNavigation.selectedTab {
+                    case .home: HomeView()
+                    case .social: SocialView()
+                    case .search: SearchView()
+                    case .profile: ProfileView()
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .environment(\.shellChromeMetrics, shellChromeMetrics)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .safeAreaInset(edge: .bottom) {
                 shellChrome
             }
+
+            if playbackCoordinator.playerSheet.isModalVisible {
+                PlayerChromeOverlay()
+                    .environmentObject(dependencies)
+                    .environmentObject(playbackCoordinator)
+                    .zIndex(50)
+                    .transition(.opacity)
+            }
         }
-        .background(EarflowTheme.background.ignoresSafeArea())
+        .background(EarflowTheme.surfaceMain.ignoresSafeArea())
         .preferredColorScheme(.dark)
         .earflowTypography()
-        .sheet(
-            isPresented: Binding(
-                get: { dependencies.playbackCoordinator.sheetExpanded },
-                set: { dependencies.playbackCoordinator.sheetExpanded = $0 }
-            )
-        ) {
-            PlayerSheetView()
+        .sheet(isPresented: $showMfaStepUp) {
+            MfaStepUpView()
                 .environmentObject(dependencies)
+        }
+        .task {
+            guard mode.isAuthenticated else { return }
+            await dependencies.auth.refreshDiagnostics()
+            await dependencies.deviceSync.connectIfAuthenticated()
+            if await dependencies.auth.needsMfaStepUp() {
+                showMfaStepUp = true
+            }
+        }
+        .onChange(of: mode) { newMode in
+            if newMode.isGuest {
+                showMfaStepUp = false
+                Task { await dependencies.deviceSync.disconnect() }
+            } else if newMode.isAuthenticated {
+                Task { await dependencies.deviceSync.connectIfAuthenticated() }
+            }
+        }
+    }
+
+    private var sessionBannerMessage: String? {
+        switch authState {
+        case .degraded:
+            return "Слабая связь — работаем с кэшем. Некоторые действия могут быть недоступны."
+        case .expired:
+            return "Сессия истекла. Войдите снова."
+        case .revoked:
+            return "Вы вышли из аккаунта."
+        case .error:
+            return "Ошибка сессии. Войдите снова."
+        default:
+            return nil
         }
     }
 
     private var shellChrome: some View {
-        VStack(spacing: 6) {
-            if dependencies.playbackCoordinator.nowPlaying != nil {
+        VStack(spacing: EarflowTheme.miniPlayerFloatGap) {
+            if mode.isAuthenticated, playbackCoordinator.nowPlaying != nil {
                 MiniPlayerBar()
                     .environmentObject(dependencies)
-                    .padding(.horizontal, 6)
+                    .environmentObject(playbackCoordinator)
+                    .padding(.horizontal, EarflowTheme.miniPlayerSideInset)
             }
-            EarflowBottomBar(selection: $selectedTab)
-                .padding(.horizontal, 6)
+            EarflowBottomBar(selection: selectedTab)
+                .padding(.horizontal, EarflowTheme.miniPlayerSideInset)
         }
         .padding(.bottom, 0)
         .background(EarflowTheme.navBackground)
+    }
+
+    private var shellChromeMetrics: ShellChromeMetrics {
+        let hasTrack = mode.isAuthenticated && playbackCoordinator.nowPlaying != nil
+        let sheetOpen = playbackCoordinator.playerSheet.sheetProgress > 0.88
+        return ShellChromeMetrics(hasMiniPlayer: hasTrack && !sheetOpen)
     }
 }
 
@@ -95,6 +156,7 @@ struct EarflowBottomBar: View {
                         )
                         .frame(maxWidth: .infinity)
                         .frame(height: EarflowTheme.navHeight)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(tab.label)

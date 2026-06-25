@@ -14,6 +14,11 @@ struct SettingsView: View {
                 NavigationLink("Журнал отладки") {
                     DebugLogView()
                 }
+                #if DEBUG
+                NavigationLink("Auth Gate (dev)") {
+                    AuthDiagnosticsView()
+                }
+                #endif
             }
             Section("О приложении") {
                 LabeledContent("API", value: AppConfiguration.current.gatewayBaseURL.host ?? "api.earflow.ru")

@@ -1110,11 +1110,10 @@ export const PlayerProvider = ({
     shouldSyncConnectorIsPlaying,
     onFatalError: (code) => {
       const safe = typeof code === 'string' ? code : '';
-      if (!isIosSafari()) return;
       if (!userWantsPlaybackRef?.current) return;
       if (typeof document !== 'undefined' && document.hidden) return;
       if (!safe) return;
-      if (!/HLS_|PLAYBACK_|ABORT|NOT_SUPPORTED/i.test(safe)) return;
+      if (!/DIRECT_RECOVERY|HLS_RECOVERY|HLS_|PLAYBACK_|ABORT|NOT_SUPPORTED/i.test(safe)) return;
       hardResetAudioPipeline(`connector_${safe}`)
         .then(() => playerCoreRef.current?.play().catch(() => undefined))
         .catch(() => undefined);

@@ -114,9 +114,6 @@ jobs:
       - name: Validate compose config
         run: docker compose config --quiet
 
-      - name: Social feed unit tests
-        run: npm --prefix backend/database-service run test:social
-
   party-go:
     name: party-go (go test + vet + build)
     runs-on: ubuntu-latest

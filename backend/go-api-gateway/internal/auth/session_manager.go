@@ -273,7 +273,7 @@ func bypassesSessionAuthMiddleware(path string) bool {
 	switch path {
 	case "/api/auth/email/login", "/api/auth/email/register", "/api/auth/telegram/login",
 		"/api/auth/reset-password", "/api/auth/csrf", "/api/auth/refresh",
-		"/api/auth/logout", "/api/public-config":
+		"/api/auth/logout", "/api/auth/native/exchange", "/api/public-config":
 		return true
 	default:
 		return false

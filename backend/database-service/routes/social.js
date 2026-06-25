@@ -9,7 +9,6 @@ const {
   parseFeedLimit,
   parsePositiveBigIntString,
   parsePositiveInt,
-  POST_STATUS,
   validatePostInput,
 } = require('../lib/socialPosts');
 
@@ -395,14 +394,14 @@ router.delete('/posts/:id', async (req, res) => {
 
     const result = await db.query(
       `UPDATE social_posts
-       SET status = $3,
+       SET status = 'deleted',
            deleted_at = CURRENT_TIMESTAMP,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $1::bigint
          AND user_id = $2
-         AND status = $4
+         AND status = 'active'
        RETURNING id::text`,
-      [postId, viewerId, POST_STATUS.DELETED, POST_STATUS.ACTIVE],
+      [postId, viewerId],
     );
 
     if (result.rows.length === 0) {

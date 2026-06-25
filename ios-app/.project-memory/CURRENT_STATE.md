@@ -1,69 +1,59 @@
 # Current State — Earflow iOS
 
 **Updated:** 2026-06-23  
-**Phase:** 2 (UI + catalog shell) — **not** production-ready  
-**Gate:** `PEND-IOS-001` **open**
+**Phase:** 3 — playback / Device Sync (auth gate **closed**)  
+**Gate:** `PEND-IOS-001` **CLOSED** — see `docs/DECISIONS.md` 2026-06-23
 
 ---
 
-## Phase summary
+## Auth — closed (automated + prod bootstrap)
 
-| Phase | Scope | Status |
-|-------|--------|--------|
-| 0–1 | Scaffold, auth core, playback core, tests | ✅ build PASS |
-| 2 | EmailAuth UI, 4-tab shell, home/search/social/profile, logs | ✅ in tree |
-| 3 | Playlists, artist pages, social actions, full player | ⏳ planned |
-| 4 | Device Sync WS, analytics flush, background audio | ⏳ planned |
-| 5 | App Intents, TestFlight gate, gesture QA | ⏳ planned |
+| Area | Status |
+|------|--------|
+| Native form + web login (ASWeb+PKCE, code) | ✅ — `verify:ios-native` 56 tests PASS; prod e2e PEND-IOS-002 |
+| Device register + proof token | ✅ |
+| Bootstrap / degraded / revalidate | ✅ |
+| Logout + lifecycle cleanup | ✅ |
+| MFA step-up UI/API | ✅ code; device beta OPEN |
+| Auth Gate (DEBUG) | ✅ |
+| Automated verify | ✅ `npm run verify:ios-native` — 34 tests PASS |
+| Prod bootstrap | ✅ log evidence `userId=157` |
 
----
-
-## Implemented (verified in repo)
-
-### Core
-
-- `AuthActor` — login, register, telegram login, device register, proof token, logout
-- `GatewayClient` — gateway-only, retry, CSRF, blocked internal URLs
-- `PlaybackActor` + `PlaybackCoordinator` — single AVPlayer path, HLS session
-- `EarflowLog` — ring buffer, redaction, in-app debug console
-- `CatalogService`, `SearchService`, `SocialService`
-
-### UI
-
-- `LoginView` — dark EmailAuth parity (tabs, validators, Telegram WKWebView)
-- `MainShellView` — home / social / search / profile + mini player bar
-- `HomeView` — discover rails + likes
-- `SearchView`, `SocialView`, `ProfileView`, `SettingsView`, `DebugLogView`
-
-### Tests
-
-- `CanonicalProofStringTests`, `AuthStateTests` (5 tests)
-- `xcodebuild` generic iOS Simulator: **BUILD SUCCEEDED**
+**Residual (TestFlight, not blocking features):** MFA on physical device, native web-login prod e2e (`PEND-IOS-002`), App Store pipeline. WKWebView login removed (→ ASWebAuthenticationSession + PKCE, `INV-SEC-018`).
 
 ---
 
-## Not implemented / partial
+## Guest-first shell
 
-- Device Sync WebSocket client (skeleton only)
-- Analytics queue flush to backend
-- Lock screen / Control Center / background audio polish
-- Social like/unlike write paths
-- Playlist / album / artist detail screens
-- Full mobile player sheet (gestures per `INV-SHEET-*`)
-- Mood radar, party, EQ, subscription
-- Real device + TestFlight verification
-- CI macOS runner for `verify:ios-native`
+- `RootView`: guest shell first; `LoginView` as sheet
+- `degraded` banner + 12min `revalidateSession` (web parity)
+- Session expired/revoked banners
+
+## Home + Player UX — web parity pass (2026-06-23)
+
+- **Home hero:** `HomeMobileHeroV3` layout — MetaRow (play справа), теги, progress strip снизу
+- **Home:** «Для вас» **8 tracks** (`pickForYouTracks`), mood chips, popular artists, user playlists, deferred rails (900ms)
+- **Catalog pages:** `PlaylistPageView` + `AlbumPageView` — push как web `/playlist/:id`, `/album/:pid`
+- **Mini bar:** accent from cover, swipe expand, horizontal skip; play icon white monochrome
+- **Full player:** `PlayerChromeOverlay` — web control order + secondary row; white icons; accent backdrop
+- **Queue:** `PlaybackCoordinator.syncQueue` + next/prev; like via API
+
+**Residual vs web 1:1 (do not claim done):** hero waveform seek (interactive), dislike/repeat/lyrics/queue wiring, continuous mini→sheet morph (`INV-SHEET-*`), mood-radar screen, Device Sync queue authority
+
+## Playback infrastructure (Phase 3 engineering — 2026-06-23)
+
+- `AuthenticatedStreamResourceLoader` — session cookies on all HLS segments
+- `StreamSessionService` cache + logout clear; `playbackError` on coordinator
+- Tests: `StreamSessionServiceIntegrationTests` (+37 total in verify gate)
+- **Manual gate OPEN:** prod tap → audible playback
+
+Design split: `ios-app/.project-memory/PLAYBACK_PHASE3.md`
 
 ---
 
-## Known risks
+## Verify
 
-- Telegram login via WKWebView — standard iOS pattern; not native Telegram SDK
-- `PlaybackCoordinator` holds display metadata; playback truth remains `PlaybackActor` + backend
-- Discover rails DTO supports `playlists[]`; UI flattens tracks for horizontal rails
-
----
-
-## Next P0 tasks
-
-See `TASKS.md` — Phase 3 entry items.
+```bash
+npm run verify:monorepo-integrity
+npm run verify:ios-native   # build + 34 tests incl. auth lifecycle integration
+```

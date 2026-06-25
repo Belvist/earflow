@@ -226,40 +226,6 @@ function scanCodeFile(filePath, content) {
   }
 }
 
-function scanSocialFeedArchitecture(filePath, content) {
-  const relPath = toRel(filePath);
-
-  if (relPath === 'frontend/src/components/SocialPage.js') {
-    if (/mockPosts|seedPosts|MOCK_SOCIAL|fallbackPosts/.test(content)) {
-      addError(relPath, 'INV-SOCIAL-001: mock/seed social feed on frontend is forbidden');
-    }
-    if (/\.posts\.sort\s*\(/.test(content)) {
-      addError(relPath, 'INV-SOCIAL-001: client-side feed ordering is forbidden; backend owns cursor/order');
-    }
-    if (/author\.(id|handle)\b/.test(content)) {
-      addError(relPath, 'INV-SOCIAL-003: social feed must not render author.id/handle');
-    }
-    if (/viewer\.canDelete/.test(content)) {
-      addError(relPath, 'INV-SOCIAL-001: use viewer.canManage from backend only, not client canDelete');
-    }
-  }
-
-  if (relPath === 'frontend/src/api/client.js') {
-    if (!content.includes('getSocialFeed')) {
-      addError(relPath, 'social API client methods missing (getSocialFeed)');
-    }
-    if (!content.includes('/api/social/feed')) {
-      addError(relPath, 'social feed endpoint must route through /api/social/feed');
-    }
-  }
-
-  if (relPath === 'backend/go-api-gateway/gateway.yaml') {
-    if (!/id:\s*social\b/.test(content) || !content.includes('/api/social')) {
-      addError(relPath, 'gateway must expose protected social route (/api/social)');
-    }
-  }
-}
-
 function scanRootMarkdown() {
   for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
     if (!entry.isFile()) continue;
@@ -318,14 +284,10 @@ function main() {
     'docs/SERVICE_CONTEXT_TEMPLATE.md',
     '.windsurf/workflows/load-context.md',
     '.windsurf/rules/earflow-context-discipline.mdc',
-    'docs/BACKEND_FRONTEND_BOUNDARY.md',
-    '.cursor/rules/earflow-backend-sot.mdc',
-    '.windsurf/rules/earflow-backend-sot.mdc',
     '.cursor/rules/earflow-context-discipline.mdc',
     '.cursor/rules/earflow-ui-client-prefs.mdc',
     '.cursor/rules/earflow-frontend-branch.mdc',
     'docs/MOBILE_PLAYER_SHEET_DESIGN.md',
-    'docs/SOCIAL_FEED.md',
     '.cursor/skills/earflow-player-sheet/SKILL.md',
     '.cursor/skills/engineering-verification/SKILL.md',
     'docs/ENGINEERING_VERIFICATION_PLAYBOOK.md',
@@ -335,37 +297,22 @@ function main() {
   ].forEach(assertFile);
 
   assertContains('AGENTS.md', 'docs/DECISIONS.md', 'AGENTS.md must point agents to docs/DECISIONS.md');
-  assertContains('AGENTS.md', 'BACKEND_FRONTEND_BOUNDARY.md', 'AGENTS.md must point agents to backend/frontend boundary doc');
-  assertContains('AGENTS.md', 'INV-ARCH-002', 'AGENTS.md must reference INV-ARCH-002');
-  assertContains('AGENTS.md', 'earflow-backend-sot.mdc', 'AGENTS.md must point agents to earflow-backend-sot rule');
   assertContains('AGENTS.md', 'ENGINEERING_VERIFICATION_PLAYBOOK.md', 'AGENTS.md must point agents to engineering verification playbook');
   assertContains('AGENTS.md', 'engineering-verification', 'AGENTS.md must reference engineering-verification skill');
   assertContains('AGENTS.md', 'earflow-ui-client-prefs.mdc', 'AGENTS.md must point agents to earflow-ui-client-prefs rule');
   assertContains('.windsurf/rules/earflow-context-discipline.mdc', 'alwaysApply: true', 'Windsurf discipline rule must always apply');
   assertContains('.cursor/rules/earflow-context-discipline.mdc', 'alwaysApply: true', 'Cursor discipline rule must always apply');
-  assertContains('.cursor/rules/earflow-backend-sot.mdc', 'alwaysApply: true', 'Cursor backend SOT rule must always apply');
-  assertContains('.cursor/rules/earflow-backend-sot.mdc', 'INV-ARCH-002', 'Backend SOT rule must reference INV-ARCH-002');
-  assertContains('.windsurf/rules/earflow-backend-sot.mdc', 'INV-ARCH-002', 'Windsurf backend SOT rule must reference INV-ARCH-002');
-  assertContains('.cursor/rules/earflow-context-discipline.mdc', 'BACKEND_FRONTEND_BOUNDARY.md', 'Context discipline must reference backend/frontend boundary doc');
   assertContains('.cursor/rules/earflow-ui-client-prefs.mdc', 'alwaysApply: true', 'Cursor UI prefs / escape hatch rule must always apply');
   assertContains('.cursor/rules/earflow-frontend-branch.mdc', 'alwaysApply: true', 'Cursor frontend branch rule must always apply');
   assertContains('.cursor/rules/earflow-frontend-branch.mdc', 'git push origin main:frontend', 'Frontend branch rule must document main→frontend sync');
   assertContains('.windsurf/rules/earflow-ui-client-prefs.mdc', 'INV-ARCH-001', 'Windsurf UI prefs rule must reference INV-ARCH-001');
   assertContains('docs/ARCHITECTURE_INVARIANTS.md', 'INV-DS-001', 'DeviceSync backend-authority invariant is missing');
   assertContains('docs/ARCHITECTURE_INVARIANTS.md', 'INV-ARCH-001', 'Cross-cutting escape-hatch invariant is missing');
-  assertContains('docs/ARCHITECTURE_INVARIANTS.md', 'INV-ARCH-002', 'Cross-cutting backend SOT invariant is missing');
-  assertContains('docs/BACKEND_FRONTEND_BOUNDARY.md', 'INV-ARCH-002', 'BACKEND_FRONTEND_BOUNDARY.md must reference INV-ARCH-002');
-  assertContains('docs/BACKEND_FRONTEND_BOUNDARY.md', 'Litmus test', 'BACKEND_FRONTEND_BOUNDARY.md must document litmus test');
   assertContains('docs/ARCHITECTURE_INVARIANTS.md', 'INV-SHEET-001', 'Player sheet Y-owner invariant is missing');
   assertContains('docs/ARCHITECTURE_INVARIANTS.md', 'INV-SHEET-006', 'Player sheet dismiss API invariant is missing');
   assertContains('docs/ARCHITECTURE_INVARIANTS.md', 'INV-SHEET-008', 'Player sheet portal/pointer-events invariant is missing');
   assertContains('docs/ARCHITECTURE_INVARIANTS.md', 'INV-SHEET-010', 'Player sheet single pan controller invariant is missing');
   assertContains('docs/ARCHITECTURE_INVARIANTS.md', 'INV-FE-008', 'AI user-disclosure invariant is missing');
-  assertContains('docs/ARCHITECTURE_INVARIANTS.md', 'INV-SOCIAL-001', 'Social backend-authority invariant is missing');
-  assertContains('docs/ARCHITECTURE_INVARIANTS.md', 'INV-SOCIAL-004', 'Social post state machine invariant is missing');
-  assertContains('docs/SOCIAL_FEED.md', 'INV-SOCIAL-001', 'SOCIAL_FEED.md must reference social invariants');
-  assertContains('backend/go-api-gateway/gateway.yaml', 'id: social', 'gateway.yaml must define social route');
-  assertContains('frontend/src/api/client.js', 'getSocialFeed', 'frontend api client must expose getSocialFeed');
   assertContains('AGENTS.md', 'INV-SHEET-010', 'AGENTS.md must reference mini pan rewrite invariant');
   assertContains('AGENTS.md', 'useMiniPlayerPan', 'AGENTS.md must reference useMiniPlayerPan as mini gesture owner');
   assertContains('AGENTS.md', 'MOBILE_PLAYER_SHEET_DESIGN.md', 'AGENTS.md must point to mobile player sheet design doc');
@@ -386,7 +333,6 @@ function main() {
     if (!isCodeFile(filePath)) continue;
     scanCodeFile(filePath, content);
     scanPlayerSheetArchitecture(filePath, content);
-    scanSocialFeedArchitecture(filePath, content);
     scanEscapeHatchPatterns(filePath, content);
   }
 

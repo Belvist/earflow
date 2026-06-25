@@ -95,7 +95,7 @@ Read-only list — **no** optimistic like (Phase 3)
 
 ### Frontend
 
-Shows `PlaybackState`; pause/resume/stop → `PlaybackActor` only
+Shows `PlaybackState`; pause/resume/stop/seek → `PlaybackActor` only. Progress ticks from `AVPlayerEngine` periodic observer (single path). Mini-bar: floating shell + progress strip. Sheet: system `.presentationDetents` + seek slider (not web `useMiniPlayerPan` yet).
 
 ---
 

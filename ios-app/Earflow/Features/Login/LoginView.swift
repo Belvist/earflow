@@ -2,12 +2,13 @@ import SwiftUI
 
 struct LoginView: View {
     @EnvironmentObject private var dependencies: AppDependencies
+    @EnvironmentObject private var authPresentation: AppAuthPresentation
     @StateObject private var viewModel = AuthScreenViewModel()
-    @State private var showWebLogin = false
+    @State private var webLoginInFlight = false
     var authState: AuthState = .unauthenticated
 
     private var isAuthInFlight: Bool {
-        viewModel.isLoading || authState == .authenticating
+        viewModel.isLoading || webLoginInFlight || authState == .authenticating
     }
 
     var body: some View {
@@ -18,6 +19,13 @@ struct LoginView: View {
                     EarflowAuthCard {
                         VStack(alignment: .leading, spacing: 12) {
                             authHeader
+                            if let reason = authPresentation.loginReason, !reason.isEmpty {
+                                Text(reason)
+                                    .font(EarflowFont.unbounded(size: 11, weight: .medium))
+                                    .foregroundStyle(EarflowTheme.textSecondary)
+                                    .multilineTextAlignment(.center)
+                                    .frame(maxWidth: .infinity)
+                            }
                             connectionStatus
                             EarflowAuthTabs(isRegister: $viewModel.isRegister)
                                 .onChange(of: viewModel.isRegister) { _, _ in
@@ -48,24 +56,39 @@ struct LoginView: View {
         }
         .preferredColorScheme(.dark)
         .earflowTypography()
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Закрыть") {
+                    authPresentation.dismissLogin()
+                }
+                .disabled(isAuthInFlight)
+            }
+        }
         .task {
             await viewModel.prepare(dependencies: dependencies)
         }
-        .sheet(isPresented: $showWebLogin) {
-            AuthWebLoginView(
-                onComplete: {
-                    do {
-                        try await dependencies.auth.resumeSessionAfterWebLogin()
-                        viewModel.successMessage = "Вход выполнен!"
-                        viewModel.errorMessage = nil
-                    } catch {
-                        viewModel.errorMessage = AuthScreenViewModel.userMessage(for: error)
-                    }
-                },
-                onFailure: { message in
-                    viewModel.errorMessage = message
-                }
+    }
+
+    @MainActor
+    private func runWebLogin() async {
+        guard !webLoginInFlight else { return }
+        webLoginInFlight = true
+        viewModel.errorMessage = nil
+        viewModel.successMessage = nil
+        defer { webLoginInFlight = false }
+        do {
+            let result = try await NativeWebLoginController().authenticate()
+            try await dependencies.auth.completeNativeWebLogin(
+                code: result.code,
+                codeVerifier: result.codeVerifier
             )
+            viewModel.successMessage = "Вход выполнен!"
+        } catch NativeAuthError.cancelled {
+            // User dismissed the system login sheet — not an error.
+        } catch let nativeError as NativeAuthError {
+            viewModel.errorMessage = nativeError.errorDescription
+        } catch {
+            viewModel.errorMessage = AuthErrorClassifier.userMessage(for: error, path: "/api/auth/native/exchange")
         }
     }
 
@@ -202,16 +225,31 @@ struct LoginView: View {
     }
 
     private var webLoginButton: some View {
-        Button {
-            showWebLogin = true
-        } label: {
-            Text("Войти как на сайте (auth.earflow.ru)")
-                .font(EarflowFont.unbounded(size: 11, weight: .medium))
-                .foregroundStyle(EarflowTheme.textSecondary)
+        VStack(spacing: 6) {
+            EarflowAuthDivider()
+            Button {
+                Task { await runWebLogin() }
+            } label: {
+                HStack(spacing: 8) {
+                    if webLoginInFlight {
+                        ProgressView().tint(EarflowTheme.textPrimary)
+                    } else {
+                        Image(systemName: "globe")
+                    }
+                    Text("Войти через сайт")
+                }
+                .font(EarflowFont.unbounded(size: 12, weight: .medium))
+                .foregroundStyle(EarflowTheme.textPrimary)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                )
+            }
+            .disabled(isAuthInFlight)
         }
-        .disabled(isAuthInFlight)
+        .padding(.top, 2)
     }
 
     private var actionRow: some View {
@@ -330,7 +368,7 @@ final class AuthScreenViewModel: ObservableObject {
     private var isProbing = false
 
     var localDevHint: String {
-        "Симулятор не находит сервер? Проверьте DNS на Mac (System Settings → Network → Wi‑Fi → DNS → 8.8.8.8) и отключите VPN, затем перезапустите симулятор."
+        "Нет связи с сервером? Проверьте интернет и отключите VPN."
     }
 
     func prepare(dependencies: AppDependencies) async {
@@ -345,11 +383,13 @@ final class AuthScreenViewModel: ObservableObject {
             showTelegram = !bot.isEmpty
             serverReachable = true
             serverStatusMessage = nil
+            await AuthDiagnostics.shared.recordGatewayProbe(reachable: true)
             await EarflowLog.shared.info("auth", "gateway reachable")
             await dependencies.auth.prepareAuthSession()
         } catch {
             serverReachable = false
             serverStatusMessage = AuthScreenViewModel.reachabilityMessage(for: error, host: host)
+            await AuthDiagnostics.shared.recordGatewayProbe(reachable: false)
             await EarflowLog.shared.error("auth", "gateway unreachable: \(error)")
             showTelegram = false
         }
@@ -404,7 +444,7 @@ final class AuthScreenViewModel: ObservableObject {
                 successMessage = "Вход выполнен!"
             }
         } catch {
-            errorMessage = AuthScreenViewModel.describe(error)
+            errorMessage = AuthErrorClassifier.userMessage(for: error, path: "/api/auth/email/login")
         }
     }
 
@@ -417,7 +457,7 @@ final class AuthScreenViewModel: ObservableObject {
             try await auth.loginWithTelegram(payload: payload)
             successMessage = "Вход выполнен!"
         } catch {
-            errorMessage = AuthScreenViewModel.describe(error)
+            errorMessage = AuthErrorClassifier.userMessage(for: error, path: "/api/auth/telegram/login")
         }
     }
 
@@ -428,12 +468,16 @@ final class AuthScreenViewModel: ObservableObject {
                 #if DEBUG
                 return "Нет DNS для \(host). Симулятор без интернета — включите локальный API (см. подсказку ниже)."
                 #else
-                return "Не удалось найти \(host) (DNS). Отключите VPN и откройте https://\(host)/api/public-config в Safari на этом устройстве."
+                return "Не удалось найти \(host) (DNS). Проверьте сеть."
                 #endif
             case GatewayNetworkCode.offline.rawValue:
                 return "Нет интернета. Проверьте Wi‑Fi или мобильную сеть."
+            case GatewayNetworkCode.connectionLost.rawValue:
+                return "Соединение с \(host) оборвалось. Повторите через несколько секунд."
             case GatewayNetworkCode.timeout.rawValue:
                 return "Таймаут при подключении к \(host). Попробуйте снова."
+            case GatewayNetworkCode.tlsHandshakeFailed.rawValue:
+                return "Защищённое соединение с \(host) не установилось. Повторите запрос."
             default:
                 break
             }
@@ -442,37 +486,6 @@ final class AuthScreenViewModel: ObservableObject {
     }
 
     static func userMessage(for error: Error) -> String {
-        describe(error)
-    }
-
-    private static func describe(_ error: Error) -> String {
-        if let gateway = error as? GatewayError {
-            switch gateway {
-            case .unauthorized(let code):
-                if code == "INVALID_CREDENTIALS" || code == nil {
-                    return "Неверный email или пароль."
-                }
-                return "Сессия отклонена (\(code ?? "401"))."
-            case .forbidden(let code):
-                if code == "DEVICE_REVOKED" { return "Устройство отозвано. Войдите снова." }
-                return code ?? "Доступ запрещён."
-            case .rateLimited: return "Слишком много попыток. Подождите."
-            case .serverError: return "Ошибка сервера Earflow. Попробуйте позже."
-            case .blockedHost: return "Заблокированный хост. Разрешён только api.earflow.ru."
-            case .network(let msg):
-                if msg == GatewayNetworkCode.dnsLookupFailed.rawValue {
-                    return "DNS не находит api.earflow.ru. Отключите VPN или проверьте DNS на устройстве."
-                }
-                if msg == GatewayNetworkCode.offline.rawValue {
-                    return "Нет интернета."
-                }
-                if msg.contains("session_not_established") {
-                    return "Сервер не выдал сессию. Проверьте аккаунт или попробуйте позже."
-                }
-                return "Нет связи с api.earflow.ru: \(msg)"
-            default: return "Не удалось войти. См. журнал в Настройках."
-            }
-        }
-        return error.localizedDescription
+        AuthErrorClassifier.userMessage(for: error)
     }
 }

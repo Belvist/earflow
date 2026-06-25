@@ -11,47 +11,20 @@
 
 ---
 
-### PEND-IOS-001 — Native iOS app scaffold and verification
+### PEND-IOS-002 — Native web login (ASWebAuthenticationSession + PKCE): prod e2e
 
-**Priority:** high
-**Status:** scaffold present (2026-06-23); full verification gate not closed
+**Priority:** medium
+**Status:** implemented (code + unit/integration green), prod e2e open
 
-Контекст: native iOS направление — SwiftUI listener app в `ios-app/`. **Scaffold добавлен:** XcodeGen `project.yml`, `Earflow.xcodeproj`, Auth/Network/Playback foundations.
+**Implemented:** Gateway `POST /api/auth/native/exchange` + `GET /api/auth/native/finalize` (PKCE S256, one-time code Redis 60s, device-bound). iOS `ASWebAuthenticationSession` + PKCE replacing WKWebView (`AuthActor.completeNativeWebLogin`). Tests: `native_auth_http_test.go` PASS; `verify:ios-native` build+56 tests PASS. See `DECISIONS.md` 2026-06-24, `INV-SEC-018`.
 
-**Что сделано (Phase 0–2 partial, 2026-06-23):**
-- `ios-app/` SwiftUI project + `docs/IOS_APP.md` + `ios-app/CONTEXT.md`
-- `ios-app/.project-memory/` — agent memory per `universal_project_agent_pack`
-- `.cursor/rules/earflow-ios-native.mdc` — iOS discipline rule
-- `AuthActor`, Keychain, P-256 proof signer, proof token cache; login/register/telegram
-- `GatewayClient` (gateway-only, retry, log redaction)
-- `PlaybackActor` + `PlaybackCoordinator`, HLS session via `/api/ebap-hls/v1/session`
-- `EarflowLog` + in-app debug journal
-- UI: EmailAuth parity, 4-tab shell, home/search/social/profile, mini player
-- `npm run verify:ios-native` / `scripts/verify-ios-native.sh`
-- Unit tests: canonical proof string, auth state
-- `xcodebuild` generic iOS Simulator: BUILD SUCCEEDED (2026-06-23)
+**`return_to` query preservation — CONFIRMED in code (not an open risk):** `auth.earflow.ru` serves the same `frontend` build (nginx → `frontend` upstream; no separate backend login page). `frontend/src/App.js` keeps `location.search` when forcing `/login`, reads `params.get('return_to')`, `sanitizeReturnTo` (`utils/authRedirect.js`) allows https `*.earflow.ru` and returns `u.toString()` with query intact, then `window.location.replace(returnTo)`. iOS `URLComponents` encodes `&`/`=` inside the `return_to` value (verified empirically); PKCE tokens are base64url (no `+`), so the URLComponents `+` gotcha does not apply.
 
-**Что не сделано:**
-- Не выполнен `xcodebuild test` на конкретном Simulator (только generic build).
-- Не выполнен smoke на реальном iPhone / TestFlight.
-- Device Sync WS — skeleton; нет player_state sync.
-- Analytics flush — skeleton.
-- Background audio / lock screen controls — не полированы.
-- Social — только read feed; нет like/unlike write.
-- Нет playlist/artist/album detail screens.
-- Player sheet упрощён — не соответствует полному `INV-SHEET-*` gate.
-- Не реализованы App Intents.
-- Не выполнена gesture QA matrix для native player.
-- Security audit на device не закрыт.
+**Remaining (prod-verify, cannot validate from repo):**
+1. Set/confirm gateway env `NATIVE_AUTH_REDIRECT_URIS=earflow://auth/callback` (default applied if unset).
+2. Live device flow: open login sheet → site auth (email/Telegram/MFA) → `earflow://` callback → exchange → `authenticated`; assert cookie-only transplant still 401 `DEVICE_PROOF_REQUIRED`.
 
-**Gate для закрытия:**
-1. На macOS с Xcode и iOS Simulator создать или восстановить native iOS проект.
-2. Зафиксировать воспроизводимую команду верификации (`npm run verify:ios-native` или documented equivalent).
-3. Получить PASS для build/test на Simulator.
-4. Получить PASS для smoke-сценария на реальном iPhone или TestFlight.
-5. Проверить gesture ownership против `docs/GESTURE_ARCHITECTURE.md`, `docs/MOBILE_PLAYER_SHEET_DESIGN.md` и `INV-GESTURE-*` / `INV-SHEET-*`.
-
-**Blocks:** любые заявления “native iOS app готово”, “можно тестировать на iPhone”, “gesture-поведение безопасно проверено” или “App Intents готовы”.
+---
 
 ### PEND-WAVE-001 — Server-side waveform peaks for hero / seek UI
 
@@ -183,26 +156,19 @@ Social feed now uses a short process-local public-page cache in `database-servic
 ### PEND-SOCIAL-002 — Finish verification and VPS rollout for social privacy/perf pass
 
 **Priority:** high
-**Status:** **closed locally (2026-06-23)** — verification ladder PASS; VPS deploy checklist below
+**Status:** pending verification
 
-**Verified:**
-- `npm --prefix backend/database-service run test:social` — 9/9 PASS (incl. state machine + pickCreatePostFields)
-- `CI=true npm --prefix frontend test -- --watchAll=false --runInBand --runTestsByPath src/components/SocialPage.test.js` — 4/4 PASS
-- `npm --prefix frontend run build` — PASS
-- `npm run validate:ai` — 0 errors
-- `go test ./internal/auth/ -run TestGatewayYAMLSocial` — PASS
-- Gateway route `social` in `gateway.yaml`; API client methods wired in `frontend/src/api/client.js`
-- Backend-SOT: `POST_STATUS`, `pickCreatePostFields`, `INV-SOCIAL-004`; frontend renderer-only
+The social privacy/perf pass code is prepared locally, but the full verification ladder is not closed yet. Completed so far: `node --check` for `backend/database-service/routes/social.js`, `backend/database-service/lib/socialPosts.js`, `frontend/src/components/SocialPage.js`, `frontend/src/api/client.js`.
 
-**VPS deploy (ops, not auto-closed here):**
-```bash
-git pull origin main
-psql "$DATABASE_URL" -f backend/database-service/database/migrations/004_social_feed.sql   # if not applied
-psql "$DATABASE_URL" -f backend/database-service/database/migrations/005_social_feed_likes_count.sql
-docker compose build --no-cache frontend api-gateway database-service
-docker compose up -d frontend api-gateway database-service
-```
-Browser smoke `/social`: compact cards, no `author.id`/`handle` in feed JSON, `...` only on own posts, like applies `reaction` without full feed reload.
+**Still required before claiming done:**
+- Run backend unit: `npm.cmd --prefix backend/database-service run test:social` on Windows, or `npm --prefix backend/database-service run test:social` in shell where npm scripts are allowed.
+- Run frontend unit: PowerShell form `$env:CI='true'; npm.cmd --prefix frontend test -- --watchAll=false --runInBand --runTestsByPath src/components/SocialPage.test.js`.
+- Run frontend build: `npm.cmd --prefix frontend run build`.
+- Run project gate: `npm.cmd run validate:ai`.
+- Browser smoke `/social`: verify compact card alignment, no `author.id`/`author.handle`/`updatedAt` in feed response, `...` menu only on own posts, like/unlike applies `reaction` without full feed reload.
+- VPS rollout must apply `backend/database-service/database/migrations/005_social_feed_likes_count.sql` after `004_social_feed.sql`, then rebuild `database-service`, `api-gateway`, `frontend`.
+
+**Why pending:** initial npm test commands were invoked through PowerShell as `npm`/`CI=true npm`; Windows blocked `npm.ps1` by execution policy and rejected POSIX env syntax. This is an execution-command issue, not a test result.
 
 ---
 
@@ -309,7 +275,7 @@ Real stack: gateway + Redis + security-service + auth login + frontend + `auth-e
 
 **Scale claims:** capacity validated on `ru-vmv2-mini` auth-e2e profile only — see `PEND-SEC-CAPACITY-001` / `reports/auth-capacity-20260608.md`. Do **not** write «готово для миллионов» / «Redis не bottleneck навсегда» / «production scale proven».
 
-**Known risks (accepted for hot-path optimization, not closed):** token replay within TTL (~90s) if XSS/extension steals header; WS/stream still cookie-only (`PEND-SEC-005`); ~~artist-frontend has no proof token cache~~ **mitigated 2026-06-23** — artist portal uses same proof token + PoP transport as listener.
+**Known risks (accepted for hot-path optimization, not closed):** token replay within TTL (~90s) if XSS/extension steals header; WS/stream still cookie-only (`PEND-SEC-005`); artist-frontend has no proof token cache.
 
 **Commits:** `493ba5a`, `5010df1`, `c5c501d` (double-nonce fix), `ac37504` (DoD e2e fixes), capacity tooling `d726935`–`250e256`.
 
@@ -336,17 +302,9 @@ DoD: см. roadmap §2.
 ### PEND-SEC-003 — Fresh-login protection
 
 **Priority:** high  
-**Status:** **backend unit tests PASS (2026-06-23 local)** — VPS/browser e2e gate pending  
+**Status:** **implemented (2026-06-09)** — VPS/browser e2e gate pending  
 
 Mass revoke с сессии <24h без step-up → `FRESH_LOGIN_REQUIRED` (security-service). Step-up via `POST /api/auth/2fa/step-up` unblocks.
-
-**Delivered locally (2026-06-23):**
-- `security-service` unit tests: fresh session → `FRESH_LOGIN_REQUIRED`; step-up active → 200; mature session (>24h) skips fresh guard.
-- Artist portal: PoP device register + proof access token on all API calls (`artist-frontend/src/auth/*`, `transport/http.js`); `FRESH_LOGIN_REQUIRED` → step-up modal (UI only displays backend decision).
-
-**Still required before closed:**
-- VPS/browser matrix: new session → revoke-others → `FRESH_LOGIN_REQUIRED` → step-up → retry → 200.
-- `bash scripts/run-auth-fullstack-e2e.sh` or manual DevTools on auth-e2e with sessions UI.
 
 ### PEND-SEC-004 — MFA step-up modal (UI)
 

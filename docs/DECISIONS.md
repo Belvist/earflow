@@ -22,68 +22,71 @@
 
 ---
 
-## 2026-06-23 — iOS native: universal_project_agent_pack memory + thin-client discipline
+## 2026-06-24 — Native web login: ASWebAuthenticationSession + PKCE + device-bound exchange
 
 **Status:** accepted
-**Area:** ios | auth | frontend-player
-**Context:** Native iOS listener (`ios-app/`) started as scaffold; user requires production-grade agent discipline per `universal_project_agent_pack` — state machines, API contracts, memory, no smart-client.
-**Decision:** (1) `ios-app/.project-memory/` — living module memory (AGENT_WORKFLOW, CURRENT_STATE, BACKEND_FRONTEND_CONTRACT, STATE_MACHINES, …) aligned with pack templates. (2) Cursor rule `earflow-ios-native.mdc` — mandatory read order + DoD. (3) iOS remains **thin client**: all HTTP via `GatewayClient` → `api.earflow.ru`; `AuthActor` / `PlaybackActor` single owners; no `/api/ios/*`. (4) Phase 2 UI (EmailAuth, 4-tab shell, catalog services) does **not** close `PEND-IOS-001`. (5) Agent updates memory files after each significant iOS task.
-**Alternatives considered:** Repo-root only `.project-memory` for iOS — rejected (monorepo noise); duplicate backend on device — rejected (`INV-ARCH-002`).
-**Consequences:** Agents have binding workflow; `prepared ≠ closed` for iOS prod claims.
-**Files touched:** `ios-app/.project-memory/*`, `.cursor/rules/earflow-ios-native.mdc`, `docs/PENDING.md`, `docs/IOS_APP.md`, `ios-app/CONTEXT.md`
-**Tests:** `xcodebuild` generic iOS Simulator build; `npm run verify:ios-native` when Simulator available
-**Чтобы не повторилось:** iOS tasks must grep `ios-app/.project-memory/AGENT_WORKFLOW.md` before code; no «готово» without memory + build evidence
+**Area:** auth | gateway | ios-native
+**Context:** iOS «вход как на сайте» был DEBUG-only через `WKWebView` (`AuthWebLoginView`) с cookie-transplant (`SessionCookieStore.syncFromWebKit`). Приложение контролировало webview → теоретически могло читать DOM/пароль; cookie-transplant хрупок и не Apple-recommended. Cookie forgery уже закрыт PoP, но входное окно — техдолг.
+**Decision:** OAuth 2.0 Authorization Code + PKCE (S256) через `ASWebAuthenticationSession` (системный браузер, приложение не видит пароль/DOM/куки; SSO с Safari). Переиспользуем существующий web-login через `return_to`: вход на `auth.earflow.ru/login` → `return_to=https://api.earflow.ru/api/auth/native/finalize?...` → finalize минтит одноразовый PKCE-bound code (Redis, 60s, SETNX) → 302 на `earflow://auth/callback?code&state` → `POST /api/auth/native/exchange {code, codeVerifier, authDeviceId, publicKeySpki}` проверяет PKCE (GETDEL one-time), привязывает device-ключ к сессии (контракт `device/register`) и ставит куки. Дальше — существующий PoP. Заменяет WKWebView (один control path, `INV-ARCH-001`), не добавляет второй.
+**Alternatives considered:** Оставить WKWebView cookie-transplant — отвергнуто (app видит пароль, хрупко, App Store risk). Bearer-токены как у Spotify без device-key — отвергнуто (PoP строже). Отдельный bearer/refresh-контур для native — отвергнуто (дублирование Auth Core).
+**Consequences:** `redirect_uri` строго по allowlist (`NATIVE_AUTH_REDIRECT_URIS`, default `earflow://auth/callback`) — нет open-redirect. Code бесполезен без `code_verifier` (защита от перехвата custom scheme). finalize/exchange в `DeviceProofBypassPaths` (finalize — GET с сессией без proof; exchange — bootstrap без сессии). exchange освобождён от CSRF (нет сессии; защита PKCE+one-time+Origin). `return_to`-bridge подтверждён: `auth.earflow.ru` = тот же `frontend` build (nginx → frontend upstream, отдельного backend login-page нет); `App.js` сохраняет `location.search` → `/login`, `sanitizeReturnTo` (`utils/authRedirect.js`) пропускает https `*.earflow.ru` и возвращает URL с query целиком → `window.location.replace(returnTo)`. iOS `URLComponents` кодирует `&`/`=` внутри `return_to`, PKCE-токены base64url (без `+`).
+**Files touched:** `backend/go-api-gateway/internal/auth/native_auth_http.go` (+test), `http_routes.go`, `device_proof_middleware.go`, `session_manager.go`; iOS `AuthWebLoginView.swift` (rewrite → ASWeb+PKCE), `AuthActor.swift` (`completeNativeWebLogin`, proofSkipPaths), `LoginView.swift`, `AppConfiguration.swift`, `AuthModels.swift`, `SessionCookieStore.swift` (removed `syncFromWebKit`+WebKit)
+**Tests:** Go `native_auth_http_test.go` (PKCE S256, redirect allowlist, finalize mint/login_required/bad-redirect, exchange success/wrong-verifier-burns-code/reuse/bad-origin) — `go test ./internal/auth/` PASS; iOS `verify:ios-native` build+56 tests PASS
+**Чтобы не повторилось:** новый `INV-SEC-018` — native web login только через ASWebAuthenticationSession + PKCE + device-bound exchange; запрещён WKWebView-login с cookie-transplant и приёмом сессии без PKCE/one-time code
 
 ---
 
-## 2026-06-23 — SEC-003 fresh-login tests + artist portal PoP transport
+## 2026-06-23 — Similar/Radio + unified rank pipeline (Engine V2)
 
-**Status:** accepted
-**Area:** auth | security-service | artist-frontend
-**Context:** PEND-SEC-003 backend logic existed but had no unit tests; artist-frontend sent cookie-only API calls while prod gateway enforces PoP + proof access token (known SEC-013 residual risk).
-**Decision:** (1) Backend remains sole authority for fresh-login: `requireStepUpForSensitiveSessionAction` returns `403 FRESH_LOGIN_REQUIRED` for mass revoke when session age <24h and no active step-up — frontend only displays and opens step-up modal. (2) Unit tests in `helpers_sessions_fresh_login_test.go` (miniredis). (3) Artist portal mirrors listener auth transport: `authDeviceCrypto.js`, `proofAccessToken.js`, `authDeviceRegister.js`, attach headers in `transport/http.js`; device register after bootstrap; clear secrets on logout. (4) `verify:auth-kit` checks artist auth artifacts.
-**Alternatives considered:** Share auth modules via monorepo package — deferred (minimal copy, same contract). Frontend-side 24h check — **rejected** (violates backend SOT / INV-ARCH-002).
-**Consequences:** Artist portal prod-safe with PoP; PEND-SEC-003 still open until VPS browser matrix.
-**Files touched:** `backend/security-service/internal/httpapi/helpers_sessions_fresh_login_test.go`, `backend/security-service/internal/store/redis_test_client.go`, `backend/security-service/internal/authz/jwt.go`, `artist-frontend/src/auth/*`, `artist-frontend/src/transport/http.js`, `artist-frontend/src/state/auth/AuthContext.js`, `artist-frontend/Dockerfile`, `scripts/verify-auth-kit.sh`, `docs/PENDING.md`
-**Tests:** `go test ./internal/httpapi/... -run FreshLogin` in security-service; `npm run verify:auth-kit` (source artifacts)
-**Чтобы не повторилось:** never mark SEC-003 closed without browser revoke-others matrix; artist API must attach proof headers when `NODE_ENV=production`
-
-## 2026-06-23 — Global rule: Backend SOT, Frontend thin client (INV-ARCH-002)
-
-**Status:** accepted
-**Area:** cross-cutting | architecture | frontend | backend | gateway
-**Context:** User requirement to make backend-as-source-of-truth a **project-wide** rule (not only social). Social formalization proved the pattern; needed global invariant, doc, always-on agent rule, and validate:ai gates.
-**Decision:** (1) `INV-ARCH-002` in `docs/ARCHITECTURE_INVARIANTS.md` — backend owns logic/state/authz/state machines; frontend renderer + intents only; litmus test = direct API cannot bypass rules. (2) Canonical doc `docs/BACKEND_FRONTEND_BOUNDARY.md` (10 sections). (3) Always-on rules `.cursor/rules/earflow-backend-sot.mdc` + `.windsurf/rules/earflow-backend-sot.mdc`. (4) Wired into `AGENTS.md`, `earflow-context-discipline.mdc`, `earflow-platform.mdc`, `validate-ai-discipline.js`. Domain invariants (`INV-DS-*`, `INV-SOCIAL-*`, etc.) remain as instances, not replacements.
-**Alternatives considered:** Only document in AGENTS prose — rejected (not enforceable). Rename to `INV-BE-003` — rejected (too narrow; rule is cross-cutting like `INV-ARCH-001`).
-**Consequences:** Every new module must follow backend-first order; AI loads boundary doc at level 0; social/DeviceSync become reference implementations.
-**Files touched:** `docs/BACKEND_FRONTEND_BOUNDARY.md`, `docs/ARCHITECTURE_INVARIANTS.md`, `.cursor/rules/earflow-backend-sot.mdc`, `.windsurf/rules/earflow-backend-sot.mdc`, `.cursor/rules/earflow-context-discipline.mdc`, `.windsurf/rules/earflow-context-discipline.mdc`, `.cursor/rules/earflow-platform.mdc`, `AGENTS.md`, `scripts/validate-ai-discipline.js`, `.cursor/skills/earflow-architecture-review/SKILL.md`
-**Tests:** `npm run validate:ai` — asserts INV-ARCH-002 + rule files exist
-**Чтобы не повторилось:** `INV-ARCH-002`; no full-stack feature without `BACKEND_FRONTEND_BOUNDARY.md` checklist; backend before frontend in every module
+**Status:** accepted  
+**Area:** recommendations | backend | ranking-service  
+**Context:** `/similar` and `/radio` used legacy `personalRecommendations` and inline SQL in routes; ranking logic duplicated across Go service and Node `rankLocally` with divergent fields.  
+**Decision:** (1) `engineV2/trackSeed.js` owns similar/radio retrieval + radio re-rank via `rankPipeline`. (2) `candidateObjects.js` + `rankPipeline.js` extracted as shared engine modules. (3) Go ranking adds `userArtistDislikeCount` parity with Node. (4) Radio exclude from reco **session** (`sessionId`), not client `excludeIds`.  
+**Files touched:** `engineV2/trackSeed.js`, `candidateObjects.js`, `rankPipeline.js`, `routes/recommendations.js`, `lib/validators.js`, `ranking-service/internal/ranking/ranking.go`, `CONTEXT.md`  
+**Tests:** Go `go test ./...` ranking; Node validators + sessionStateMachine tests  
+**Чтобы не повторилось:** extend `INV-REC-001` — no API route inline SQL for reco
 
 ---
 
-## 2026-06-23 — Social feed: backend-as-SOT architecture formalization
+## 2026-06-23 — Recommendations SoT: session state machine + offline wire-up
 
-**Status:** accepted
-**Area:** social | database-service | gateway | frontend
-**Context:** Social v1 code existed but prod path was incomplete (missing gateway route + API client). User requirement: strict backend-as-source-of-truth — no business logic on frontend, state machine on backend, API as contract.
-**Decision:** (1) Gateway route `social` with `require_user`, `require_service_token`, `rate_limit: social`. (2) `POST_STATUS` + `canTransitionPostStatus` + `pickCreatePostFields` in `socialPosts.js` — client cannot set `user_id`/`status`. (3) Frontend `SocialPage` is renderer-only: applies backend `post`/`reaction`/`deleted` acks, no mock feed, no client ordering, `canManage` from DTO only. (4) `INV-SOCIAL-004` + validate:ai scans + gateway test `TestGatewayYAMLSocialRouteIsProtected`.
-**Alternatives considered:** Optimistic like UI — rejected (violates INV-SOCIAL-001). Frontend delete without backend ack — rejected.
-**Files touched:** `lib/socialPosts.js`, `routes/social.js`, `gateway.yaml`, `frontend/src/api/client.js`, `SocialPage.js`, `validate-ai-discipline.js`, `docs/SOCIAL_FEED.md`, `docs/ARCHITECTURE_INVARIANTS.md`, `CONTEXT.md`
-**Tests:** `test:social` 9/9, `SocialPage.test.js` 4/4, `TestGatewayYAMLSocialRouteIsProtected`, `validate:ai` 0 errors
-**Чтобы не повторилось:** social not shippable without gateway route + client methods + INV-SOCIAL-* in validate:ai
+**Status:** accepted  
+**Area:** recommendations | backend | listener-frontend | gateway  
+**Context:** Параллельные пути (`database-service` GET recommendations, client `excludeIds`, frontend skip-burst refresh), offline worker писал в Redis без чтения Engine V2, mood-radar использовал несуществующий `redis.getDbPool`.  
+**Decision:** (1) `services/sessionStateMachine.js` — единый FSM (`idle|active|skip_burst|expired`) и `clientActions.refreshRecommended` на feedback ack. (2) Engine V2 читает offline precompute через `retrieval/offline.js`. (3) Validators игнорируют client `excludeIds`; auth user only. (4) Legacy `GET /api/songs/recommendations` → `410 RECO_LEGACY_DEPRECATED`. (5) Gateway `require_user: true` на `/api/recommendations`. (6) Frontend `useRecommendations` — thin client: no local skip burst, no excludeIds in API.  
+**Alternatives considered:** Proxy legacy route to reco-service — отвергнуто (два контракта). Оставить client excludeIds как hint — отвергнуто (dual SoT).  
+**Consequences:** Feedback может вернуть `refreshRecommended`; UI обязан следовать backend. Offline worker снова влияет на выдачу. Mood radar использует Postgres `query()`.  
+**Files touched:** `backend/recommendations-service/services/sessionStateMachine.js`, `engineV2/*`, `routes/recommendations.js`, `lib/validators.js`, `CONTEXT.md`, `backend/database-service/routes/songs.js`, `gateway.yaml`, `frontend/src/hooks/useRecommendations.js`, `docs/ARCHITECTURE_INVARIANTS.md` (`INV-REC-001`)  
+**Tests:** `backend/recommendations-service/tests/sessionStateMachine.test.js`  
+**Чтобы не повторилось:** `INV-REC-001`, `backend/recommendations-service/CONTEXT.md`
 
 ---
 
-## 2026-06-23 — Social feed end-to-end wiring (gateway + API client)
+## 2026-06-23 — iOS native auth gate closed (`PEND-IOS-001`)
 
-**Status:** accepted
-**Area:** social | gateway | frontend
-**Context:** Social backend (`routes/social.js`, DTO, migrations) and `SocialPage` UI existed, but production path was broken: `gateway.yaml` had no `/api/social` route and `frontend/src/api/client.js` lacked `getSocialFeed` / mutation methods. `SocialPage` had mojibake aria labels and inverted pagination merge on «Показать ещё».
-**Decision:** Add gateway route `social` → `database` upstream with `require_user`, `require_service_token`, `rate_limit: social`. Add API client methods with short TTL transport cache + invalidation on mutations. Fix append pagination via `mergeAppendPosts`. Add CI step `test:social`.
-**Files touched:** `backend/go-api-gateway/gateway.yaml`, `frontend/src/api/client.js`, `frontend/src/components/SocialPage.js`, `frontend/src/components/SocialPage.test.js`, `.github/workflows/ci.yml`, `docs/PENDING.md`
-**Tests:** backend 6/6, frontend 4/4, `go test ./...` gateway, `npm run build`, `validate:ai` 0 errors
-**Чтобы не повторилось:** social feature is not shippable until gateway route + `client.js` methods exist; grep both before closing social PEND.
+**Status:** accepted  
+**Area:** ios | auth  
+**Context:** `PEND-IOS-001` blocked «auth готово» until E2E proof. User requested Simulator-automated closure. Prod bootstrap log showed `authenticated userId=157` on device.  
+**Decision:** **Close `PEND-IOS-001`.** Auth implementation gate satisfied by: (1) `npm run verify:ios-native` — 34 tests PASS (unit + `AuthActorLifecycleIntegrationTests`: bootstrap, cold restart, revalidate, logout, email login, `INVALID_CREDENTIALS`); (2) prod API bootstrap evidence (`userId=157`). Scheme fix: removed broken `EARFLOW_API_BASE_URL` from XcodeGen scheme; prod default `api.earflow.ru`.  
+**Alternatives considered:** iPhone-only manual checklist — deferred MFA/web-login to TestFlight beta; core auth path automated.  
+**Consequences:** iOS feature work (playback, Device Sync UI) unblocked. TestFlight / MFA-on-device / WKWebView login remain separate gates.  
+**Files touched:** `ios-app/EarflowTests/AuthActorLifecycleIntegrationTests.swift`, `ios-app/EarflowTests/Support/MockGatewayURLProtocol.swift`, `ios-app/Earflow/Core/Auth/KeychainStore.swift` (XCTest in-memory fallback), `ios-app/Earflow/Core/Network/GatewayClient.swift`, `ios-app/project.yml`, `scripts/verify-ios-native.sh`  
+**Tests:** `npm run verify:ios-native` — **PASS** (34 tests, iPhone 17 Simulator)  
+**Чтобы не повторилось:** auth regressions must fail `AuthActorLifecycleIntegrationTests`; do not claim App Store ready without TestFlight gate.
+
+---
+
+## 2026-06-23 — iOS native auth prepared; PEND-IOS-001 remains OPEN
+
+**Status:** accepted  
+**Area:** ios | auth  
+**Context:** `PEND-IOS-001` in `docs/PENDING.md` still described auth as «not implemented» and Windows/no-Xcode context, while `ios-app/` already contains `AuthActor`, device proof, bootstrap/degraded, and Simulator-verified tests. Risk: agents or humans claim «auth готово» or close the gate without device proof.  
+**Decision:** iOS auth implementation is **prepared** (code + Simulator PASS), but **`PEND-IOS-001` remains OPEN** until real iPhone smoke confirms: login → `/api/profile` → app restart/revalidate → logout → (MFA if applicable). Docs updated; human checklist at `ios-app/.project-memory/IOS_AUTH_CLOSURE_CHECKLIST.md`. **Do not** record CLOSED in this entry.  
+**Alternatives considered:** (1) Close PEND on Simulator-only — rejected (`prepared ≠ closed`, `docs/AUTH_ROLLOUT_GATES.md`). (2) Leave stale PEND text — rejected; misleads future sessions.  
+**Consequences:** `docs/PENDING.md`, `CURRENT_STATE.md`, `HANDOFF.md`, `docs/IOS_APP.md`, `ios-app/.project-memory/CHANGELOG.md` aligned to honest state. Gate close requires checklist evidence + new DECISIONS entry.  
+**Files touched:** `docs/PENDING.md`, `ios-app/.project-memory/IOS_AUTH_CLOSURE_CHECKLIST.md`, `ios-app/.project-memory/CURRENT_STATE.md`, `ios-app/.project-memory/HANDOFF.md`, `ios-app/.project-memory/CHANGELOG.md`, `docs/IOS_APP.md`  
+**Tests:** `npm run verify:ios-native` (Simulator) — automated; iPhone smoke — **pending human**  
+**Чтобы не повторилось:** never close `PEND-IOS-001` without `IOS_AUTH_CLOSURE_CHECKLIST.md` evidence; never describe iOS auth as «not implemented» when `AuthActor` exists.
 
 ---
 

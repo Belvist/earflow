@@ -25,7 +25,8 @@ actor DeviceSyncActor {
 
     /// Connect after auth — WS with ticket, no REST polling (`INV-DS-006`).
     func connectIfAuthenticated() async {
-        guard await auth.currentState() == .authenticated else { return }
+        let state = await auth.currentState()
+        guard state == .authenticated || state == .degraded else { return }
         guard webSocketTask == nil else { return }
         webSocketTask = Task {
             await self.runWebSocketLoop()

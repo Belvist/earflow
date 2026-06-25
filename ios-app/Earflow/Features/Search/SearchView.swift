@@ -2,10 +2,14 @@ import SwiftUI
 
 struct SearchView: View {
     @EnvironmentObject private var dependencies: AppDependencies
+    @EnvironmentObject private var authPresentation: AppAuthPresentation
+    @Environment(\.appShellMode) private var shellMode
     @State private var query = ""
     @State private var results = SearchResponse(tracks: [], artists: [], albums: [])
     @State private var isSearching = false
     @State private var errorMessage: String?
+    @State private var searchTask: Task<Void, Never>?
+    @State private var searchGeneration = 0
 
     var body: some View {
         NavigationStack {
@@ -18,7 +22,12 @@ struct SearchView: View {
                         .autocorrectionDisabled()
                         .foregroundStyle(EarflowTheme.textPrimary)
                         .onChange(of: query) { _, newValue in
-                            Task { await performSearch(newValue) }
+                            searchGeneration += 1
+                            let generation = searchGeneration
+                            searchTask?.cancel()
+                            searchTask = Task {
+                                await performSearch(newValue, generation: generation)
+                            }
                         }
                 }
                 .padding(14)
@@ -59,7 +68,7 @@ struct SearchView: View {
                         Section("Треки") {
                             ForEach(tracks) { track in
                                 TrackRowView(track: track) {
-                                    Task { await dependencies.playbackCoordinator.play(track) }
+                                    Task { await playTrack(track) }
                                 }
                                 .listRowBackground(EarflowTheme.background)
                             }
@@ -74,20 +83,41 @@ struct SearchView: View {
         }
     }
 
-    private func performSearch(_ text: String) async {
+    private func performSearch(_ text: String, generation: Int) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 2 else {
+            guard generation == searchGeneration else { return }
             results = SearchResponse(tracks: [], artists: [], albums: [])
+            isSearching = false
             return
         }
         isSearching = true
         errorMessage = nil
-        defer { isSearching = false }
+        defer {
+            if generation == searchGeneration {
+                isSearching = false
+            }
+        }
         do {
-            results = try await dependencies.search.search(query: trimmed)
+            let response = try await dependencies.search.search(query: trimmed, publicOnly: shellMode.isGuest)
+            guard !Task.isCancelled, generation == searchGeneration else { return }
+            results = response
+        } catch is CancellationError {
+            return
         } catch {
-            errorMessage = "Ошибка поиска."
+            guard generation == searchGeneration else { return }
+            errorMessage = shellMode.isGuest
+                ? "Поиск может требовать вход. Нажмите «Войти» в профиле."
+                : "Ошибка поиска."
             await EarflowLog.shared.error("search", error.localizedDescription)
         }
+    }
+
+    private func playTrack(_ track: TrackItem) async {
+        guard await authPresentation.guardAuthenticated(
+            auth: dependencies.auth,
+            reason: "Войдите, чтобы слушать треки."
+        ) else { return }
+        await dependencies.playbackCoordinator.play(track)
     }
 }

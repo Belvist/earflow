@@ -19,7 +19,8 @@ Every important client process has **one owner actor** and explicit states. Dire
 | `register_submit` | * → authenticating → authenticated | backend validation | same as login |
 | `telegram_auth` | * → authenticating → authenticated | valid Telegram hash | same as login |
 | `logout` | authenticated → unauthenticated | — | clear Keychain subset, cookies, proof cache |
-| `unauthorized_401` | authenticated → expired | gateway 401 | clear session |
+| `session_refresh` | authenticated → authenticated | valid mp_sid | POST /api/auth/refresh, renew cookies |
+| `unauthorized_401` | authenticated → expired | refresh failed | clear session |
 | `device_revoked_403` | * → revoked | code DEVICE_REVOKED | stop playback hook |
 
 ### Invariants

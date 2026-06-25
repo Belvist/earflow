@@ -219,14 +219,8 @@ router.get('/', requireService(['api-gateway']), async (req, res) => {
 });
 
 /**
- * GET /api/songs/recommendations
- * Умные рекомендации на основе истории прослушиваний, лайков и предпочтений
- * Query params:
- * - userId?: number — ID пользователя для персонализации
- * - exclude?: string — CSV списка id для исключения
- * - limit?: number — количество треков (по умолчанию 30, максимум 100)
- * - seed?: string — seed для стабильной сортировки
- * - offset?: number — смещение для пагинации
+ * GET /api/songs/recommendations — DEPRECATED (2026-06-23)
+ * Use POST /api/recommendations/init via recommendations-service.
  */
 const recommendationsLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -241,153 +235,11 @@ const recommendationsLimiter = rateLimit({
 });
 
 router.get('/recommendations', requireService(['api-gateway']), recommendationsLimiter, async (req, res) => {
-  try {
-    let userId = null;
-    if (req.query.userId !== undefined && req.query.userId !== null && String(req.query.userId).trim() !== '') {
-      const parsedUserId = parseInt(String(req.query.userId), 10);
-      if (!Number.isFinite(parsedUserId) || parsedUserId <= 0) {
-        return res.status(400).json({ error: 'Некорректный userId' });
-      }
-      userId = parsedUserId;
-    }
-    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
-    const seedRaw = (req.query.seed || '').toString();
-    const computedSeed = seedRaw || `${userId || 0}:${Math.floor(Date.now() / 60000)}`;
-    const offset = parseInt(req.query.offset, 10) || 0;
-    const excludeCsv = (req.query.exclude || '').toString();
-
-    const excludeIds = excludeCsv
-      .split(',')
-      .map((s) => parseInt(s.trim(), 10))
-      .filter((n) => Number.isFinite(n));
-
-    const { hasIsAvailable, hasEbapReadyFlag } = await getSchemaCapabilities();
-    const view = (req.query.view ?? '').toString().trim().toLowerCase();
-    const availabilityClause = hasIsAvailable ? ' AND is_available = true' : '';
-    const availabilitySelect = hasIsAvailable ? 'is_available' : 'true as is_available';
-    const ebapSelect = hasEbapReadyFlag ? 'has_ebap' : 'false as has_ebap';
-
-    const params = [];
-
-    // Умный алгоритм рекомендаций
-    let sql = `
-      WITH
-      -- История прослушиваний за последние 7 дней
-      recent_listens AS (
-        SELECT DISTINCT song_id, MAX(listened_at) as last_listen
-        FROM listens
-        ${userId ? 'WHERE user_id = $1' : 'WHERE 1=0'}
-        AND listened_at > NOW() - INTERVAL '7 days'
-        GROUP BY song_id
-      ),
-      -- Лайки пользователя
-      user_likes AS (
-        SELECT DISTINCT song_id
-        FROM likes
-        ${userId ? 'WHERE user_id = $1' : 'WHERE 1=0'}
-      ),
-      -- Дизлайки пользователя (исключаем)
-      user_dislikes AS (
-        SELECT DISTINCT song_id
-        FROM dislikes
-        ${userId ? 'WHERE user_id = $1' : 'WHERE 1=0'}
-      ),
-      -- Топ артисты и альбомы на основе истории
-      top_artists AS (
-        SELECT s.artist, COUNT(*) as play_count
-        FROM listens l
-        JOIN songs s ON s.id = l.song_id
-        ${userId ? 'WHERE l.user_id = $1' : 'WHERE 1=0'}
-        AND l.listened_at > NOW() - INTERVAL '30 days'
-        GROUP BY s.artist
-        ORDER BY play_count DESC
-        LIMIT 10
-      ),
-      top_albums AS (
-        SELECT s.album, COUNT(*) as play_count
-        FROM listens l
-        JOIN songs s ON s.id = l.song_id
-        ${userId ? 'WHERE l.user_id = $1' : 'WHERE 1=0'}
-        AND l.listened_at > NOW() - INTERVAL '30 days'
-        GROUP BY s.album
-        ORDER BY play_count DESC
-        LIMIT 10
-      ),
-      -- Все доступные треки (пользователь + библиотека)
-      all_songs AS (
-        ${userId ? `SELECT * FROM songs WHERE uploader_id = $1${availabilityClause} UNION` : ''}
-        SELECT * FROM songs WHERE uploader_id = 1${availabilityClause}
-      ),
-      -- Расчет скора релевантности
-      scored_songs AS (
-        SELECT 
-          s.*,
-          COALESCE(
-            -- Лайкнутые треки = высокий приоритет
-            (CASE WHEN ul.song_id IS NOT NULL THEN 50 ELSE 0 END) +
-            -- Треки топовых артистов
-            (CASE WHEN ta.artist IS NOT NULL THEN 30 ELSE 0 END) +
-            -- Треки топовых альбомов
-            (CASE WHEN tb.album IS NOT NULL THEN 20 ELSE 0 END) +
-            -- Новые треки (не слушали) = exploration
-            (CASE WHEN rl.song_id IS NULL THEN 15 ELSE 0 END) +
-            -- Пенальти за недавнее прослушивание
-            (CASE 
-              WHEN rl.last_listen > NOW() - INTERVAL '1 hour' THEN -100
-              WHEN rl.last_listen > NOW() - INTERVAL '6 hours' THEN -50
-              WHEN rl.last_listen > NOW() - INTERVAL '1 day' THEN -20
-              ELSE 0
-            END),
-            10  -- базовый скор для новых пользователей
-          ) as relevance_score
-        FROM all_songs s
-        LEFT JOIN user_likes ul ON ul.song_id = s.id
-        LEFT JOIN user_dislikes ud ON ud.song_id = s.id
-        LEFT JOIN top_artists ta ON ta.artist = s.artist
-        LEFT JOIN top_albums tb ON tb.album = s.album
-        LEFT JOIN recent_listens rl ON rl.song_id = s.id
-        WHERE ud.song_id IS NULL
-      )
-      SELECT id, uploader_id as user_id, title, artist, album, duration, genre, year,
-             cover_path, ${availabilitySelect}, ${ebapSelect}, created_at, updated_at
-      FROM scored_songs
-    `;
-
-    if (userId) {
-      params.push(userId);
-    }
-
-    // Исключаем треки
-    if (excludeIds.length > 0) {
-      const placeholders = excludeIds.map((_, i) => `$${params.length + i + 1}`).join(',');
-      sql += ` WHERE id NOT IN (${placeholders})`;
-      params.push(...excludeIds);
-    }
-
-    params.push(computedSeed);
-    sql += ` ORDER BY relevance_score DESC, md5(id::text || $${params.length})`;
-
-    params.push(limit);
-    sql += ` LIMIT $${params.length}`;
-
-    if (offset > 0) {
-      params.push(offset);
-      sql += ` OFFSET $${params.length}`;
-    }
-
-    const result = await db.query(sql, params);
-    const rows = result.rows || [];
-    if (view === 'compact') {
-      return res.json(mapSongListCompactDto(rows));
-    }
-    return res.json(rows.map(stripSensitiveSongFields));
-  } catch (error) {
-    console.error('❌ Ошибка рекомендаций:', error);
-    if (error && error.code === 'SCHEMA_UNAVAILABLE') {
-      return res.status(503).json({ error: 'Схема базы данных недоступна', code: 'SCHEMA_UNAVAILABLE' });
-    }
-    return res.status(500).json({ error: 'Ошибка получения рекомендаций' });
-  }
+  return res.status(410).json({
+    error: 'Legacy recommendations endpoint removed',
+    code: 'RECO_LEGACY_DEPRECATED',
+    replacement: 'POST /api/recommendations/init',
+  });
 });
 
 /**

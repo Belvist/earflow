@@ -43,6 +43,9 @@
     "verify:auth-kit": "bash scripts/verify-auth-kit.sh",
     "rollout:auth-pg-sot": "bash scripts/rollout-auth-pg-sot.sh",
     "verify:auth-pg-sot": "bash scripts/verify-auth-pg-sot.sh",
-    "verify:ios-native": "bash scripts/verify-ios-native.sh"
+    "verify:auth-error-codes": "bash scripts/verify-auth-error-codes.sh",
+    "verify:sec003-fresh-login": "bash scripts/verify-sec003-fresh-login-gate.sh",
+    "verify:ios-native": "bash scripts/verify-ios-native.sh",
+    "verify:monorepo-integrity": "bash scripts/verify-monorepo-integrity.sh"
   }
 }

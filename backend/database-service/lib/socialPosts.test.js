@@ -5,15 +5,12 @@ const assert = require('node:assert/strict');
 
 const {
   MAX_BODY_LENGTH,
-  POST_STATUS,
-  canTransitionPostStatus,
   decodeFeedCursor,
   encodeFeedCursor,
   formatCreatedAtLabel,
   mapSocialReaction,
   mapSocialPostRow,
   normalizePostBody,
-  pickCreatePostFields,
   validatePostInput,
 } = require('./socialPosts');
 
@@ -81,34 +78,6 @@ test('formatCreatedAtLabel is stable for relative labels', () => {
     formatCreatedAtLabel('2026-06-11T07:55:00.000Z', new Date('2026-06-11T08:00:00.000Z')),
     '5 минут назад',
   );
-});
-
-test('validatePostInput ignores spoofed user_id and status from client body', () => {
-  const result = validatePostInput({
-    user_id: 999,
-    userId: 999,
-    authorId: 888,
-    status: POST_STATUS.DELETED,
-    visibility: 'private',
-    title: '  Launch  ',
-    body: 'Hello world',
-  });
-  assert.equal(result.ok, true);
-  assert.equal(result.title, 'Launch');
-  assert.equal(result.body, 'Hello world');
-});
-
-test('pickCreatePostFields strips auth and lifecycle fields', () => {
-  assert.deepEqual(
-    pickCreatePostFields({ title: 'A', body: 'B', user_id: 1, status: 'deleted', likes_count: 99 }),
-    { title: 'A', body: 'B' },
-  );
-});
-
-test('post status state machine allows active to deleted only', () => {
-  assert.equal(canTransitionPostStatus(POST_STATUS.ACTIVE, POST_STATUS.DELETED), true);
-  assert.equal(canTransitionPostStatus(POST_STATUS.DELETED, POST_STATUS.ACTIVE), false);
-  assert.equal(canTransitionPostStatus(POST_STATUS.ACTIVE, POST_STATUS.ACTIVE), true);
 });
 
 test('mapSocialReaction returns only reaction delta', () => {

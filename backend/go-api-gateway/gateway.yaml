@@ -176,6 +176,7 @@ routes:
     upstream: recommendations
     policies:
       class: public
+      require_user: true
       timeout: 10s
 
   - id: songs_recommendations
@@ -372,18 +373,6 @@ routes:
       class: unsafe
       require_user: true
       timeout: 20s
-
-  - id: social
-    match:
-      type: prefix
-      value: /api/social
-    upstream: database
-    policies:
-      class: unsafe
-      require_user: true
-      require_service_token: true
-      rate_limit: social
-      timeout: 10s
 
   - id: user_alias
     match:

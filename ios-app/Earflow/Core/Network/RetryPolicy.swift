@@ -8,10 +8,10 @@ struct RetryPolicy: Sendable {
     let retryableStatusCodes: Set<Int>
 
     static let `default` = RetryPolicy(
-        maxAttempts: 3,
-        initialDelay: 0.5,
-        multiplier: 2.0,
-        maxDelay: 8.0,
+        maxAttempts: NetworkTransientRetry.gatewayAttempts,
+        initialDelay: 0.35,
+        multiplier: 1.75,
+        maxDelay: 3.5,
         retryableStatusCodes: [408, 500, 502, 503, 504]
     )
 

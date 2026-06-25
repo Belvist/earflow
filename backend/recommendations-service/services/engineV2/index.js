@@ -1,25 +1,13 @@
-const axios = require('axios');
 const config = require('../../config');
 const { query, fetchTracksByIds } = require('../../lib/database');
 const redis = require('../../lib/redis');
 const { sanitizeUserId } = require('../../lib/validators');
 
 const { bloomFilterIds, bloomMarkSeen } = require('./seenBloom');
-const { rankWithService, rankLocally } = require('./ranking');
+const { rankCandidateList } = require('./rankPipeline');
 const { retrieveCandidates: retrieveCandidatesInternal } = require('./internal');
-
-function uniqInt(ids) {
-    const out = [];
-    const seen = new Set();
-    for (const raw of Array.isArray(ids) ? ids : []) {
-        const id = Number.parseInt(raw, 10);
-        if (!Number.isFinite(id) || id <= 0) continue;
-        if (seen.has(id)) continue;
-        seen.add(id);
-        out.push(id);
-    }
-    return out;
-}
+const { enrichDeliveryResponse } = require('../sessionStateMachine');
+const { uniqInt, fetchCandidateObjects } = require('./candidateObjects');
 
 function mergeUniqueInt(primary, secondary) {
     const out = [];
@@ -232,6 +220,7 @@ function sanitizeSourceCounts(counts) {
         'genreAffinity',
         'similarArtist',
         'exploration',
+        'offline',
     ]) {
         out[key] = Math.max(0, Number.parseInt(src[key], 10) || 0);
     }
@@ -260,69 +249,6 @@ function buildRecommendationMeta(retrieval, servedIds) {
 }
 
 const ACTIVE_SESSION_ENGINE = 'v2';
-
-async function fetchCandidateObjects(userId, ids, sourceScores, sourceBuckets) {
-    const list = uniqInt(ids);
-    if (list.length === 0) return [];
-
-    const result = await query(
-        `WITH artist_dislike_counts AS (
-       SELECT LOWER(TRIM(ds.artist)) AS artist_key, COUNT(*)::int AS dislike_count
-         FROM dislikes dd
-         JOIN songs ds ON ds.id = dd.song_id
-        WHERE dd.user_id = $1
-          AND ds.artist IS NOT NULL
-          AND TRIM(ds.artist) != ''
-        GROUP BY LOWER(TRIM(ds.artist))
-     )
-     SELECT
-       s.id,
-       s.artist,
-       s.genre,
-       sf.tempo,
-       sf.energy,
-       COALESCE(s.popularity, 0)::double precision AS popularity,
-       COALESCE(s.play_count, 0)::double precision AS play_count,
-       COALESCE(uh.play_count, 0)::int AS user_play_count,
-       COALESCE(uh.skip_count, 0)::int AS user_skip_count,
-       COALESCE(adl.dislike_count, 0)::int AS user_artist_dislike_count
-     FROM songs s
-     LEFT JOIN song_features sf ON s.id = sf.song_id
-     LEFT JOIN user_history uh ON uh.user_id = $1 AND uh.song_id = s.id
-     LEFT JOIN artist_dislike_counts adl
-       ON LOWER(TRIM(s.artist)) = adl.artist_key
-     WHERE s.id = ANY($2::int[])`,
-        [userId, list]
-    );
-
-    const map = new Map((result.rows || []).map((r) => [r.id, r]));
-
-    const out = [];
-    for (const id of list) {
-        const row = map.get(id);
-        if (!row) continue;
-
-        const tempo = row.tempo == null ? null : Number(row.tempo);
-        const energy = row.energy == null ? null : Number(row.energy);
-
-        out.push({
-            id: row.id,
-            artist: row.artist || '',
-            genre: typeof row.genre === 'string' ? row.genre.trim() : '',
-            tempo: Number.isFinite(tempo) ? tempo : null,
-            energy: Number.isFinite(energy) ? energy : null,
-            popularity: Number(row.popularity) || 0,
-            playCount: Number(row.play_count) || 0,
-            userPlayCount: Number(row.user_play_count) || 0,
-            userSkipCount: Number(row.user_skip_count) || 0,
-            userArtistDislikeCount: Number(row.user_artist_dislike_count) || 0,
-            sourceScore: Number(sourceScores.get(row.id)) || 0,
-            tasteBucket: sourceBuckets instanceof Map ? (sourceBuckets.get(row.id) || null) : null,
-        });
-    }
-
-    return out;
-}
 
 async function ensureSession(userId, options = {}) {
     const forceNew = options && options.forceNew === true;
@@ -489,23 +415,6 @@ async function selectFilteredCandidateIds(userId, retrievalIds, requestExcludeId
     return filteredIds;
 }
 
-async function rankCandidates(userId, candidates, limit, context) {
-    const safeLimit = Math.min(Math.max(Number(limit) || 0, 1), 100);
-
-    const url = config.engineV2.rankingServiceUrl;
-    const timeoutMs = config.engineV2.rankingTimeoutMs;
-
-    if (url) {
-        try {
-            return await rankWithService(axios, url, timeoutMs, candidates, safeLimit, context);
-        } catch {
-            return rankLocally(candidates, safeLimit, context);
-        }
-    }
-
-    return rankLocally(candidates, safeLimit, context);
-}
-
 async function loadCatalogExpansionIds(userId, excludeIds, limit) {
     const safeLimit = Math.min(Math.max(Number(limit) || 0, 0), 100);
     if (safeLimit <= 0) return [];
@@ -572,7 +481,7 @@ async function expandRankedIdsIfNeeded(userId, rankedIds, retrieval, excludeIds,
     );
     if (expansionCandidates.length === 0) return baseIds;
 
-    const rankedExpansion = await rankCandidates(userId, expansionCandidates, safeDesired - baseIds.length, context);
+    const rankedExpansion = await rankCandidateList(userId, expansionCandidates, safeDesired - baseIds.length, context);
     const expansionRankedIds = (Array.isArray(rankedExpansion) ? rankedExpansion : []).map((x) => x.id);
     return mergeUniqueInt(baseIds, expansionRankedIds).slice(0, safeDesired);
 }
@@ -625,7 +534,7 @@ async function initSessionV2(userId, preferences, forceNew, limit, excludeIds = 
     const candidates = await fetchCandidateObjects(uid, filteredIds, retrieval.scores, retrieval.sourceBuckets);
 
     const rankWindow = getRankWindowSize(limit, candidates.length);
-    const ranked = await rankCandidates(uid, candidates, rankWindow, {
+    const ranked = await rankCandidateList(uid, candidates, rankWindow, {
         isEvening: retrieval.evening === true,
         seedTempo: retrieval.seedTempo,
         sessionId,
@@ -650,13 +559,13 @@ async function initSessionV2(userId, preferences, forceNew, limit, excludeIds = 
     const seedExclude = mergeUniqueInt(expansionExclude, servedIds);
     await persistSessionExcludeIds(sessionId, seedExclude).catch(() => null);
 
-    return {
+    return enrichDeliveryResponse(uid, sessionId, {
         sessionId,
         tracks,
         hasMore: tracks.length > 0 || filteredIds.length > 0 || retrieval.ids.length > 0,
         recommendationMeta: buildRecommendationMeta(retrieval, servedIds),
         ...diagnosticsPayload(retrieval, servedIds),
-    };
+    });
 }
 
 async function nextBatchV2(userId, sessionId, count, excludeIds) {
@@ -680,7 +589,7 @@ async function nextBatchV2(userId, sessionId, count, excludeIds) {
     const candidates = await fetchCandidateObjects(uid, filteredIds, retrieval.scores, retrieval.sourceBuckets);
 
     const rankWindow = getRankWindowSize(count, candidates.length);
-    const ranked = await rankCandidates(uid, candidates, rankWindow, {
+    const ranked = await rankCandidateList(uid, candidates, rankWindow, {
         isEvening: retrieval.evening === true,
         seedTempo: retrieval.seedTempo,
         sessionId: sid || null,
@@ -707,12 +616,12 @@ async function nextBatchV2(userId, sessionId, count, excludeIds) {
         await persistSessionExcludeIds(sid, servedIds).catch(() => null);
     }
 
-    return {
+    return enrichDeliveryResponse(uid, sid || null, {
         tracks,
         hasMore: tracks.length > 0 || filteredIds.length > 0 || retrieval.ids.length > 0,
         recommendationMeta: buildRecommendationMeta(retrieval, servedIds),
         ...diagnosticsPayload(retrieval, servedIds),
-    };
+    });
 }
 
 module.exports = {

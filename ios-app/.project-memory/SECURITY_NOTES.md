@@ -20,6 +20,9 @@
 | Threat | Mitigation |
 |--------|------------|
 | Token theft from logs | LogRedactor + EarflowLog policy |
+| Login 401 with wrong password | Must **not** call `clearSession` — `skipAuth` on login/register |
+| Session TTL | `POST /api/auth/refresh` on 401 before logout (GatewayClient retry) |
+| Native Origin / CSRF | `Origin: https://earflow.ru` + `X-Earflow-Client: ios-native` on all gateway requests |
 | MITM | TLS + pinned host allowlist in GatewayClient |
 | Client spoofed userId | Not sent; session from cookies |
 | Direct media URL bypass | HLS session via gateway only |

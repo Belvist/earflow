@@ -1,8 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
-import { clearAuthDeviceState } from '../../auth/authDeviceCrypto';
-import { ensureAuthDeviceRegistered } from '../../auth/authDeviceRegister';
-import { clearProofAccessToken } from '../../auth/proofAccessToken';
 import { authApi } from '../../transport/authApi';
 import { artistPortalApi } from '../../transport/artistPortalApi';
 
@@ -39,11 +36,6 @@ const writeCachedAuth = (nextUser, nextPortal) => {
 };
 
 const clearCachedAuth = () => writeCachedAuth(null, null);
-
-const clearLocalAuthSecrets = () => {
-    void clearAuthDeviceState();
-    clearProofAccessToken();
-};
 
 const normalizeAuthCode = (code) => (typeof code === 'string' ? code.trim().toUpperCase() : '');
 
@@ -88,7 +80,6 @@ export function AuthProvider({ children }) {
 
     const applyGuest = useCallback(() => {
         clearCachedAuth();
-        clearLocalAuthSecrets();
         setUser(null);
         setPortal(null);
         userRef.current = null;
@@ -191,7 +182,6 @@ export function AuthProvider({ children }) {
                     : defaultPortalState(isAdmin);
 
             applyAuthenticated(safeProfile, mergedPortal);
-            void ensureAuthDeviceRegistered().catch(() => undefined);
             scheduleRefresh(4 * 60_000);
             if (portalErr && (isBackendRecoverable(portalErr) || isTransientStatus(portalErr?.status))) {
                 applyDegraded();
@@ -228,7 +218,6 @@ export function AuthProvider({ children }) {
                                 ? { ...cachedPortal, isAdmin: cachedPortal.isAdmin === true || safeProfile.isAdmin === true }
                                 : defaultPortalState(isAdmin);
                         applyAuthenticated(safeProfile, mergedPortal);
-                        void ensureAuthDeviceRegistered().catch(() => undefined);
                         scheduleRefresh(4 * 60_000);
                         if (portalErr && (isBackendRecoverable(portalErr) || isTransientStatus(portalErr?.status))) {
                             applyDegraded();

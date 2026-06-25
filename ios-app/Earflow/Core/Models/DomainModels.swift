@@ -5,6 +5,7 @@ enum AuthState: String, Sendable, Equatable {
     case unauthenticated
     case authenticating
     case authenticated
+    case degraded
     case refreshing
     case expired
     case revoked

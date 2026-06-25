@@ -342,6 +342,7 @@ async function retrieveCandidates(userId, options = {}) {
     const { buildGenreAffinityCandidates } = require('./retrieval/genreAffinity');
     const { buildArtistAffinityCandidates } = require('./retrieval/artistAffinity');
     const { buildSimilarArtistCandidates } = require('./retrieval/similarArtist');
+    const { buildOfflineCandidates } = require('./retrieval/offline');
     const redis = require('../../lib/redis');
     const sessionId = typeof options.sessionId === 'string' ? options.sessionId.trim() : '';
 
@@ -376,6 +377,7 @@ async function retrieveCandidates(userId, options = {}) {
         genreAffinitySource,
         artistAffinitySource,
         similarArtistSource,
+        offlineSource,
     ] = await Promise.all([
         buildSessionIntentCandidates(userId, sessionId),
         buildVectorCandidates(userId, recentTrackIds),
@@ -387,6 +389,7 @@ async function retrieveCandidates(userId, options = {}) {
         buildGenreAffinityCandidates(userId, affinityOptions),
         buildArtistAffinityCandidates(userId, affinityOptions),
         buildSimilarArtistCandidates(userId, affinityOptions),
+        buildOfflineCandidates(userId),
     ]);
 
     const sourceGroups = {
@@ -396,6 +399,7 @@ async function retrieveCandidates(userId, options = {}) {
             momentumSource,
             collaborativeSource,
             artistAffinitySource,
+            offlineSource,
         ],
         near: [
             sideStepSource,
@@ -448,6 +452,7 @@ async function retrieveCandidates(userId, options = {}) {
         genreAffinity: countSourceIds(genreAffinitySource),
         similarArtist: countSourceIds(similarArtistSource),
         exploration: countSourceIds(explorationSource),
+        offline: countSourceIds(offlineSource),
     };
 
     return {

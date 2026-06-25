@@ -1,0 +1,25 @@
+# Gate 1 — apply in full git clone (VPS was FAIL on AuthDevicesSection.js)
+#
+# From repo root:
+#   patch -p1 < scripts/patches/gate1-verify-auth-kit-security-settings.patch
+#   npm run verify:auth-kit
+#
+# Expected: "Sessions + devices UI (SecuritySettingsSection + sessionDeviceGroups)" PASS
+#           AUTH KIT LEVEL 1 (automated): PASS  (on VPS with stack + full backend)
+
+--- a/scripts/verify-auth-kit.sh
++++ b/scripts/verify-auth-kit.sh
+@@ -63,7 +63,12 @@
+ fi
+ 
+ check_file "frontend/src/components/Settings/PasswordChangeSection.js" "Password change UI"
+-check_file "frontend/src/components/Settings/AuthDevicesSection.js" "Auth devices UI"
++if [[ -f "$ROOT/frontend/src/components/Settings/SecuritySettingsSection.js" ]] \
++  && [[ -f "$ROOT/frontend/src/utils/sessionDeviceGroups.js" ]] \
++  && grep -q 'revokeOtherAuthSessions' "$ROOT/frontend/src/components/Settings/SecuritySettingsSection.js" 2>/dev/null; then
++  pass "Sessions + devices UI (SecuritySettingsSection + sessionDeviceGroups)"
++else
++  fail "Sessions/devices UI missing (SecuritySettingsSection.js or sessionDeviceGroups.js)"
++fi
+ check_file "frontend/src/components/Settings/TelegramUnlinkSection.js" "Telegram unlink UI"
+ check_file "scripts/verify-stream-ticket-ws-accept.sh" "WS accept gate script"

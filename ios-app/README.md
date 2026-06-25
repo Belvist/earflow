@@ -182,7 +182,7 @@ See `docs/IOS_APP.md`, `ios-app/CONTEXT.md`, `ios-app/.project-memory/`.
 
 - Auth + playback foundations, gateway-only, debug log
 
-- **`PEND-IOS-001` open** — not production / TestFlight ready
+- **`PEND-IOS-001` closed** (2026-06-23) — 34 automated tests; TestFlight separate
 
 - Device Sync / full player sheet / App Intents: not done
 

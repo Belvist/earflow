@@ -1,9 +1,4 @@
 import React from 'react';
-/**
- * Social feed — thin client (INV-SOCIAL-001).
- * Backend owns: feed order, likes, permissions, author DTO, cursor, post lifecycle.
- * This module only renders backend DTOs and applies backend acks (post/reaction/deleted).
- */
 import { FaEllipsisH, FaHeart, FaPaperPlane, FaPen, FaRegHeart, FaSyncAlt, FaTimes, FaTrash } from 'react-icons/fa';
 import apiClient from '../api/client';
 import {
@@ -74,20 +69,7 @@ function mergePrependPosts(incoming, current) {
   return next;
 }
 
-function mergeAppendPosts(current, incoming) {
-  const next = Array.isArray(current) ? [...current] : [];
-  const seen = new Set(next.map((post) => String(post?.id || '')).filter(Boolean));
-  for (const post of Array.isArray(incoming) ? incoming : []) {
-    const id = String(post?.id || '');
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
-    next.push(post);
-  }
-  return next;
-}
-
 function applyReaction(post, reaction) {
-  // Applies backend reaction delta only — no local like math (INV-SOCIAL-001).
   if (!post?.id || !reaction || String(post.id) !== String(reaction.postId || '')) return post;
   return {
     ...post,
@@ -147,7 +129,7 @@ export default function SocialPage() {
       const data = await apiClient.getSocialFeed({ limit: FEED_LIMIT, cursor, signal, cache });
       const payload = readPostsPayload(data);
       setFeed((current) => ({
-        posts: append ? mergeAppendPosts(current.posts, payload.posts) : payload.posts,
+        posts: append ? mergePrependPosts(current.posts, payload.posts) : payload.posts,
         page: payload.page,
       }));
     } catch (e) {
@@ -203,7 +185,7 @@ export default function SocialPage() {
       }
     } catch (e) {
       if (!silent && e?.name !== 'AbortError') {
-        setError('Не удалось обновить ленту');
+        setError('РќРµ СѓРґР°Р»РѕСЃСЊ РѕР±РЅРѕРІРёС‚СЊ Р»РµРЅС‚Сѓ');
       }
     }
   }, [loadFeed]);
@@ -296,8 +278,8 @@ export default function SocialPage() {
   };
 
   const handleDelete = async (post) => {
-    // canManage is display hint from backend; delete authz is enforced server-side (INV-SOCIAL-002).
-    if (!post?.id || post.viewer?.canManage !== true) return;
+    const canManage = post?.viewer?.canManage === true || post?.viewer?.canDelete === true;
+    if (!post?.id || !canManage) return;
     setPostBusy(post.id, true);
     setError('');
     setOpenMenuPostId('');
@@ -395,7 +377,7 @@ export default function SocialPage() {
             const viewer = post.viewer || {};
             const metrics = post.metrics || {};
             const busy = busyPostIds.has(String(post.id));
-            const canManage = viewer.canManage === true;
+            const canManage = viewer.canManage === true || viewer.canDelete === true;
             const menuOpen = openMenuPostId === post.id;
             const fallbackMeta = [post.createdAtLabel].filter(Boolean).join(' · ');
             return (
@@ -421,7 +403,7 @@ export default function SocialPage() {
                     <PostMenu>
                       <PostMenuButton
                         type="button"
-                        aria-label="Управление постом"
+                        aria-label="РЈРїСЂР°РІР»РµРЅРёРµ РїРѕСЃС‚РѕРј"
                         aria-haspopup="menu"
                         aria-expanded={menuOpen}
                         onClick={() => setOpenMenuPostId(menuOpen ? '' : post.id)}
@@ -438,7 +420,7 @@ export default function SocialPage() {
                             disabled={busy}
                           >
                             <FaTrash size={12} />
-                            <span>Удалить</span>
+                            <span>РЈРґР°Р»РёС‚СЊ</span>
                           </PostMenuItem>
                         </PostMenuPanel>
                       ) : null}

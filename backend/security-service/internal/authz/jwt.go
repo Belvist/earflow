@@ -114,11 +114,6 @@ func FromContext(ctx context.Context) (Principal, bool) {
 	return p, ok
 }
 
-// WithPrincipal attaches a principal for handler unit tests.
-func WithPrincipal(ctx context.Context, principal Principal) context.Context {
-	return context.WithValue(ctx, ctxKeyPrincipal, principal)
-}
-
 func writeUnauthorized(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusUnauthorized)

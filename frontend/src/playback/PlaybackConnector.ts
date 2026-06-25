@@ -807,6 +807,15 @@ export class PlaybackConnector {
 
         void (async () => {
           await this.destroySession();
+          try {
+            await this.play(trackLike, {
+              startAtSeconds,
+              forceProtocol: "direct",
+              allowFallback: true,
+            });
+            return;
+          } catch {
+          }
           await this.play(trackLike, {
             startAtSeconds,
             forceProtocol: "hls",

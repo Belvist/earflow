@@ -16,6 +16,10 @@ actor ProofAccessTokenCache {
         return cached
     }
 
+    func hasActiveToken(nowMs: Int64 = Int64(Date().timeIntervalSince1970 * 1000)) -> Bool {
+        getValid(nowMs: nowMs) != nil
+    }
+
     func set(_ entry: Entry) {
         cached = entry
     }

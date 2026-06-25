@@ -16,8 +16,41 @@ struct UserProfile: Codable, Sendable, Equatable {
     let email: String?
     let displayName: String?
     let username: String?
+    let firstName: String?
+    let mfaEnabled: Bool?
 
     var resolvedId: Int? { id ?? userId }
+
+    var resolvedDisplayName: String? {
+        if let displayName, !displayName.isEmpty { return displayName }
+        if let firstName, !firstName.isEmpty { return firstName }
+        return username
+    }
+}
+
+struct MfaStepUpRequest: Encodable, Sendable {
+    let token: String?
+    let recoveryCode: String?
+
+    init(totpCode: String) {
+        token = totpCode
+        recoveryCode = nil
+    }
+
+    init(recoveryCode: String) {
+        token = nil
+        self.recoveryCode = recoveryCode
+    }
+}
+
+struct MfaStepUpResponse: Decodable, Sendable {
+    let ok: Bool?
+    let ttlSeconds: Int?
+}
+
+struct MfaStepUpStatusResponse: Decodable, Sendable {
+    let ok: Bool?
+    let active: Bool?
 }
 
 struct DeviceRegisterRequest: Encodable, Sendable {
@@ -26,6 +59,22 @@ struct DeviceRegisterRequest: Encodable, Sendable {
 }
 
 struct DeviceRegisterResponse: Decodable, Sendable {
+    let authDeviceId: String
+    let sidHash: String
+    let ok: Bool
+}
+
+/// Native web-login (ASWebAuthenticationSession + PKCE) — exchanges a one-time code for a
+/// device-bound session. Contract: gateway `POST /api/auth/native/exchange`.
+struct NativeAuthExchangeRequest: Encodable, Sendable {
+    let code: String
+    let codeVerifier: String
+    let authDeviceId: String
+    let publicKeySpki: String
+}
+
+struct NativeAuthExchangeResponse: Decodable, Sendable {
+    let user: UserProfile?
     let authDeviceId: String
     let sidHash: String
     let ok: Bool

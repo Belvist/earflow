@@ -2,6 +2,8 @@ import SwiftUI
 
 struct SocialView: View {
     @EnvironmentObject private var dependencies: AppDependencies
+    @EnvironmentObject private var authPresentation: AppAuthPresentation
+    @Environment(\.appShellMode) private var shellMode
     @State private var posts: [SocialPostDTO] = []
     @State private var isLoading = true
     @State private var errorMessage: String?
@@ -9,7 +11,15 @@ struct SocialView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if isLoading && posts.isEmpty {
+                if shellMode.isGuest {
+                    GuestAuthPromptView(
+                        title: "Соцсеть Earflow",
+                        message: "Лента и взаимодействия доступны после входа.",
+                        buttonTitle: "Войти"
+                    ) {
+                        authPresentation.presentLogin(reason: "Войдите, чтобы открыть соцсеть.")
+                    }
+                } else if isLoading && posts.isEmpty {
                     ProgressView("Загрузка ленты…")
                         .tint(EarflowTheme.accent)
                 } else if posts.isEmpty {
@@ -36,6 +46,11 @@ struct SocialView: View {
     }
 
     private func loadFeed() async {
+        guard !shellMode.isGuest else {
+            posts = []
+            isLoading = false
+            return
+        }
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
@@ -44,7 +59,13 @@ struct SocialView: View {
             posts = response.posts ?? []
         } catch {
             errorMessage = "Не удалось загрузить ленту."
-            await EarflowLog.shared.error("social", error.localizedDescription)
+            if let gateway = error as? GatewayError, case .unauthorized(let detail) = gateway, detail.status == 404 {
+                errorMessage = "Соцсеть пока недоступна на сервере (404)."
+            } else if let gateway = error as? GatewayError {
+                await EarflowLog.shared.error("social", "\(gateway)")
+            } else {
+                await EarflowLog.shared.error("social", error.localizedDescription)
+            }
         }
     }
 }
@@ -84,10 +105,6 @@ private struct SocialPostCard: View {
         .padding(14)
         .background(EarflowTheme.cardTop.opacity(0.55))
         .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(EarflowTheme.border, lineWidth: 1)
-        )
         .padding(.vertical, 4)
     }
 

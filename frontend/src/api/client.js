@@ -43,8 +43,6 @@ const deriveCoverOrigin = () => {
 // Кеш URL обложек для предотвращения повторных вычислений
 const coverUrlCache = new LruCache({ maxEntries: 500, ttlMs: 30 * 60 * 1000 });
 
-const socialFeedCache = new LruCache({ maxEntries: 32, ttlMs: 8000 });
-
 const decodeUtf8 = (buf) => {
   try {
     return new TextDecoder().decode(buf);
@@ -2245,70 +2243,6 @@ class ApiClient {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-  }
-
-  // ==================== SOCIAL FEED ====================
-
-  _clearSocialFeedCache() {
-    socialFeedCache.clear();
-  }
-
-  async getSocialFeed({ limit, cursor, after, signal, cache = true } = {}) {
-    const query = new URLSearchParams();
-    if (limit !== undefined && limit !== null) query.set('limit', String(limit));
-    if (cursor) query.set('cursor', String(cursor));
-    if (after) query.set('after', String(after));
-    const qs = query.toString();
-    const endpoint = `/api/social/feed${qs ? `?${qs}` : ''}`;
-
-    if (cache !== false) {
-      const hit = socialFeedCache.get(endpoint);
-      if (hit) return hit;
-    }
-
-    const data = await this.request(endpoint, {
-      signal,
-      cache: cache === false ? 'no-store' : undefined,
-    });
-
-    if (cache !== false && data && typeof data === 'object') {
-      socialFeedCache.set(endpoint, data);
-    }
-
-    return data;
-  }
-
-  async createSocialPost({ title, body } = {}) {
-    const response = await this.request('/api/social/posts', {
-      method: 'POST',
-      body: JSON.stringify({ title, body }),
-    });
-    this._clearSocialFeedCache();
-    return response;
-  }
-
-  async likeSocialPost(postId) {
-    const response = await this.request(`/api/social/posts/${encodeURIComponent(postId)}/like`, {
-      method: 'POST',
-    });
-    this._clearSocialFeedCache();
-    return response;
-  }
-
-  async unlikeSocialPost(postId) {
-    const response = await this.request(`/api/social/posts/${encodeURIComponent(postId)}/like`, {
-      method: 'DELETE',
-    });
-    this._clearSocialFeedCache();
-    return response;
-  }
-
-  async deleteSocialPost(postId) {
-    const response = await this.request(`/api/social/posts/${encodeURIComponent(postId)}`, {
-      method: 'DELETE',
-    });
-    this._clearSocialFeedCache();
-    return response;
   }
 
   // ==================== PLAYLISTS / QUEUE / PARTY ====================

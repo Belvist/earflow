@@ -2,7 +2,8 @@ import SwiftUI
 
 /// Earflow listener visual tokens — pixel-aligned with web `EmailAuth` / `index.css` / `MobileBottomNav`.
 enum EarflowTheme {
-    static let background = Color.black
+    static let background = surfaceMain
+    static let surfaceMain = Color(red: 13 / 255, green: 13 / 255, blue: 13 / 255) // #0D0D0D
     static let backgroundGradientTop = Color(red: 12 / 255, green: 12 / 255, blue: 12 / 255)
     static let cardTop = Color(red: 28 / 255, green: 28 / 255, blue: 28 / 255)
     static let cardBottom = Color(red: 12 / 255, green: 12 / 255, blue: 12 / 255)
@@ -23,6 +24,27 @@ enum EarflowTheme {
     static let fieldRadius: CGFloat = 14
     static let buttonRadius: CGFloat = 14
     static let navHeight: CGFloat = 48
+    static let miniPlayerHeight: CGFloat = 60
+    static let miniPlayerFloatGap: CGFloat = 6
+    static let miniPlayerRadius: CGFloat = 14
+    static let miniPlayerSideInset: CGFloat = 6
+    static let miniProgressHeight: CGFloat = 2
+    static let homeHeroRadius: CGFloat = 18
+    static let playlistCardWidth: CGFloat = 118
+    static let portraitCoverRatio: CGFloat = 5 / 4
+
+    // Home layout rhythm (web MobileHomeRoot)
+    static let homeSectionSpacing: CGFloat = 20
+    static let homeRailSpacing: CGFloat = 28
+    static let homeScrollExtraBottom: CGFloat = 16
+    static let trackRowCoverWidth: CGFloat = 52
+    static let trackRowHeight: CGFloat = 52
+    static let homeForYouMaxTracks: Int = 8
+    static let homeForYouCoverWidth: CGFloat = 52
+
+    static func mobileChromeHeight(showMiniPlayer: Bool) -> CGFloat {
+        navHeight + (showMiniPlayer ? miniPlayerFloatGap + miniPlayerHeight : 0)
+    }
 
     static var authBackground: Color { background }
 
@@ -52,10 +74,6 @@ struct EarflowAuthCard<Content: View>: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 14)
             .background(EarflowTheme.cardSolid)
-            .overlay(
-                RoundedRectangle(cornerRadius: EarflowTheme.cardCornerRadius)
-                    .stroke(EarflowTheme.border, lineWidth: 1)
-            )
             .clipShape(RoundedRectangle(cornerRadius: EarflowTheme.cardCornerRadius))
             .shadow(color: .black.opacity(0.55), radius: 24, y: 12)
     }
@@ -110,7 +128,6 @@ struct EarflowSecureBadge: View {
         .padding(.horizontal, 10)
         .frame(minHeight: 28)
         .background(Color.white.opacity(0.055))
-        .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 1))
         .clipShape(Capsule())
     }
 }
@@ -127,7 +144,6 @@ struct EarflowAuthTabs: View {
         }
         .padding(4)
         .background(EarflowTheme.tabTrackBackground)
-        .overlay(Capsule().stroke(Color.white.opacity(0.11), lineWidth: 1))
         .clipShape(Capsule())
     }
 
@@ -212,14 +228,12 @@ struct EarflowAuthInput: View {
                 }
             }
             .frame(height: 46)
-            .background(focused ? Color.white.opacity(0.095) : EarflowTheme.fieldBackground)
-            .overlay(
+            .background(
                 RoundedRectangle(cornerRadius: EarflowTheme.fieldRadius)
-                    .stroke(
+                    .fill(
                         errorMessage != nil
-                            ? EarflowTheme.danger.opacity(0.55)
-                            : (focused ? Color.white.opacity(0.34) : EarflowTheme.border),
-                        lineWidth: 1
+                            ? EarflowTheme.danger.opacity(0.12)
+                            : (focused ? Color.white.opacity(0.095) : EarflowTheme.fieldBackground)
                     )
             )
             .clipShape(RoundedRectangle(cornerRadius: EarflowTheme.fieldRadius))
@@ -296,10 +310,6 @@ struct EarflowAuthBackButton: View {
                 .foregroundStyle(Color.white.opacity(0.78))
                 .frame(width: 92, height: 46)
                 .background(Color.white.opacity(0.055))
-                .overlay(
-                    RoundedRectangle(cornerRadius: EarflowTheme.buttonRadius)
-                        .stroke(Color.white.opacity(0.13), lineWidth: 1)
-                )
                 .clipShape(RoundedRectangle(cornerRadius: EarflowTheme.buttonRadius))
         }
         .buttonStyle(.plain)
@@ -334,14 +344,12 @@ struct EarflowRegisterSteps: View {
     private func stepPill(_ title: String, active: Bool) -> some View {
         let fg = active ? Color.white.opacity(0.9) : Color.white.opacity(0.42)
         let bg = active ? Color.white.opacity(0.12) : Color.white.opacity(0.035)
-        let stroke = active ? Color.white.opacity(0.28) : Color.white.opacity(0.09)
         return Text(title.uppercased())
             .font(EarflowFont.unbounded(size: 9, weight: .bold))
             .kerning(0.4)
             .foregroundStyle(fg)
             .frame(maxWidth: .infinity, minHeight: 24)
             .background(bg)
-            .overlay(Capsule().stroke(stroke, lineWidth: 1))
             .clipShape(Capsule())
     }
 }

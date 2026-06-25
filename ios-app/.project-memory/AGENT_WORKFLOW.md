@@ -8,7 +8,9 @@
 
 ## Перед любой задачей в `ios-app/`
 
-1. **`universal_project_agent_pack/.ai/INDEX.md`** — универсальные + Earflow правила.
+0. **`docs/AGENT_SESSION_HANDOFF.md`** — глобальная память между чатами
+1. **`ios-app/.project-memory/HANDOFF.md`** — iOS снимок (**первым** для ios-app)
+2. **`universal_project_agent_pack/.ai/INDEX.md`** — универсальные + Earflow правила.
 2. **`universal_project_agent_pack/.ai/AGENT_RULES.md`** — DoD, запреты, скиллы.
 3. **`ios-app/.project-memory/CURRENT_STATE.md`** — что уже сделано / что нет.
 4. **`docs/ARCHITECTURE_INVARIANTS.md`** — grep `INV-ARCH`, `INV-SEC`, `INV-DS`, `INV-FE`.
@@ -50,7 +52,7 @@
 5. **Errors** — маппинг `GatewayError`, без stack/SQL пользователю.
 6. **Logs** — `EarflowLog` + redaction; без секретов.
 7. **Tests** — unit для crypto/state/validators; test plan для UI smoke.
-8. **Memory** — обновлены `CURRENT_STATE.md`, `TASKS.md`, при архитектуре — `docs/DECISIONS.md`.
+8. **Memory** — обновлены `HANDOFF.md`, `CURRENT_STATE.md`, `CHANGELOG.md`, при архитектуре — `docs/DECISIONS.md`.
 9. **Verify** — `xcodebuild` PASS; `npm run verify:ios-native` когда доступен Simulator.
 
 **prepared ≠ closed** для `PEND-IOS-001` до полного gate в `docs/PENDING.md`.
@@ -66,7 +68,7 @@
 | Архитектурное решение | `docs/DECISIONS.md` (prepend) |
 | Новый gap | `docs/PENDING.md` или `TASKS.md` |
 | Изменение owns/caveats | `ios-app/CONTEXT.md` |
-| Фаза закрыта/открыта | `CURRENT_STATE.md`, `CHANGELOG.md` |
+| Фаза закрыта/открыта | `HANDOFF.md`, `CURRENT_STATE.md`, `CHANGELOG.md` |
 
 ---
 

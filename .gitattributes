@@ -1,6 +1,0 @@
-# Enforce Unix line endings for shell scripts (VPS/Linux bash breaks on CRLF).
-*.sh text eol=lf
-*.bash text eol=lf
-
-# Docker/nginx entrypoints and ops helpers often invoked by bash on Linux.
-scripts/** text eol=lf

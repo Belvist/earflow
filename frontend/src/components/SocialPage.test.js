@@ -67,27 +67,6 @@ test('replaces post with backend response after like intent', async () => {
   expect((await screen.findByRole('button', { name: 'Убрать лайк' })).textContent).toContain('4');
 });
 
-test('load more appends older posts after current feed', async () => {
-  apiClient.getSocialFeed
-    .mockResolvedValueOnce({
-      posts: [makePost({ id: '11' })],
-      page: { nextCursor: 'cursor-1', hasMore: true },
-    })
-    .mockResolvedValueOnce({
-      posts: [makePost({ id: '10', body: 'Older post' })],
-      page: { nextCursor: null, hasMore: false },
-    });
-
-  render(<SocialPage />);
-
-  await screen.findByText('$Maduro');
-  fireEvent.click(screen.getByRole('button', { name: 'Показать ещё' }));
-
-  await screen.findByText('Older post');
-  expect(apiClient.getSocialFeed).toHaveBeenCalledTimes(2);
-  expect(apiClient.getSocialFeed.mock.calls[1][0]).toMatchObject({ cursor: 'cursor-1' });
-});
-
 test('creates post from backend response without reloading feed', async () => {
   apiClient.getSocialFeed.mockResolvedValueOnce({ posts: [], page: { nextCursor: null, hasMore: false } });
   apiClient.createSocialPost.mockResolvedValue({ post: makePost({ id: '12', body: 'Fresh post' }) });

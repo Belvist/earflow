@@ -7,14 +7,16 @@ async function infiniteFeedV2(userId, sessionId, offset, limit, excludeIds) {
     if (!sessionId) {
         const init = await initSessionV2(userId, {}, false, lim, excludeIds);
         const tracks = Array.isArray(init.tracks) ? init.tracks : [];
-        return {
-            sessionId: init.sessionId || null,
-            tracks,
-            hasMore: init.hasMore === true,
-            offset: off + tracks.length,
-            nextOffset: off + tracks.length,
-            recommendationMeta: init.recommendationMeta || null,
-        };
+    return {
+        sessionId: init.sessionId || null,
+        tracks,
+        hasMore: init.hasMore === true,
+        offset: off + tracks.length,
+        nextOffset: off + tracks.length,
+        recommendationMeta: init.recommendationMeta || null,
+        sessionState: init.sessionState || null,
+        clientActions: init.clientActions || null,
+    };
     }
 
     const next = await nextBatchV2(userId, sessionId, lim, excludeIds);
@@ -30,6 +32,8 @@ async function infiniteFeedV2(userId, sessionId, offset, limit, excludeIds) {
             offset: off + freshTracks.length,
             nextOffset: off + freshTracks.length,
             recommendationMeta: fresh.recommendationMeta || null,
+            sessionState: fresh.sessionState || null,
+            clientActions: fresh.clientActions || null,
         };
     }
 
@@ -40,6 +44,8 @@ async function infiniteFeedV2(userId, sessionId, offset, limit, excludeIds) {
         offset: off + tracks.length,
         nextOffset: off + tracks.length,
         recommendationMeta: next.recommendationMeta || null,
+        sessionState: next.sessionState || null,
+        clientActions: next.clientActions || null,
     };
 }
 

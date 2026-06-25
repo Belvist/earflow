@@ -13,6 +13,11 @@ enum KeychainStore {
     private static let service = "ru.earflow.listener.auth-device"
     private static let account = "primary"
 
+    #if DEBUG
+    /// Unit tests on Simulator lack Keychain entitlements (`errSecMissingEntitlement`).
+    private static var inMemoryTestPayload: KeychainPayload?
+    #endif
+
     static func saveDeviceIdentity(_ identity: DeviceIdentity, privateKeyPKCS8: Data) throws {
         let payload = KeychainPayload(
             authDeviceId: identity.authDeviceId,
@@ -21,11 +26,29 @@ enum KeychainStore {
             createdAt: identity.createdAt,
             privateKeyPKCS8: privateKeyPKCS8
         )
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
+            inMemoryTestPayload = payload
+            return
+        }
+        #endif
         let data = try JSONEncoder().encode(payload)
         try save(data: data)
     }
 
     static func loadDeviceIdentity() throws -> (identity: DeviceIdentity, privateKeyPKCS8: Data)? {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
+            guard let payload = inMemoryTestPayload else { return nil }
+            let identity = DeviceIdentity(
+                authDeviceId: payload.authDeviceId,
+                sidHash: payload.sidHash,
+                publicKeySpki: payload.publicKeySpki,
+                createdAt: payload.createdAt
+            )
+            return (identity, payload.privateKeyPKCS8)
+        }
+        #endif
         guard let data = try load() else { return nil }
         let payload = try JSONDecoder().decode(KeychainPayload.self, from: data)
         let identity = DeviceIdentity(
@@ -38,6 +61,12 @@ enum KeychainStore {
     }
 
     static func clear() throws {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
+            inMemoryTestPayload = nil
+            return
+        }
+        #endif
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,

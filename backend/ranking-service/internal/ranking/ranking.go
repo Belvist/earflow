@@ -1,15 +1,16 @@
 package ranking
 
 type Candidate struct {
-	ID            int      `json:"id"`
-	Artist        string   `json:"artist"`
-	Tempo         *float64 `json:"tempo"`
-	Energy        *float64 `json:"energy"`
-	Popularity    float64  `json:"popularity"`
-	PlayCount     float64  `json:"playCount"`
-	UserPlayCount int      `json:"userPlayCount"`
-	UserSkipCount int      `json:"userSkipCount"`
-	SourceScore   float64  `json:"sourceScore"`
+	ID                      int      `json:"id"`
+	Artist                  string   `json:"artist"`
+	Tempo                   *float64 `json:"tempo"`
+	Energy                  *float64 `json:"energy"`
+	Popularity              float64  `json:"popularity"`
+	PlayCount               float64  `json:"playCount"`
+	UserPlayCount           int      `json:"userPlayCount"`
+	UserSkipCount           int      `json:"userSkipCount"`
+	UserArtistDislikeCount  int      `json:"userArtistDislikeCount"`
+	SourceScore             float64  `json:"sourceScore"`
 }
 
 type Context struct {
@@ -124,6 +125,18 @@ func baseScore(c Candidate, ctx Context) float64 {
 	den := float64(c.UserPlayCount + c.UserSkipCount + 1)
 	skipRate := float64(c.UserSkipCount) / den
 	s -= 0.60 * skipRate
+
+	if c.UserArtistDislikeCount > 0 {
+		cnt := c.UserArtistDislikeCount
+		penalty := 0.25 * float64(cnt)
+		if cnt >= 3 {
+			penalty = 0.6
+		}
+		if cnt >= 5 {
+			penalty = 0.9
+		}
+		s -= penalty
+	}
 
 	if ctx.IsEvening && c.Energy != nil {
 		if *c.Energy > 0.65 {

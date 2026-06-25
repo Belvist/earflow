@@ -4,6 +4,10 @@ import Foundation
 struct GatewayAuthHooks: Sendable {
     var authHeaders: (@Sendable (HTTPMethod, String) async throws -> [String: String])?
     var csrfToken: (@Sendable () async -> String?)?
+    /// Returns true if session cookies were renewed (POST /api/auth/refresh).
+    var refreshSession: (@Sendable () async -> Bool)?
+    /// Re-bind device after DEVICE_PROOF_* 401 — mirrors web `deviceProofRecovery` middleware.
+    var recoverDeviceProof: (@Sendable () async -> Bool)?
     var unauthorized: (@Sendable (Int, Data?) async -> Void)?
 }
 
@@ -13,9 +17,14 @@ actor GatewayClient {
     private let retryPolicy: RetryPolicy
     private var authHooks = GatewayAuthHooks()
 
-    init(configuration: GatewayConfiguration = GatewayConfiguration(), retryPolicy: RetryPolicy = .default) {
+    init(configuration: GatewayConfiguration = GatewayConfiguration(), retryPolicy: RetryPolicy = .default, urlSession: URLSession? = nil) {
         self.configuration = configuration
         self.retryPolicy = retryPolicy
+
+        if let urlSession {
+            session = urlSession
+            return
+        }
 
         let sessionConfig = URLSessionConfiguration.default
         sessionConfig.httpCookieAcceptPolicy = .always
@@ -23,7 +32,7 @@ actor GatewayClient {
         sessionConfig.httpCookieStorage = SessionCookieStore.storage
         sessionConfig.timeoutIntervalForRequest = configuration.requestTimeout
         sessionConfig.timeoutIntervalForResource = configuration.resourceTimeout
-        sessionConfig.waitsForConnectivity = true
+        sessionConfig.waitsForConnectivity = false
         sessionConfig.httpAdditionalHeaders = [
             "User-Agent": configuration.userAgent,
             "Accept": "application/json",
@@ -53,7 +62,11 @@ actor GatewayClient {
         do {
             return try decoder.decode(T.self, from: data)
         } catch {
+            #if DEBUG
+            GatewayLogger.error("decode failed path=\(path) error=\(error)")
+            #else
             GatewayLogger.error("decode failed path=\(path)")
+            #endif
             throw GatewayError.decodingFailed
         }
     }
@@ -62,7 +75,8 @@ actor GatewayClient {
         method: HTTPMethod,
         path: String,
         body: (any Encodable)? = nil,
-        skipAuth: Bool = false
+        skipAuth: Bool = false,
+        allowRefreshOnUnauthorized: Bool = true
     ) async throws -> Data {
         try validateGatewayPath(path)
         let url = configuration.resolve(path: path)
@@ -77,12 +91,15 @@ actor GatewayClient {
                     url: url,
                     path: path,
                     body: body,
-                    skipAuth: skipAuth
+                    skipAuth: skipAuth,
+                    retryAfterRefresh: false,
+                    retryAfterDeviceProof: false,
+                    allowRefreshOnUnauthorized: allowRefreshOnUnauthorized
                 )
             } catch let error as GatewayError {
                 if case .cancelled = error { throw error }
-                if case let .serverError(status) = error,
-                   retryPolicy.shouldRetry(statusCode: status, attempt: attempt) {
+                if case let .serverError(detail) = error,
+                   retryPolicy.shouldRetry(statusCode: detail.status, attempt: attempt) {
                     let delay = retryPolicy.delay(for: attempt)
                     try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                     continue
@@ -91,13 +108,19 @@ actor GatewayClient {
             } catch is CancellationError {
                 throw GatewayError.cancelled
             } catch {
-                if let mapped = GatewayTransport.map(error) {
-                    throw mapped
-                }
-                if attempt < retryPolicy.maxAttempts, GatewayTransport.isRetryable(error) {
+                let mapped = GatewayTransport.map(error)
+                let retryError: Error = mapped ?? error
+                if attempt < retryPolicy.maxAttempts, NetworkTransientRetry.isTransient(retryError) {
                     let delay = retryPolicy.delay(for: attempt)
+                    await EarflowLog.shared.debug(
+                        "gateway",
+                        "transport retry attempt=\(attempt)/\(retryPolicy.maxAttempts) delay=\(String(format: "%.2f", delay))s"
+                    )
                     try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                     continue
+                }
+                if let mapped {
+                    throw mapped
                 }
                 throw GatewayError.network(error.localizedDescription)
             }
@@ -134,6 +157,7 @@ actor GatewayClient {
         for (key, value) in additionalHeaders {
             request.setValue(value, forHTTPHeaderField: key)
         }
+        applyNativeClientHeaders(&request)
         if method != .get, let csrf = await authHooks.csrfToken?(), !csrf.isEmpty {
             request.setValue(csrf, forHTTPHeaderField: "X-CSRF-Token")
         }
@@ -143,12 +167,31 @@ actor GatewayClient {
             throw GatewayError.network("non-http response")
         }
         guard (200...299).contains(http.statusCode) else {
-            if http.statusCode == 401 {
-                await authHooks.unauthorized?(401, data)
-            }
-            throw GatewayError.unauthorized(code: parseErrorCode(data))
+            throw gatewayErrorForResponse(status: http.statusCode, data: data, notifyUnauthorized: http.statusCode == 401)
         }
+        SessionCookieStore.ingestCookies(from: http, for: url)
         return data
+    }
+
+    /// Lightweight auth surface probe — GET /api/auth/csrf (no secrets logged).
+    func probeAuthEndpoint() async -> (reachable: Bool, statusCode: Int?) {
+        do {
+            _ = try await requestData(method: .get, path: "/api/auth/csrf", skipAuth: true)
+            return (true, 204)
+        } catch let error as GatewayError {
+            switch error {
+            case .unauthorized(let detail), .forbidden(let detail):
+                return (true, detail.status)
+            case .serverError(let detail):
+                return (detail.status < 500, detail.status)
+            case .network:
+                return (false, nil)
+            default:
+                return (true, nil)
+            }
+        } catch {
+            return (false, nil)
+        }
     }
 
     // MARK: - Private
@@ -158,11 +201,15 @@ actor GatewayClient {
         url: URL,
         path: String,
         body: (any Encodable)?,
-        skipAuth: Bool
+        skipAuth: Bool,
+        retryAfterRefresh: Bool,
+        retryAfterDeviceProof: Bool,
+        allowRefreshOnUnauthorized: Bool
     ) async throws -> Data {
         var request = URLRequest(url: url)
         request.httpMethod = method.rawValue
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        applyNativeClientHeaders(&request)
 
         if let body {
             request.httpBody = try JSONEncoder().encode(AnyEncodable(body))
@@ -187,24 +234,89 @@ actor GatewayClient {
 
         switch http.statusCode {
         case 200...299:
+            SessionCookieStore.ingestCookies(from: http, for: url)
             return data
         case 401:
-            await authHooks.unauthorized?(401, data)
-            let code = parseErrorCode(data)
-            throw GatewayError.unauthorized(code: code)
+            let detail = parseHTTPError(status: 401, data: data)
+            if allowRefreshOnUnauthorized,
+               !skipAuth,
+               !retryAfterRefresh,
+               !Self.isAuthRefreshPath(path),
+               let refresh = authHooks.refreshSession,
+               await refresh() {
+                return try await performRequest(
+                    method: method,
+                    url: url,
+                    path: path,
+                    body: body,
+                    skipAuth: skipAuth,
+                    retryAfterRefresh: true,
+                    retryAfterDeviceProof: retryAfterDeviceProof,
+                    allowRefreshOnUnauthorized: allowRefreshOnUnauthorized
+                )
+            }
+            if !skipAuth,
+               !retryAfterDeviceProof,
+               let recover = authHooks.recoverDeviceProof,
+               Self.isRecoverableDeviceProofCode(detail.code),
+               await recover() {
+                return try await performRequest(
+                    method: method,
+                    url: url,
+                    path: path,
+                    body: body,
+                    skipAuth: skipAuth,
+                    retryAfterRefresh: retryAfterRefresh,
+                    retryAfterDeviceProof: true,
+                    allowRefreshOnUnauthorized: allowRefreshOnUnauthorized
+                )
+            }
+            if !skipAuth {
+                await authHooks.unauthorized?(401, data)
+            }
+            throw GatewayError.unauthorized(detail)
         case 403:
-            let code = parseErrorCode(data)
-            if code == "DEVICE_REVOKED" {
+            let detail = parseHTTPError(status: 403, data: data)
+            if detail.code == "DEVICE_REVOKED", !skipAuth {
                 await authHooks.unauthorized?(403, data)
             }
-            throw GatewayError.forbidden(code: code)
+            throw GatewayError.forbidden(detail)
         case 429:
-            throw GatewayError.rateLimited
+            let detail = parseHTTPError(status: 429, data: data)
+            throw GatewayError.unauthorized(detail)
+        case 400...499:
+            let detail = parseHTTPError(status: http.statusCode, data: data)
+            throw GatewayError.unauthorized(detail)
         case 500...599:
-            throw GatewayError.serverError(status: http.statusCode)
+            let detail = parseHTTPError(status: http.statusCode, data: data)
+            throw GatewayError.serverError(detail)
         default:
             throw GatewayError.network("HTTP \(http.statusCode)")
         }
+    }
+
+    private func gatewayErrorForResponse(status: Int, data: Data, notifyUnauthorized: Bool) -> GatewayError {
+        let detail = parseHTTPError(status: status, data: data)
+        switch status {
+        case 403:
+            return .forbidden(detail)
+        case 429:
+            return .unauthorized(detail)
+        case 400...499:
+            if notifyUnauthorized {
+                Task { await self.authHooks.unauthorized?(status, data) }
+            }
+            return .unauthorized(detail)
+        case 500...599:
+            return .serverError(detail)
+        default:
+            return .network("HTTP \(status)")
+        }
+    }
+
+    private func applyNativeClientHeaders(_ request: inout URLRequest) {
+        request.setValue(AppConfiguration.current.clientOrigin, forHTTPHeaderField: "Origin")
+        request.setValue("ios-native", forHTTPHeaderField: "X-Earflow-Client")
     }
 
     private func validateGatewayPath(_ path: String) throws {
@@ -230,9 +342,27 @@ actor GatewayClient {
         }
     }
 
-    private func parseErrorCode(_ data: Data) -> String? {
-        (try? JSONDecoder().decode(APIErrorBody.self, from: data))?.code
-            ?? (try? JSONDecoder().decode(APIErrorBody.self, from: data))?.error
+    static func isAuthRefreshPath(_ path: String) -> Bool {
+        let base = path.split(separator: "?", maxSplits: 1).first.map(String.init) ?? path
+        return base == "/api/auth/refresh"
+    }
+
+    private static func isRecoverableDeviceProofCode(_ code: String?) -> Bool {
+        guard let code else { return false }
+        return code == BackendAuthCode.deviceProofInvalid || code == BackendAuthCode.deviceProofRequired
+    }
+
+    private func parseHTTPError(status: Int, data: Data) -> GatewayHTTPErrorDetail {
+        let body = try? JSONDecoder().decode(APIErrorBody.self, from: data)
+        let code = BackendAuthCode.normalize(rawCode: body?.code, message: body?.error)
+        return GatewayHTTPErrorDetail(
+            status: status,
+            code: code,
+            message: body?.error,
+            retryAfterSeconds: body?.retryAfterSeconds,
+            recoverable: body?.recoverable == true,
+            reauthRequired: body?.reauthRequired == true
+        )
     }
 }
 

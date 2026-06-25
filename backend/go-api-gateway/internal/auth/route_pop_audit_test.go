@@ -61,42 +61,6 @@ func TestGatewayYAMLProtectedAPIRoutesRequireDeviceProof(t *testing.T) {
 	}
 }
 
-func TestGatewayYAMLSocialRouteIsProtected(t *testing.T) {
-	cfg, err := config.LoadGatewayYAML(filepath.Join("..", "..", "gateway.yaml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var social *config.Route
-	for i := range cfg.Routes {
-		if cfg.Routes[i].ID == "social" {
-			social = &cfg.Routes[i]
-			break
-		}
-	}
-	if social == nil {
-		t.Fatal("gateway route id=social is missing")
-	}
-	if social.Upstream != "database" {
-		t.Fatalf("social route upstream = %q, want database", social.Upstream)
-	}
-	if social.Match.Value != "/api/social" {
-		t.Fatalf("social route match = %q, want /api/social", social.Match.Value)
-	}
-	if !social.Policies.RequireUser {
-		t.Fatal("social route must set require_user: true")
-	}
-	if !social.Policies.RequireServiceToken {
-		t.Fatal("social route must set require_service_token: true")
-	}
-	if strings.ToLower(strings.TrimSpace(social.Policies.Class)) != "unsafe" {
-		t.Fatalf("social route class = %q, want unsafe", social.Policies.Class)
-	}
-	if social.Policies.RateLimit != "social" {
-		t.Fatalf("social route rate_limit = %q, want social", social.Policies.RateLimit)
-	}
-}
-
 func TestAuthHandlerProtectedPathsRequireDeviceProof(t *testing.T) {
 	manager := &SessionManager{isProduction: true}
 	for _, path := range authHandlerProtectedPaths {
