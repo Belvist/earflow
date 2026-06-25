@@ -1,4 +1,5 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import styled from 'styled-components';
 import {
   FaDesktop,
@@ -28,6 +29,9 @@ const KIND_ICON = {
 };
 
 const ACCENT = '#1db954';
+const MENU_Z = 10100;
+const MENU_WIDTH = 220;
+const MENU_EST_HEIGHT = 96;
 
 function formatRelativeSeconds(ts) {
   if (!ts) return '';
@@ -48,66 +52,121 @@ function resolveHeroSubtitle(device, currentDeviceId) {
   return device.lastSeenAt ? formatRelativeSeconds(device.lastSeenAt) : 'Подключено';
 }
 
+function computeMenuPosition(anchorEl) {
+  if (!anchorEl || typeof window === 'undefined') return null;
+  const rect = anchorEl.getBoundingClientRect();
+  const spaceBelow = window.innerHeight - rect.bottom;
+  const openUp = spaceBelow < MENU_EST_HEIGHT + 12;
+  const top = openUp ? rect.top - MENU_EST_HEIGHT - 6 : rect.bottom + 6;
+  const left = Math.max(
+    12,
+    Math.min(rect.right - MENU_WIDTH, window.innerWidth - MENU_WIDTH - 12),
+  );
+  return { top, left, openUp };
+}
+
 function DeviceMenu({ deviceId, onTransfer, onRemove, canTransfer, canRemove }) {
-  const [open, setOpen] = React.useState(false);
-  const ref = React.useRef(null);
+  const [open, setOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState(null);
+  const btnRef = useRef(null);
+  const menuRef = useRef(null);
 
-  React.useEffect(() => {
+  const hasActions = canTransfer || canRemove;
+
+  const close = useCallback(() => setOpen(false), []);
+
+  const refreshPosition = useCallback(() => {
+    setMenuPos(computeMenuPosition(btnRef.current));
+  }, []);
+
+  useEffect(() => {
     if (!open) return undefined;
-    const close = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    refreshPosition();
+    const onLayout = () => refreshPosition();
+    window.addEventListener('resize', onLayout);
+    window.addEventListener('scroll', onLayout, true);
+    return () => {
+      window.removeEventListener('resize', onLayout);
+      window.removeEventListener('scroll', onLayout, true);
     };
-    document.addEventListener('pointerdown', close);
-    return () => document.removeEventListener('pointerdown', close);
-  }, [open]);
+  }, [open, refreshPosition]);
 
-  if (!canTransfer && !canRemove) return null;
+  useEffect(() => {
+    if (!open) return undefined;
+    const onPointerDown = (e) => {
+      const t = e.target;
+      if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      close();
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [open, close]);
 
-  return (
-    <MenuWrap ref={ref}>
-      <MenuBtn
-        type="button"
-        aria-label="Действия с устройством"
-        aria-expanded={open}
-        onClick={(e) => {
-          e.stopPropagation();
-          setOpen((v) => !v);
+  if (!hasActions) return null;
+
+  const menu = open && menuPos
+    ? createPortal(
+      <MenuPopover
+        ref={menuRef}
+        role="menu"
+        $openUp={menuPos.openUp}
+        style={{
+          position: 'fixed',
+          top: menuPos.top,
+          left: menuPos.left,
+          width: MENU_WIDTH,
+          zIndex: MENU_Z,
         }}
       >
-        <FaEllipsisH size={14} />
-      </MenuBtn>
-      {open ? (
-        <MenuPopover>
-          {canTransfer ? (
-            <MenuItem
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setOpen(false);
-                onTransfer(deviceId);
-              }}
-            >
-              <FaExchangeAlt size={12} aria-hidden />
-              Передать воспроизведение
-            </MenuItem>
-          ) : null}
-          {canRemove ? (
-            <MenuItem
-              type="button"
-              $danger
-              onClick={(e) => {
-                e.stopPropagation();
-                setOpen(false);
-                onRemove(deviceId);
-              }}
-            >
-              <FaTrashAlt size={12} aria-hidden />
-              Отключить
-            </MenuItem>
-          ) : null}
-        </MenuPopover>
-      ) : null}
-    </MenuWrap>
+        {canTransfer ? (
+          <MenuItem
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              close();
+              onTransfer(deviceId);
+            }}
+          >
+            <FaExchangeAlt size={12} aria-hidden />
+            Передать воспроизведение
+          </MenuItem>
+        ) : null}
+        {canRemove ? (
+          <MenuItem
+            type="button"
+            role="menuitem"
+            $danger
+            onClick={() => {
+              close();
+              onRemove(deviceId);
+            }}
+          >
+            <FaTrashAlt size={12} aria-hidden />
+            Отключить устройство
+          </MenuItem>
+        ) : null}
+      </MenuPopover>,
+      document.body,
+    )
+    : null;
+
+  return (
+  <>
+    <MenuBtn
+      ref={btnRef}
+      type="button"
+      aria-label="Действия с устройством"
+      aria-haspopup="menu"
+      aria-expanded={open}
+      onClick={(e) => {
+        e.stopPropagation();
+        setOpen((v) => !v);
+      }}
+    >
+      <FaEllipsisH size={14} />
+    </MenuBtn>
+    {menu}
+  </>
   );
 }
 
@@ -143,7 +202,7 @@ export default function DevicesPanel({
     [list, heroDevice],
   );
 
-  const handleRowClick = (device) => {
+  const handleTransfer = (device) => {
     if (!device || device.isActive) return;
     if (typeof onTransfer === 'function') onTransfer(device.id);
   };
@@ -154,37 +213,47 @@ export default function DevicesPanel({
     const isActive = !!device.isActive;
     const canTransfer = !isActive && typeof onTransfer === 'function';
     const canRemove = !isMe && typeof onRemove === 'function';
+    const hasMenu = canTransfer || canRemove;
 
     return (
-      <DeviceRow
-        key={device.id}
-        type="button"
-        $compact={compact}
-        $active={isActive}
-        $clickable={canTransfer}
-        disabled={!canTransfer}
-        onClick={() => handleRowClick(device)}
-      >
-        <RowIcon $active={isActive} aria-hidden>
-          <Icon size={compact ? 16 : 18} />
-        </RowIcon>
-        <RowText>
-          <RowName $active={isActive}>{device.name || 'Устройство'}</RowName>
-          <RowSub>
-            {isActive ? 'Сейчас играет' : isMe ? 'Это устройство' : 'Нажмите, чтобы передать'}
-            {device.lastSeenAt && !isActive
-              ? ` • ${formatRelativeSeconds(device.lastSeenAt)}`
-              : null}
-          </RowSub>
-        </RowText>
-        <DeviceMenu
-          deviceId={device.id}
-          onTransfer={onTransfer}
-          onRemove={onRemove}
-          canTransfer={canTransfer}
-          canRemove={canRemove}
-        />
-      </DeviceRow>
+      <DeviceRowShell key={device.id} $compact={compact} $active={isActive}>
+        <RowMain
+          type="button"
+          disabled={!canTransfer}
+          onClick={() => handleTransfer(device)}
+          aria-label={
+            canTransfer
+              ? `Передать воспроизведение на ${device.name || 'устройство'}`
+              : undefined
+          }
+        >
+          <RowIcon $active={isActive} aria-hidden>
+            <Icon size={compact ? 16 : 18} />
+          </RowIcon>
+          <RowText>
+            <RowName $active={isActive}>{device.name || 'Устройство'}</RowName>
+            <RowSub>
+              {isActive ? 'Сейчас играет' : isMe ? 'Это устройство' : 'Нажмите, чтобы передать'}
+              {device.lastSeenAt && !isActive
+                ? ` • ${formatRelativeSeconds(device.lastSeenAt)}`
+                : null}
+            </RowSub>
+          </RowText>
+        </RowMain>
+        {hasMenu ? (
+          <RowActions>
+            <DeviceMenu
+              deviceId={device.id}
+              onTransfer={onTransfer}
+              onRemove={onRemove}
+              canTransfer={canTransfer}
+              canRemove={canRemove}
+            />
+          </RowActions>
+        ) : (
+          <RowActionsPlaceholder aria-hidden />
+        )}
+      </DeviceRowShell>
     );
   };
 
@@ -328,6 +397,7 @@ const HeroIcon = styled.div`
   align-items: center;
   justify-content: center;
   color: ${(p) => (p.$active ? ACCENT : 'rgba(255, 255, 255, 0.88)')};
+  flex-shrink: 0;
 `;
 
 const HeroText = styled.div`
@@ -413,35 +483,57 @@ const SectionLabel = styled.div`
 const GroupCard = styled.div`
   border-radius: 12px;
   background: #282828;
-  overflow: hidden;
+  overflow: visible;
 `;
 
-const DeviceRow = styled.button`
-  appearance: none;
-  border: 0;
-  width: 100%;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 12px;
+const DeviceRowShell = styled.div`
+  display: flex;
   align-items: center;
-  padding: ${(p) => (p.$compact ? '12px 14px' : '14px 16px')};
-  background: transparent;
-  color: inherit;
-  font-family: inherit;
-  text-align: left;
-  cursor: ${(p) => (p.$clickable ? 'pointer' : 'default')};
+  gap: 4px;
+  padding: ${(p) => (p.$compact ? '4px 6px 4px 4px' : '6px 8px 6px 6px')};
+  background: ${(p) => (p.$active ? 'rgba(29, 185, 84, 0.06)' : 'transparent')};
   transition: background 0.15s ease;
 
   & + & {
     border-top: 1px solid rgba(255, 255, 255, 0.06);
   }
 
+  &:first-child {
+    border-radius: 12px 12px 0 0;
+  }
+
+  &:last-child {
+    border-radius: 0 0 12px 12px;
+  }
+
+  &:only-child {
+    border-radius: 12px;
+  }
+`;
+
+const RowMain = styled.button`
+  appearance: none;
+  border: 0;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: ${(p) => (p.disabled ? '8px 10px' : '8px 10px')};
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: ${(p) => (p.disabled ? 'default' : 'pointer')};
+  border-radius: 8px;
+  transition: background 0.15s ease;
+
   &:hover:not(:disabled) {
-    background: ${(p) => (p.$clickable ? 'rgba(255, 255, 255, 0.06)' : 'transparent')};
+    background: rgba(255, 255, 255, 0.06);
   }
 
   &:disabled {
-    cursor: default;
+    opacity: 1;
   }
 `;
 
@@ -452,6 +544,7 @@ const RowIcon = styled.div`
   align-items: center;
   justify-content: center;
   color: ${(p) => (p.$active ? ACCENT : 'rgba(255, 255, 255, 0.85)')};
+  flex-shrink: 0;
 `;
 
 const RowText = styled.div`
@@ -478,41 +571,55 @@ const RowSub = styled.div`
   text-overflow: ellipsis;
 `;
 
-const MenuWrap = styled.div`
-  position: relative;
-  flex-shrink: 0;
+const RowActions = styled.div`
+  flex: 0 0 40px;
+  width: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`;
+
+const RowActionsPlaceholder = styled.div`
+  flex: 0 0 8px;
+  width: 8px;
 `;
 
 const MenuBtn = styled.button`
   appearance: none;
   border: 0;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.65);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.82);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.14);
+    color: #fff;
+  }
+
+  &:active {
+    transform: scale(0.96);
+  }
+
+  &[aria-expanded='true'] {
+    background: rgba(255, 255, 255, 0.18);
     color: #fff;
   }
 `;
 
 const MenuPopover = styled.div`
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
-  min-width: 210px;
   padding: 6px;
   border-radius: 10px;
-  background: #282828;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
-  z-index: 20;
+  background: #3e3e3e;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.65);
 `;
 
 const MenuItem = styled.button`
@@ -522,17 +629,18 @@ const MenuItem = styled.button`
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
+  padding: 11px 12px;
   border-radius: 8px;
   background: transparent;
   color: ${(p) => (p.$danger ? '#ff8a84' : '#fff')};
   font-size: 13px;
+  font-weight: 500;
   font-family: inherit;
   text-align: left;
   cursor: pointer;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.1);
   }
 `;
 

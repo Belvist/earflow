@@ -67,6 +67,7 @@ export const DeviceSyncPanelBody = styled.div`
   width: 100%;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: visible;
   box-sizing: border-box;
   padding: 20px 18px 18px;
 `;
