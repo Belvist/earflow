@@ -25,26 +25,28 @@ final class AVPlayerEngine: NSObject {
     private var timeObserver: Any?
     private var endObserver: NSObjectProtocol?
     private var itemStatusObservation: NSKeyValueObservation?
+    private var timeControlObservation: NSKeyValueObservation?
     private var loadContinuation: CheckedContinuation<Void, Error>?
     private var loadTimeoutTask: Task<Void, Never>?
-    private static var audioSessionConfigured = false
 
     var onStatusChange: ((PlaybackState) -> Void)?
     var onProgress: ((PlaybackProgress) -> Void)?
 
     private let loadTimeoutSeconds: TimeInterval = 40
 
-    func load(url: URL) async throws {
+    func load(url: URL, skipPreflight: Bool = false) async throws {
         try await withTaskCancellationHandler {
-            try await loadUncancelled(url: url)
+            try await loadUncancelled(url: url, skipPreflight: skipPreflight)
         } onCancel: {
             Task { @MainActor in
-                self.teardownForCancellation()
+                self.releaseActivePlayer()
             }
         }
     }
 
-    private func teardownForCancellation() {
+    /// Fully release the active player (pause, drop item, remove observers, drop reference) so a new
+    /// `load` never leaves the previous `AVPlayer`/`AVPlayerItem` (and its decode buffers) retained.
+    private func releaseActivePlayer() {
         cancelLoadWait()
         player?.pause()
         player?.replaceCurrentItem(with: nil)
@@ -52,19 +54,20 @@ final class AVPlayerEngine: NSObject {
         player = nil
     }
 
-    private func loadUncancelled(url: URL) async throws {
-        tearDownObservers()
-        cancelLoadWait()
+    private func loadUncancelled(url: URL, skipPreflight: Bool) async throws {
+        releaseActivePlayer()
 
         let playbackURL = StreamURLResolver.nativePlaybackURL(url)
         try Task.checkCancellation()
 
-        // Early auth check with a clear message: AVPlayer's -12881/-11800 errors are opaque.
-        let preflight = await HLSPlaybackPreflight.probe(masterURL: playbackURL)
-        try Task.checkCancellation()
-        guard preflight.errorMessage == nil, (200 ... 299).contains(preflight.statusCode) else {
-            let detail = preflight.errorMessage ?? "http \(preflight.statusCode)"
-            throw AVPlayerEngineError.preflightFailed(detail)
+        if !skipPreflight {
+            // Early auth check with a clear message: AVPlayer's -12881/-11800 errors are opaque.
+            let preflight = await HLSPlaybackPreflight.probe(masterURL: playbackURL)
+            try Task.checkCancellation()
+            guard preflight.errorMessage == nil, (200 ... 299).contains(preflight.statusCode) else {
+                let detail = preflight.errorMessage ?? "http \(preflight.statusCode)"
+                throw AVPlayerEngineError.preflightFailed(detail)
+            }
         }
 
         try await loadWithNativeAsset(url: playbackURL)
@@ -74,12 +77,12 @@ final class AVPlayerEngine: NSObject {
     func play() {
         guard let player else { return }
         player.play()
-        onStatusChange?(.playing)
+        // Playback state follows `timeControlStatus` KVO — do not optimistically emit `.playing`
+        // here or UI/progress can run ahead of actual audio (especially after background/lock).
     }
 
     func pause() {
         player?.pause()
-        onStatusChange?(.paused)
     }
 
     func seek(to seconds: Double) {
@@ -89,7 +92,7 @@ final class AVPlayerEngine: NSObject {
     }
 
     func stop() {
-        teardownForCancellation()
+        releaseActivePlayer()
         onProgress?(.zero)
         onStatusChange?(.idle)
     }
@@ -104,22 +107,44 @@ final class AVPlayerEngine: NSObject {
         )
     }
 
-    private func loadWithResourceLoader(url: URL) async throws {
-        let loader = AuthenticatedStreamResourceLoader()
-        resourceLoader = loader
-
-        let customURL = AuthenticatedStreamResourceLoader.playbackURL(from: url)
-        let asset = AVURLAsset(url: customURL)
-        asset.resourceLoader.setDelegate(loader, queue: loader.loaderQueue)
+    /// Native HLS playback. AVPlayer fetches master + variants + segments itself; we only inject auth.
+    /// `AVAssetResourceLoaderDelegate` cannot serve HLS segments (Apple returns -12881), so AVPlayer
+    /// MUST own the network; we pass Origin/cookies via asset options instead.
+    private func loadWithNativeAsset(url: URL) async throws {
+        let asset = Self.makeAuthenticatedAsset(url: url)
         let item = AVPlayerItem(asset: asset)
+        // Cap forward buffering: default (0 = automatic) lets AVPlayer buffer arbitrarily far ahead
+        // on a fast network, growing resident memory over long playback. 60s is ample for music.
+        item.preferredForwardBufferDuration = 60
 
         player = AVPlayer(playerItem: item)
         player?.automaticallyWaitsToMinimizeStalling = true
-        configureAudioSessionOnce()
+        if #available(iOS 16.0, *) {
+            player?.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
+        }
         observeItem(item)
+        observeTimeControlStatus()
         observeEnd(item)
         startTimeObserver()
         try await waitUntilReadyOrFailed()
+    }
+
+    /// `AVURLAssetHTTPHeaderFieldsKey` is undocumented but the de-facto standard for header injection;
+    /// `AVURLAssetHTTPCookiesKey` is documented. Both apply to every request for the asset (segments incl.).
+    nonisolated static func makeAuthenticatedAsset(url: URL) -> AVURLAsset {
+        AVURLAsset(url: url, options: assetOptions(for: url))
+    }
+
+    /// Exposed for tests — header/cookie injection is the auth contract, not the AVURLAsset instance.
+    nonisolated static func assetOptions(for url: URL) -> [String: Any] {
+        var options: [String: Any] = [
+            "AVURLAssetHTTPHeaderFieldsKey": StreamCookieHeaders.assetHeaderFields(for: url),
+        ]
+        let cookies = StreamCookieHeaders.playbackCookies(for: url)
+        if !cookies.isEmpty {
+            options[AVURLAssetHTTPCookiesKey] = cookies
+        }
+        return options
     }
 
     private func waitUntilReadyOrFailed() async throws {
@@ -135,17 +160,8 @@ final class AVPlayerEngine: NSObject {
         } onCancel: {
             Task { @MainActor in
                 self.cancelLoadWait()
-                self.resourceLoader?.cancelAllTasks()
             }
         }
-    }
-
-    private func configureAudioSessionOnce() {
-        guard !Self.audioSessionConfigured else { return }
-        let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playback, mode: .default, options: [.allowAirPlay])
-        try? session.setActive(true)
-        Self.audioSessionConfigured = true
     }
 
     private func observeItem(_ item: AVPlayerItem) {
@@ -165,6 +181,36 @@ final class AVPlayerEngine: NSObject {
                     self.finishLoadWait(with: .failure(AVPlayerEngineError.itemFailed(message)))
                     self.onStatusChange?(.failed)
                 default:
+                    break
+                }
+            }
+        }
+    }
+
+    private func observeTimeControlStatus() {
+        guard let player else { return }
+        timeControlObservation = player.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
+            Task { @MainActor in
+                guard let self else { return }
+                switch player.timeControlStatus {
+                case .playing:
+                    self.onStatusChange?(.playing)
+                case .paused:
+                    if player.currentItem?.status == .readyToPlay {
+                        self.onStatusChange?(.paused)
+                    }
+                case .waitingToPlayAtSpecifiedRate:
+                    if let reason = player.reasonForWaitingToPlay {
+                        switch reason {
+                        case .toMinimizeStalls, .evaluatingBufferingRate:
+                            self.onStatusChange?(.buffering)
+                        default:
+                            break
+                        }
+                    } else {
+                        self.onStatusChange?(.buffering)
+                    }
+                @unknown default:
                     break
                 }
             }
@@ -221,6 +267,7 @@ final class AVPlayerEngine: NSObject {
 
     private func tearDownObservers() {
         itemStatusObservation = nil
+        timeControlObservation = nil
         if let timeObserver, let player {
             player.removeTimeObserver(timeObserver)
         }

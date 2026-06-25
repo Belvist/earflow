@@ -15,7 +15,8 @@
 3. **`ios-app/.project-memory/CURRENT_STATE.md`** — что уже сделано / что нет.
 4. **`docs/ARCHITECTURE_INVARIANTS.md`** — grep `INV-ARCH`, `INV-SEC`, `INV-DS`, `INV-FE`.
 5. **`docs/DECISIONS.md`** — grep `ios`, `native`, `iOS`.
-6. **`docs/PENDING.md`** — `PEND-IOS-001` и связанные записи.
+6. **`docs/PENDING.md`** — `PEND-IOS-005` (playback device gate), `PEND-IOS-003`/`004`, auth `PEND-IOS-002`.
+6b. **Playback device smoke (если трогаешь playback):** `ios-app/.project-memory/IPHONE_PLAYBACK_SMOKE_INSTRUCTIONS.md`
 7. **`docs/IOS_APP.md`** + **`ios-app/CONTEXT.md`** — архитектура модуля.
 8. **`ios-app/.project-memory/BACKEND_FRONTEND_CONTRACT.md`** — контракт экрана, который трогаешь.
 

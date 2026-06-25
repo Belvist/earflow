@@ -4,12 +4,17 @@ Priority: **P0** blockers · **P1** product · **P2** polish
 
 ---
 
-## P0 — Gate `PEND-IOS-001`
+## P0 — Gate `PEND-IOS-005` (playback device smoke)
 
-- [ ] **P0** Simulator test on concrete device (`iPhone 17`) — `verify:ios-native` PASS
-- [ ] **P0** Real iPhone smoke (login, play, background audio basic)
-- [ ] **P0** Security pass: logout clears all secrets; log audit
-- [ ] **P0** Device Sync WS client (no REST polling) — `earflow-device-sync` skill
+- [x] **P0** P0 code: AVAudioSession -50 fix, timeControlStatus sync, auth hot-path (`verify:ios-native` 91 PASS)
+- [ ] **P0** Real iPhone playback smoke — `IPHONE_PLAYBACK_SMOKE_INSTRUCTIONS.md` (lock screen, background ≥60s, switch, no auth storm)
+- [ ] **P0** Close `PEND-IOS-005` only with evidence bundle + `DECISIONS.md` entry
+
+## P0 — Auth / other
+
+- [x] **P0** Simulator — `verify:ios-native` PASS
+- [ ] **P0** Real iPhone auth prod e2e (`PEND-IOS-002`)
+- [ ] **P0** Memory Instruments gate (`PEND-IOS-004`)
 
 ## P1 — Phase 3 product parity
 

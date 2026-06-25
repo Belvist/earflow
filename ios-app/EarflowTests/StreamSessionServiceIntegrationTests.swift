@@ -103,27 +103,3 @@ final class StreamSessionServiceIntegrationTests: XCTestCase {
         XCTAssertEqual(items.first { $0.name == "token" }?.value, "signedtok")
     }
 }
-
-final class AuthenticatedStreamResourceLoaderTests: XCTestCase {
-    func testRewritesHTTPSMasterToCustomScheme() {
-        let https = URL(string: "https://strmhaha.earflow.ru/audio/master.m3u8?st=tok")!
-        let custom = AuthenticatedStreamResourceLoader.playbackURL(from: https)
-        XCTAssertEqual(custom.scheme, AuthenticatedStreamResourceLoader.customScheme)
-        XCTAssertEqual(custom.host, "api.earflow.ru")
-        XCTAssertEqual(custom.query, "st=tok")
-    }
-
-    func testPlaylistRewriteUsesCustomSchemeForStreamHost() {
-        let input = """
-        #EXTM3U
-        #EXT-X-STREAM-INF:BANDWIDTH=128000
-        https://strmhaha.earflow.ru/api/ebap-hls/v1/hls/42/variant.m3u8
-        /api/ebap-hls/v1/hls/42/alt.m3u8
-        """.data(using: .utf8)!
-        let output = AuthenticatedStreamResourceLoader.rewritePlaylistBodyForTests(input)
-        let text = String(decoding: output, as: UTF8.self)
-        XCTAssertTrue(text.contains("earflow-stream://api.earflow.ru"))
-        XCTAssertFalse(text.contains("strmhaha.earflow.ru"))
-        XCTAssertTrue(text.contains("earflow-stream://api.earflow.ru/api/ebap-hls/v1/hls/42/alt.m3u8"))
-    }
-}

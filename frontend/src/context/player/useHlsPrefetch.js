@@ -106,7 +106,7 @@ export const useHlsPrefetch = ({
 
             const fetcher = primaryFetch === 'direct'
                 ? api.getSongDirectSession(nextTrackId, { signal: controller.signal })
-                : api.getSongHlsSession(nextTrackId, { signal: controller.signal });
+                : api.getSongHlsSession(nextTrackId, { signal: controller.signal, prefetch: true });
 
             fetcher
                 .then((sess) => {

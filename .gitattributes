@@ -1,0 +1,2 @@
+# Shell scripts must use LF — CRLF breaks `set -euo pipefail` on Linux VPS.
+*.sh text eol=lf

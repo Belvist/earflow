@@ -12,6 +12,7 @@ actor AuthActor {
     private var pendingMfaStepUp = false
     private var refreshInFlight: Task<RefreshSessionResult, Never>?
     private var bootstrapInFlight: Task<AuthBootstrapResult, Never>?
+    private var lastSoftRevalidateAt: Date?
     private var hooksInstalled = false
     private var lifecycleHooks = SessionLifecycleHooks()
 
@@ -104,15 +105,21 @@ actor AuthActor {
         }
         await transition(to: .refreshing)
         let result = await runBootstrapAuthState(preferRefresh: false, softRevalidate: false)
-        await applyBootstrapResult(result)
+        await applyBootstrapResult(result, source: .coldBootstrap)
         await refreshDiagnostics()
     }
 
     /// Foreground / periodic revalidation — mirrors web `revalidateSession`.
+    /// Debounced: must not run full refresh+profile on every `scenePhase.active` (lock/unlock steals
+    /// network from playback). Use `preferRefresh: false` on foreground; refresh only on 401 retry path.
     func revalidateSession(preferRefresh: Bool = true) async {
         guard state == .authenticated || state == .degraded else { return }
+        if let last = lastSoftRevalidateAt, Date().timeIntervalSince(last) < 45 {
+            return
+        }
+        lastSoftRevalidateAt = Date()
         let result = await runBootstrapAuthState(preferRefresh: preferRefresh, softRevalidate: true)
-        await applyBootstrapResult(result)
+        await applyBootstrapResult(result, source: .revalidate)
         await refreshDiagnostics()
     }
 
@@ -531,13 +538,13 @@ actor AuthActor {
 
     private func logLoginPipelineComplete(loginPath: String) async {
         let hasSid = SessionCookieStore.hasSessionCookie(for: AppConfiguration.current.gatewayBaseURL)
-        let userId = profile?.resolvedId
+        let hasProfile = profile != nil
         let deviceOk = deviceIdentity?.needsRegister == false
         let mfa = profile?.mfaEnabled == true
         let stepUp = mfa ? !pendingMfaStepUp : false
         await EarflowLog.shared.info(
             "auth",
-            "pipeline ok login=\(loginPath) mp_sid=\(hasSid) device=\(deviceOk) profile=\(userId != nil) userId=\(userId.map(String.init) ?? "nil") mfa=\(mfa) stepUpClear=\(stepUp) state=authenticated"
+            "pipeline ok login=\(loginPath) mp_sid=\(hasSid) device=\(deviceOk) profile=\(hasProfile) user=\(profile?.logSafeHandle ?? "nil") mfa=\(mfa) stepUpClear=\(stepUp) state=authenticated"
         )
     }
 
@@ -782,7 +789,13 @@ actor AuthActor {
         AuthBootstrapResult(outcome: .degraded, profile: cachedAuthUser(), diagnosticCode: code)
     }
 
-    private func applyBootstrapResult(_ result: AuthBootstrapResult) async {
+    private enum BootstrapLogSource {
+        case coldBootstrap
+        case revalidate
+        case login
+    }
+
+    private func applyBootstrapResult(_ result: AuthBootstrapResult, source: BootstrapLogSource = .login) async {
         switch result.outcome {
         case .authenticated:
             if let user = result.profile {
@@ -792,10 +805,15 @@ actor AuthActor {
             await updateMfaFlagsAfterLogin()
             await transition(to: .authenticated)
             await prewarmProofAccessToken()
-            await EarflowLog.shared.info(
-                "auth",
-                "bootstrap authenticated userId=\(profile?.resolvedId.map(String.init) ?? "nil")"
-            )
+            let label = profile?.logSafeHandle ?? "nil"
+            switch source {
+            case .coldBootstrap:
+                await EarflowLog.shared.info("auth", "bootstrap authenticated user=\(label)")
+            case .revalidate:
+                await EarflowLog.shared.debug("auth", "session revalidated user=\(label)")
+            case .login:
+                await EarflowLog.shared.info("auth", "authenticated user=\(label)")
+            }
         case .degraded:
             if let user = result.profile {
                 profile = user
@@ -803,7 +821,7 @@ actor AuthActor {
             await transition(to: .degraded)
             await EarflowLog.shared.warning(
                 "auth",
-                "bootstrap degraded code=\(result.diagnosticCode ?? "nil") userId=\(profile?.resolvedId.map(String.init) ?? "nil")"
+                "session degraded code=\(result.diagnosticCode ?? "nil") user=\(profile?.logSafeHandle ?? "nil")"
             )
         case .guest:
             await clearSession(reason: .unauthenticated)

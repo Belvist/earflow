@@ -1053,7 +1053,8 @@ class ApiClient {
       throw err;
     }
 
-    const cacheKey = String(trackId);
+    const prefetch = options?.prefetch === true;
+    const cacheKey = prefetch ? `prefetch:${trackId}` : `play:${trackId}`;
     const cached = this._hlsSessionCache?.get?.(cacheKey);
     if (cached && typeof cached === 'object') {
       const cachedMasterUrl = typeof cached.masterUrl === 'string' ? cached.masterUrl : '';
@@ -1108,11 +1109,15 @@ class ApiClient {
     };
 
     const load = (async () => {
+      const sessionHeaders = {
+        ...headers,
+        ...(prefetch ? { 'X-Earflow-Session-Intent': 'prefetch' } : {}),
+      };
       const resp = await this._apiHttpClientRaw.requestRaw({
         url,
         method: 'POST',
-        headers,
-        body: JSON.stringify({ trackId }),
+        headers: sessionHeaders,
+        body: JSON.stringify({ trackId, ...(prefetch ? { prefetch: true } : {}) }),
         credentials: 'include',
         signal: undefined,
         meta: {
@@ -1170,15 +1175,21 @@ class ApiClient {
       const result = { masterUrl: absoluteMasterUrl, expiresAtMs };
 
       const lyricsKeyB64 = data && data.lyrics && typeof data.lyrics.keyB64 === 'string' ? String(data.lyrics.keyB64).trim() : '';
-      if (lyricsKeyB64) {
+      const cacheTtlMs = (() => {
+        if (expiresAtMs && Number.isFinite(expiresAtMs)) {
+          return Math.max(5000, expiresAtMs - Date.now() - 5000);
+        }
+        return 15_000;
+      })();
+      if (lyricsKeyB64 && !options?.prefetch) {
         try {
-          this._lyricsSessionCache?.set?.(cacheKey, { keyB64: lyricsKeyB64, expiresAtMs: expiresAtMs || (Date.now() + 15_000) }, 15_000);
+          this._lyricsSessionCache?.set?.(cacheKey, { keyB64: lyricsKeyB64, expiresAtMs: expiresAtMs || (Date.now() + cacheTtlMs) }, cacheTtlMs);
         } catch {
         }
       }
 
       try {
-        this._hlsSessionCache?.set?.(cacheKey, result, 15_000);
+        this._hlsSessionCache?.set?.(cacheKey, result, cacheTtlMs);
       } catch {
       }
       return result;

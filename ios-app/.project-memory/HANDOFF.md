@@ -1,10 +1,11 @@
 # iOS Handoff — читать ПЕРВЫМ в новом чате
 
-**Updated:** 2026-06-23  
+**Updated:** 2026-06-25  
 **Global index:** `docs/AGENT_SESSION_HANDOFF.md`  
-**Gate:** `PEND-IOS-001` **OPEN** — auth **prepared in code**, **not closed** without real iPhone evidence
+**Gate:** `PEND-IOS-005` **OPEN** — playback **prepared in code**, **not closed** without real iPhone smoke
 
-**Closure checklist:** `ios-app/.project-memory/IOS_AUTH_CLOSURE_CHECKLIST.md`
+**Playback smoke:** `ios-app/.project-memory/IPHONE_PLAYBACK_SMOKE_INSTRUCTIONS.md`  
+**Auth closure checklist:** `ios-app/.project-memory/IOS_AUTH_CLOSURE_CHECKLIST.md`
 
 ---
 
@@ -12,9 +13,11 @@
 
 | Делать | Не делать |
 |--------|-----------|
-| Real iPhone auth smoke по checklist | Закрывать PEND-IOS-001 без evidence |
-| Обновлять docs при изменении auth | «iOS auth готово» без iPhone |
-| Simulator: `verify:ios-native` | TestFlight / social / reco до auth gate |
+| Real iPhone **playback** smoke по `IPHONE_PLAYBACK_SMOKE_INSTRUCTIONS.md` | Закрывать `PEND-IOS-005` без device evidence |
+| `verify:ios-native` перед device run | Новые UI-фичи до PASS playback gate |
+| Обновлять docs при изменении playback/auth | «background audio готово» по unit-тестам |
+
+**Оценка:** до P0-фикса — broken lifecycle на device; после фикса в коде — **prepared, needs device evidence**.
 
 **UX:** guest-first shell; login — sheet.
 

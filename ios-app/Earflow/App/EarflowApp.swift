@@ -71,7 +71,8 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
             guard authState == .authenticated || authState == .degraded else { return }
-            Task { await dependencies.auth.revalidateSession() }
+            // Profile-only revalidate — no POST /api/auth/refresh on every lock-screen unlock.
+            Task { await dependencies.auth.revalidateSession(preferRefresh: false) }
         }
         .onChange(of: authState) { _, newState in
             if newState == .authenticated || newState == .degraded {

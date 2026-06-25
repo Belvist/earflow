@@ -51,13 +51,15 @@ actor GatewayClient {
         path: String,
         body: (any Encodable)? = nil,
         skipAuth: Bool = false,
+        additionalHeaders: [String: String] = [:],
         decoder: JSONDecoder = JSONDecoder()
     ) async throws -> T {
         let data = try await requestData(
             method: method,
             path: path,
             body: body,
-            skipAuth: skipAuth
+            skipAuth: skipAuth,
+            additionalHeaders: additionalHeaders
         )
         do {
             return try decoder.decode(T.self, from: data)
@@ -76,7 +78,8 @@ actor GatewayClient {
         path: String,
         body: (any Encodable)? = nil,
         skipAuth: Bool = false,
-        allowRefreshOnUnauthorized: Bool = true
+        allowRefreshOnUnauthorized: Bool = true,
+        additionalHeaders: [String: String] = [:]
     ) async throws -> Data {
         try validateGatewayPath(path)
         let url = configuration.resolve(path: path)
@@ -94,7 +97,8 @@ actor GatewayClient {
                     skipAuth: skipAuth,
                     retryAfterRefresh: false,
                     retryAfterDeviceProof: false,
-                    allowRefreshOnUnauthorized: allowRefreshOnUnauthorized
+                    allowRefreshOnUnauthorized: allowRefreshOnUnauthorized,
+                    additionalHeaders: additionalHeaders
                 )
             } catch let error as GatewayError {
                 if case .cancelled = error { throw error }
@@ -204,7 +208,8 @@ actor GatewayClient {
         skipAuth: Bool,
         retryAfterRefresh: Bool,
         retryAfterDeviceProof: Bool,
-        allowRefreshOnUnauthorized: Bool
+        allowRefreshOnUnauthorized: Bool,
+        additionalHeaders: [String: String] = [:]
     ) async throws -> Data {
         var request = URLRequest(url: url)
         request.httpMethod = method.rawValue
@@ -223,6 +228,10 @@ actor GatewayClient {
             if method != .get, let csrf = await authHooks.csrfToken?(), !csrf.isEmpty {
                 request.setValue(csrf, forHTTPHeaderField: "X-CSRF-Token")
             }
+        }
+
+        for (key, value) in additionalHeaders {
+            request.setValue(value, forHTTPHeaderField: key)
         }
 
         GatewayLogger.debug("\(method.rawValue) \(path)")
@@ -252,7 +261,8 @@ actor GatewayClient {
                     skipAuth: skipAuth,
                     retryAfterRefresh: true,
                     retryAfterDeviceProof: retryAfterDeviceProof,
-                    allowRefreshOnUnauthorized: allowRefreshOnUnauthorized
+                    allowRefreshOnUnauthorized: allowRefreshOnUnauthorized,
+                    additionalHeaders: additionalHeaders
                 )
             }
             if !skipAuth,
@@ -268,7 +278,8 @@ actor GatewayClient {
                     skipAuth: skipAuth,
                     retryAfterRefresh: retryAfterRefresh,
                     retryAfterDeviceProof: true,
-                    allowRefreshOnUnauthorized: allowRefreshOnUnauthorized
+                    allowRefreshOnUnauthorized: allowRefreshOnUnauthorized,
+                    additionalHeaders: additionalHeaders
                 )
             }
             if !skipAuth {

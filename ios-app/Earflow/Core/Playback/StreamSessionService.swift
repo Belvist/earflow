@@ -6,6 +6,8 @@ actor StreamSessionService {
     private let streamTickets: StreamTicketService
     private var inFlight: [Int: Task<PlaybackSessionRef, Error>] = [:]
     private var cache: [Int: CachedHLSSession] = [:]
+    private var prefetchInFlight: [Int: Task<Void, Never>] = [:]
+    private var prefetchCache: [Int: CachedHLSSession] = [:]
 
     init(gateway: GatewayClient, streamTickets: StreamTicketService) {
         self.gateway = gateway
@@ -25,61 +27,110 @@ actor StreamSessionService {
         }
 
         let task = Task<PlaybackSessionRef, Error> {
-            let response: HLSSessionResponse = try await self.gateway.request(
-                method: .post,
-                path: "/api/ebap-hls/v1/session",
-                body: HLSSessionRequest(trackId: trackId)
-            )
-            try Task.checkCancellation()
-            SessionCookieStore.pinPlaybackCookies()
-            guard let master = response.masterUrl,
-                  let url = StreamURLResolver.resolveMasterURL(master) else {
-                throw GatewayError.network("missing_master_url")
-            }
-            try Self.validateStreamURL(url)
-            let sessionId = "hls-\(trackId)-\(Int(Date().timeIntervalSince1970))"
-            let playbackURL = Self.sanitizePlaybackURL(
-                await self.streamTickets.attachMediaTicketIfAvailable(
-                    masterURL: url,
-                    sessionId: sessionId,
-                    trackId: trackId
-                )
-            )
-            try Self.validatePlaybackCredentials(masterURL: playbackURL, trackId: trackId)
-            try Task.checkCancellation()
-            let cookies = SessionCookieStore.playbackCookieDiagnostic()
-            let hasToken = Self.hasSignedToken(in: playbackURL)
-            await EarflowLog.shared.info(
-                "playback",
-                "hls session track=\(trackId) host=\(playbackURL.host ?? "?") mp_hls=\(cookies.mpHls.present) token=\(hasToken)"
-            )
-            return PlaybackSessionRef(
-                playbackSessionId: sessionId,
-                trackId: trackId,
-                masterURL: playbackURL,
-                expiresAtMs: response.expiresAtMs.map(Int64.init)
-            )
+            try await self.resolveSession(trackId: trackId, prefetch: false)
         }
         inFlight[trackId] = task
         defer { inFlight.removeValue(forKey: trackId) }
         let ref = try await task.value
         guard !Task.isCancelled else { throw CancellationError() }
         cache[trackId] = CachedHLSSession(ref: ref, expiresAtMs: ref.expiresAtMs)
+        prefetchCache.removeValue(forKey: trackId)
         return ref
+    }
+
+    /// Warms masterUrl+token in memory without rotating `mp_hls` — safe while another track plays.
+    func prefetchSession(
+        trackId: Int,
+        generation: UInt64,
+        isGenerationCurrent: @Sendable @escaping (UInt64) async -> Bool
+    ) async {
+        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+        if cache[trackId] != nil { return }
+        if let cached = prefetchCache[trackId],
+           let expires = cached.expiresAtMs,
+           expires > nowMs + 5000 {
+            return
+        }
+        if prefetchInFlight[trackId] != nil { return }
+
+        let task = Task<Void, Never> {
+            do {
+                let ref = try await self.resolveSession(trackId: trackId, prefetch: true)
+                guard !Task.isCancelled else { return }
+                guard await isGenerationCurrent(generation) else {
+                    await EarflowLog.shared.debug("playback", "hls prefetch stale generation track=\(trackId)")
+                    return
+                }
+                self.prefetchCache[trackId] = CachedHLSSession(ref: ref, expiresAtMs: ref.expiresAtMs)
+                await EarflowLog.shared.debug("playback", "hls prefetch ready track=\(trackId)")
+            } catch {
+                await EarflowLog.shared.debug("playback", "hls prefetch skipped track=\(trackId): \(error)")
+            }
+        }
+        prefetchInFlight[trackId] = task
+        defer { prefetchInFlight.removeValue(forKey: trackId) }
+        await task.value
     }
 
     func clearCache(for trackId: Int? = nil) {
         if let trackId {
             cache.removeValue(forKey: trackId)
+            prefetchCache.removeValue(forKey: trackId)
             inFlight[trackId]?.cancel()
             inFlight.removeValue(forKey: trackId)
+            prefetchInFlight[trackId]?.cancel()
+            prefetchInFlight.removeValue(forKey: trackId)
             return
         }
         for task in inFlight.values {
             task.cancel()
         }
+        for task in prefetchInFlight.values {
+            task.cancel()
+        }
         inFlight.removeAll()
+        prefetchInFlight.removeAll()
         cache.removeAll()
+        prefetchCache.removeAll()
+    }
+
+    private func resolveSession(trackId: Int, prefetch: Bool) async throws -> PlaybackSessionRef {
+        let response: HLSSessionResponse = try await gateway.request(
+            method: .post,
+            path: "/api/ebap-hls/v1/session",
+            body: HLSSessionRequest(trackId: trackId, prefetch: prefetch),
+            additionalHeaders: prefetch ? ["X-Earflow-Session-Intent": "prefetch"] : [:]
+        )
+        try Task.checkCancellation()
+        if !prefetch {
+            SessionCookieStore.pinPlaybackCookies()
+        }
+        guard let master = response.masterUrl,
+              let url = StreamURLResolver.resolveMasterURL(master) else {
+            throw GatewayError.network("missing_master_url")
+        }
+        try Self.validateStreamURL(url)
+        let sessionId = "hls-\(trackId)-\(Int(Date().timeIntervalSince1970))"
+        let playbackURL = Self.sanitizePlaybackURL(
+            await streamTickets.attachMediaTicketIfAvailable(
+                masterURL: url,
+                sessionId: sessionId,
+                trackId: trackId
+            )
+        )
+        try Self.validatePlaybackCredentials(masterURL: playbackURL, trackId: trackId, prefetch: prefetch)
+        try Task.checkCancellation()
+        let hasToken = Self.hasSignedToken(in: playbackURL)
+        await EarflowLog.shared.info(
+            "playback",
+            "hls \(prefetch ? "prefetch" : "session") intent=\(prefetch ? "prefetch" : "play") track=\(trackId) setCookie=\(prefetch ? "no" : "yes") token=\(hasToken)"
+        )
+        return PlaybackSessionRef(
+            playbackSessionId: sessionId,
+            trackId: trackId,
+            masterURL: playbackURL,
+            expiresAtMs: response.expiresAtMs.map(Int64.init)
+        )
     }
 
     private static func sanitizePlaybackURL(_ url: URL) -> URL {
@@ -115,11 +166,15 @@ actor StreamSessionService {
     }
 
     /// nginx `hls_auth_ok` needs `?token=` or `mp_hls` cookie — fail before AVPlayer if both missing.
-    private nonisolated static func validatePlaybackCredentials(masterURL: URL, trackId: Int) throws {
+    private nonisolated static func validatePlaybackCredentials(
+        masterURL: URL,
+        trackId: Int,
+        prefetch: Bool
+    ) throws {
         let hasToken = hasSignedToken(in: masterURL)
         let mpHls = SessionCookieStore.hasNamedCookie("mp_hls")
         guard hasToken || mpHls else {
-            throw GatewayError.network("hls_session_missing_playback_auth track=\(trackId)")
+            throw GatewayError.network("hls_session_missing_playback_auth track=\(trackId) prefetch=\(prefetch)")
         }
     }
 

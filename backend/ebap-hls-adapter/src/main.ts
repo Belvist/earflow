@@ -886,6 +886,9 @@ async function handleSession(req: Request, requestId: string): Promise<Response>
     const trackId = Number(body?.trackId);
     if (!Number.isInteger(trackId) || trackId <= 0) return badRequest('Invalid trackId');
 
+    const prefetchIntent = req.headers.get('x-earflow-session-intent')?.toLowerCase() === 'prefetch'
+        || body?.prefetch === true;
+
     const nowMs = Date.now();
     try {
         const rl = await consumeSessionRateLimit({ userId, nowMs });
@@ -932,12 +935,19 @@ async function handleSession(req: Request, requestId: string): Promise<Response>
         });
 
         const headers = new Headers();
-        headers.append('set-cookie', setCookieHls);
-        headers.append('set-cookie', setCookieLyrics);
+
+        // Prefetch warms masterUrl+token in client cache without rotating mp_hls — overwriting the
+        // cookie mid-playback breaks segment auth for the track that is still playing.
+        if (!prefetchIntent) {
+            headers.append('set-cookie', setCookieHls);
+            headers.append('set-cookie', setCookieLyrics);
+        } else {
+            incCounter('ebap_hls_session_prefetch_total', 1);
+        }
 
         const crypto = getCrypto();
-        const lyricsKid = crypto ? await lyricsKeyIdFromCookieValue(cookie.value) : '';
-        const lyricsKey = crypto && lyricsKid ? randomBytes(32) : null;
+        const lyricsKid = crypto && !prefetchIntent ? await lyricsKeyIdFromCookieValue(cookie.value) : '';
+        const lyricsKey = crypto && lyricsKid && !prefetchIntent ? randomBytes(32) : null;
 
         if (lyricsKey) {
             try {
@@ -973,6 +983,7 @@ async function handleSession(req: Request, requestId: string): Promise<Response>
             masterUrl,
             legacyMasterUrl,
             expiresAtMs: nowMs + (cfg.cookie.ttlSeconds * 1000),
+            prefetch: prefetchIntent,
         };
 
         if (lyricsKey) {

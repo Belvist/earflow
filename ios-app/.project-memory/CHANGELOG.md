@@ -1,5 +1,12 @@
 # Changelog — Earflow iOS (agent memory)
 
+## 2026-06-25 — P0 playback lifecycle fix + device smoke doc (`PEND-IOS-005`)
+
+- **Root cause (device):** `AVAudioSession.setCategory` в `NowPlayingController.init` + `.allowAirPlay` на `.playback` → `OSStatus -50`; фон/lock screen сломаны; progress desync от optimistic `.playing`.
+- **Fix:** defer audio session до play-intent; `.playback` без invalid options; state от `AVPlayer.timeControlStatus`; skip HLS preflight после `createSession`; auth revalidate debounce; logs `user=@handle`.
+- **Gate:** `PEND-IOS-005` **остаётся OPEN** — smoke: `IPHONE_PLAYBACK_SMOKE_INSTRUCTIONS.md`. `verify:ios-native` **91** tests PASS ≠ device proof.
+- См. `DECISIONS.md` 2026-06-25 «iOS P0 playback…», `docs/PENDING.md` `PEND-IOS-005`.
+
 ## 2026-06-23 — Home hero + full player visual parity (web `HomeMobileHeroV3` / `MobilePlayerModal`)
 
 - **Hero:** MetaRow как web — текст слева, play **справа** (белый круг, чёрная иконка); динамические теги (`HomeHeroTags`); полоска прогресса снизу (46px зона); градиент `BgDim`

@@ -26,6 +26,15 @@ struct UserProfile: Codable, Sendable, Equatable {
         if let firstName, !firstName.isEmpty { return firstName }
         return username
     }
+
+    /// Client-log-safe handle — never emit internal numeric `id`/`userId` in device logs.
+    var logSafeHandle: String {
+        if let username, !username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "@\(username)"
+        }
+        if let name = resolvedDisplayName, !name.isEmpty { return name }
+        return "account"
+    }
 }
 
 struct MfaStepUpRequest: Encodable, Sendable {
@@ -88,6 +97,12 @@ struct ProofTokenResponse: Decodable, Sendable {
 
 struct HLSSessionRequest: Encodable, Sendable {
     let trackId: Int
+    let prefetch: Bool?
+
+    init(trackId: Int, prefetch: Bool = false) {
+        self.trackId = trackId
+        self.prefetch = prefetch ? true : nil
+    }
 }
 
 struct HLSSessionResponse: Decodable, Sendable {

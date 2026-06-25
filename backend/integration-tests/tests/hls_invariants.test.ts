@@ -76,6 +76,7 @@ async function createHlsSession(params: {
     gatewayCookie: string | null;
     csrfToken: string | null;
     origin: string;
+    prefetch?: boolean;
 }): Promise<{ masterUrl: string; mpHlsCookie: string; mpLyricsCookie: string; calledBaseUrl: string }> {
     const headers: Record<string, string> = {
         'content-type': 'application/json',
@@ -89,10 +90,17 @@ async function createHlsSession(params: {
         headers['x-user-id'] = params.userId;
     }
 
+    if (params.prefetch) {
+        headers['x-earflow-session-intent'] = 'prefetch';
+    }
+
     const res = await fetchWithTimeout(`${params.baseUrl}/api/ebap-hls/v1/session`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ trackId: params.trackId }),
+        body: JSON.stringify({
+            trackId: params.trackId,
+            ...(params.prefetch ? { prefetch: true } : {}),
+        }),
     }, 15_000);
 
     if (res.status !== 200) {
@@ -101,23 +109,27 @@ async function createHlsSession(params: {
     }
 
     const mpHlsSetCount = countSetCookieName(res.headers, 'mp_hls');
-    if (mpHlsSetCount !== 1) {
+    if (params.prefetch) {
+        if (mpHlsSetCount !== 0) {
+            throw new Error(`prefetch session must not set mp_hls, got ${mpHlsSetCount}`);
+        }
+    } else if (mpHlsSetCount !== 1) {
         throw new Error(`session response must set mp_hls exactly once, got ${mpHlsSetCount}`);
     }
 
-    const j = (await res.json()) as SessionResp;
+    const j = (await res.json()) as SessionResp & { prefetch?: boolean };
     if (!j || typeof j.masterUrl !== 'string' || !j.masterUrl) {
         throw new Error('session response missing masterUrl');
     }
 
     const cookies = parseSetCookiesFromHeaders(res.headers);
     const mpHlsCookie = cookies['mp_hls'] || '';
-    if (!mpHlsCookie) {
+    if (!params.prefetch && !mpHlsCookie) {
         throw new Error('session response missing mp_hls cookie');
     }
 
     const mpLyricsCookie = cookies['mp_lyrics'] || '';
-    if (!mpLyricsCookie) {
+    if (!params.prefetch && !mpLyricsCookie) {
         throw new Error('session response missing mp_lyrics cookie');
     }
 
@@ -409,4 +421,23 @@ describe('ebap-hls-adapter HLS invariants', () => {
             expect(String(res.headers.get('content-type') || '')).toContain('application/octet-stream');
         }
     }, 20_000);
+
+    test('prefetch session: masterUrl without mp_hls Set-Cookie', async () => {
+        await ensureAdapterUp();
+        const sessionBaseUrl = env.gatewayCookie && env.csrfToken ? env.gatewayBaseUrl : env.adapterBaseUrl;
+        if (sessionBaseUrl === env.gatewayBaseUrl) {
+            await ensureGatewayUp();
+        }
+        const sess = await createHlsSession({
+            baseUrl: sessionBaseUrl,
+            trackId: readyTrackId,
+            userId: env.testUserId,
+            gatewayCookie: env.gatewayCookie,
+            csrfToken: env.csrfToken,
+            origin: env.origin,
+            prefetch: true,
+        });
+        expect(sess.mpHlsCookie).toBe('');
+        expect(sess.masterUrl).toMatch(/token=/);
+    }, 15_000);
 });

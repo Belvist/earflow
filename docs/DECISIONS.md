@@ -2,6 +2,33 @@
 
 **Назначение:** append-only журнал архитектурных решений с историческим контекстом. AI-агент **обязан** делать `grep` по этому файлу при любой задаче, связанной с listed-областью, чтобы не повторить ошибки и не "переоткрыть" уже принятые решения.
 
+---
+
+## 2026-06-25 — HLS session prefetch: no `mp_hls` rotation mid-playback
+
+**Status:** accepted *(platform contract — device playback gate `PEND-IOS-005` still open)*
+**Area:** streaming | ebap-hls-adapter | frontend-player | ios-native
+**Context:** Prefetch next track via `POST /api/ebap-hls/v1/session` overwrote `mp_hls` cookie while current track still playing — segment 403 / silent stall (same as web `useHlsPrefetch` comment for direct `mp_stream`). Track switch latency: full session POST on every skip; no safe prewarm.
+**Decision:** Session **intent** split: `prefetch: true` (body) or `X-Earflow-Session-Intent: prefetch` → return `masterUrl`+`token`+`expiresAtMs`, **omit** `Set-Cookie` (`mp_hls`, `mp_lyrics`). Play intent unchanged — always sets cookies. Web: `getSongHlsSession(id, { prefetch: true })`, separate LRU keys `play:` vs `prefetch:`, TTL from `expiresAtMs`. iOS: `StreamSessionService.prefetchSession` + coordinator prewarm when &lt;30s remain; `createSession` always play-intent (pins cookies).
+**Alternatives considered:** Second cookie name per track — отвергнуто (nginx auth, browser cookie limits). Client-only prefetch of master URL without server flag — отвергнуто (adapter always set cookie on any POST).
+**Consequences:** Safe next-track prewarm on web+iOS; play/skip still one session POST to rotate cookie. Direct-stream prefetch overwrite remains open (`PEND-STREAM-001` if added).
+**Files touched:** `backend/ebap-hls-adapter/src/main.ts`, `frontend/src/api/client.js`, `frontend/src/context/player/useHlsPrefetch.js`, `ios-app/Earflow/Core/Playback/StreamSessionService.swift`, `PlaybackCoordinator.swift`, `GatewayClient.swift`, `backend/ebap-hls-adapter/CONTEXT.md`
+**Tests:** `hls_invariants.test.ts` prefetch no-cookie; `verify:ios-native`
+**Чтобы не повторилось:** red flag — `POST /session` for next track without `prefetch` while another track plays; shared client cache key for prefetch+play.
+
+---
+
+## 2026-06-25 — iOS P0 playback: AVAudioSession -50, background desync, auth hot-path
+
+**Status:** accepted *(code prepared — **background/lock-screen gate remains OPEN** until real iPhone smoke per `ios-app/.project-memory/IPHONE_PLAYBACK_SMOKE_INSTRUCTIONS.md` / `PEND-IOS-005`)*
+**Area:** ios-native | playback | auth  
+**Context:** На устройстве: `OSStatus -50` / `SessionCore.mm:546` при каждом play; звук останавливается при блокировке; в фоне progress идёт без звука; переключение треков 2–3 с; между треками полный `auth refresh + profile + bootstrap` log; в логах `userId=157` (внутренний id).  
+**Decision:** (1) `AVAudioSession` — не трогать в `NowPlayingController.init` (только при первом play-intent); category `.playback` + `.default` **без** `.allowAirPlay` (даёт -50); deactivate только когда `nowPlaying == nil`; re-activate перед remote play. (2) `AVPlayer` — `audiovisualBackgroundPlaybackPolicy = .continuesIfPossible`; state из `timeControlStatus` KVO (не optimistic `.playing` из `play()`); skip HLS preflight после успешного `createSession` (минус 1 RTT на switch). (3) Auth — `revalidateSession` debounce 45s; foreground `preferRefresh: false`; client logs `user=@handle`, не numeric id.  
+**Alternatives considered:** Оставить preflight на каждый load — отвергнуто (latency). Логировать `userId` для debug — отвергнуто (PII/enumeration).  
+**Consequences:** Код подготовлен (`prepared`); продуктовый gate **не закрыт** — device smoke (`PEND-IOS-005`). Follow-up same day: `561015905` (`!pux` / `cannotStartPlaying`) — auto-resume до `UIApplication.active` + activate перед `AVPlayer.play()` + retry на `didBecomeActive`. `verify:ios-native` 92 tests PASS.  
+**Files touched:** `NowPlayingController.swift`, `AVPlayerEngine.swift`, `PlaybackActor.swift`, `AuthActor.swift`, `AuthModels.swift`, `EarflowApp.swift`, `UserProfileLogSafeTests.swift`  
+**Чтобы не повторилось:** red flags — `setCategory` в `init` до `.active`; `.allowAirPlay` на `.playback`; `deactivateSession` на track switch; optimistic `.playing` без `timeControlStatus`; `revalidateSession(preferRefresh: true)` на каждый `scenePhase.active`; `userId=` в client logs.
+
 **Формат записи:**
 
 ```
@@ -19,6 +46,74 @@
 ```
 
 Записи идут **сверху вниз от новых к старым**.
+
+---
+
+## 2026-06-25 — iOS playback: персист состояния плеера + cold-start auto-resume (secret-free, re-resolve stream)
+
+**Status:** accepted
+**Area:** ios-native | playback | streaming
+**Context:** После swipe-kill и повторного открытия приложения mini bar был пуст — последний трек/очередь/позиция терялись. Продуктовое решение пользователя: **auto-resume** — на запуске восстановить трек+очередь+позицию и **сразу продолжить воспроизведение** (не «показать на паузе»).
+**Decision:** Один новый owner персистентности `PlaybackStateStore` (`@MainActor`) + secret-free `Codable` `PlaybackSnapshot` (`version`, `savedAt`, `currentIndex`, `positionSeconds`, `queue: [TrackItem]`). Атомарная запись JSON в `Application Support/Playback/playback-state.json` (queue до 200 треков — десятки КБ, не для UserDefaults).
+1. **Restore через существующий pipeline (`INV-ARCH-001`):** `PlaybackCoordinator.restore(queue:current:position:)` → `play(_:startAt:)` → `PlaybackActor.play(trackId:startAt:)`. Новый `startAt` сидит на ровно одном пути: после `engine.load` (item ready) и перед `engine.play()` делается `engine.seek(to: startAt)` — продолжение без слышимого скачка с 0. `NowPlayingController` подхватывает восстановленное состояние сам (он подписан на координатор) — **второго** playback-пути / второго AudioSession-owner нет (`INV-IOS-002`).
+2. **Никаких секретов на диске (`INV-IOS-004`):** persist'ятся только стабильные метаданные каталога + позиция. **Не** persist'ятся подписанные/токенизированные stream-URL (`?token=`/`?st=`), `mp_*` cookies, JWT. На restore — свежий HLS re-resolve через `StreamSessionService.createSession` (тот же путь, что у обычного `play`). Обложки — публичный `earflow.ru/covers/...` (не секрет).
+3. **Триггер restore — auth-gated, один раз за запуск:** `AppDependencies` слушает `auth.stateStream()`; на первом `.authenticated`/`.degraded` читает snapshot, восстанавливает и затем `beginPersisting`. Раньше нельзя — re-resolve HLS требует валидной сессии; restore до bootstrap дал бы 401 и стёр бы сохранённое состояние.
+4. **Disk discipline (`INV-IOS-003`):** позиция пишется не чаще раз в 5с во время игры; force-flush на pause/смене трека/смене очереди и на `willResignActive`/`didEnterBackground`/`willTerminate` (`queue: nil` → синхронно на main, чтобы terminate успел). Очередь ограничена 200 (windowing вокруг текущего трека). Прогресс-тик (~2 Гц) почти всегда уходит в early-return — нет disk thrash.
+**Edge cases:** нет snapshot → пустой плеер как раньше; corrupt/incompatible JSON или `version` mismatch → ignore + `clear()`; `position` < 0 или ≥ duration (трек доигран) → 0; current не в очереди → `.skip`; offline на restore → метаданные показаны (mini bar не пуст), без авто-play и без clear (сохранено для следующего запуска); session revoked / track unplayable (403) → координатор чистит `nowPlaying` → store удаляет файл.
+**Assumption (явно):** auto-resume **без TTL** — восстанавливаем независимо от возраста сессии (продуктовое «всегда продолжать»). `savedAt` хранится для диагностики/будущего TTL, в решении не участвует.
+**Alternatives considered:** (1) Хранить resolved masterURL чтобы не делать лишний session POST — **отвергнуто** (`INV-IOS-004`): URL подписан/протухает, это auth-материал на диске. (2) Второй «легковесный» player для preview восстановленного трека — отвергнуто (`INV-ARCH-001`, второй control path). (3) Гидратировать `nowPlaying` синхронно на запуске до auth (мгновенный mini bar) — отвергнуто: для разлогиненного юзера это «призрак» чужого трека + он всё равно не играет; гейтим на auth. (4) Persist на каждый progress-тик — отвергнуто (`INV-IOS-003`, disk thrash). (5) UserDefaults — отвергнуто для очереди (размер).
+**Consequences:** Возврат в приложение продолжает прослушивание с сохранённой позиции и очереди; lock screen/Control Center наполняются через тот же `NowPlayingController`. Cold-start активирует `.playback` AVAudioSession (ожидаемо для музыкального приложения, может прервать чужое аудио). Новый файл в sandbox; секретов нет.
+**Files touched:** **создан** `ios-app/Earflow/Core/Playback/PlaybackStateStore.swift`; `PlaybackActor.swift` (`startAt`), `PlaybackCoordinator.swift` (`startAt` + `restore`), `AppDependencies.swift` (store + auth-gated restore + `beginPersisting`)
+**Tests:** **создан** `EarflowTests/PlaybackStateStoreTests.swift` — Codable round-trip, secret-free JSON assert, `decideRestore` (nil/empty/bad-version/out-of-range/resume/finished→0), `clampPosition`, `makeSnapshot` (index/clamp/windowing 1000→200), file save/load/clear + corrupt→drop. `verify:ios-native` build CLOSED + **89** tests PASS (iPhone 17 Simulator, 0 failures; было 71). **Device gate OPEN** (`PEND-IOS-004`): cold-start auto-resume + lock screen — юнит-тесты не покрывают AVPlayer/AVAudioSession/системную интеграцию.
+**Чтобы не повторилось:** новый **INV-IOS-004** — persisted playback state без auth-материала; restore re-resolve'ит stream, не реплеит сохранённый URL.
+
+---
+
+## 2026-06-25 — iOS playback: устранение unbounded-памяти на пути непрерывного воспроизведения (jetsam OOM на устройстве)
+
+**Status:** accepted
+**Area:** streaming | ios-native | playback
+**Context:** Реальное устройство (iPhone 14, iOS 26.5), запуск из Xcode — приложение убито jetsam через ~12 мин (`operation_duration_ms=732569`): «Terminated due to memory issue» (code 9). Это OOM: память росла без ограничения вдоль непрерывного playback-пути. Статический аудит (без Instruments) нашёл одно достоверно unbounded накопление + места, где AVPlayer/буфер/AsyncStream могли расти без явной границы. Проверено и **исключено**: `EarflowLog` (ring buffer, cap 400), `AnalyticsQueue` (не вызывается ниоткуда — `sentKeys` мёртв, см. `PEND-IOS-004`), `CoverAccentCache` (cap 64), `DeviceSyncActor` (skeleton), continuation-словари в `PlaybackActor` (один подписчик, `onTermination` чистит).
+**Decision:** Минимальные single-owner правки (без второго control-path, `INV-ARCH-001`):
+1. `NowPlayingController.artworkCache: [URL: MPMediaItemArtwork]` был **unbounded** — по одной retained-обложке (полноразмерный декодированный `UIImage`) на каждый сыгранный уникальный cover URL на всё время жизни приложения. Введён ограниченный кэш (FIFO eviction, лимит 16) + downscale обложки до 600px перед удержанием (covers отдаются full-size с `earflow.ru/covers/`; lock screen не нужен полный размер). **HIGH confidence** реальной утечки; доминирование зависит от частоты смены треков.
+2. `AVPlayerEngine`: `loadUncancelled` теперь полностью освобождает предыдущий плеер (`releaseActivePlayer`: pause + `replaceCurrentItem(nil)` + снятие observers + `player=nil`) вместо снятия только observers — движок не зависит от того, вызвал ли caller `stop()`, и гарантированно не оставит retained старый `AVPlayer`/`AVPlayerItem` с буферами. Defense-in-depth (текущий путь и так звал `stop()`, поэтому это страховка, не доказанная утечка).
+3. `AVPlayerEngine`: `item.preferredForwardBufferDuration = 60` — дефолт (0 = automatic) позволяет AVPlayer буферизовать произвольно далеко вперёд на быстрой сети → рост resident-памяти при долгом воспроизведении. 60с с запасом достаточно для музыки. **Гипотеза/hardening** — нельзя доказать из репозитория (зависит от HLS-вывода сервера).
+4. `PlaybackActor.progressStream()` → `AsyncStream(bufferingPolicy: .bufferingNewest(1))` — progress это latest-value ~2 Гц; при отставании MainActor-консьюмера дефолтный `.unbounded` буфер мог копиться. Correctness hardening (низкая вероятность доминирования при 2 Гц).
+**Alternatives considered:** (1) Отключить artwork-кэш совсем — отвергнуто (потеря дедупа при возврате к недавнему треку); ограниченный кэш сохраняет выгоду. (2) `.bufferingNewest(1)` и для `stateStream` — отвергнуто: состояния редкие и каждое важно (`.ended` → авто-advance); оставлен `.unbounded`. (3) Объявить проблему «исправленной» — отвергнуто (честность): зелёная сборка + unit-тесты НЕ доказывают поведение памяти на устройстве.
+**Consequences:** Стационарный объём artwork ограничен (≤16 обложек ≤600px). AVPlayer не буферизует неограниченно вперёд. Старый плеер гарантированно освобождается при каждом `load`. Не затронуты: auth/header/cookie-инъекция (`INV-IOS-001`), single-owner Now Playing/AudioSession (`INV-IOS-002`), state machine, gestures.
+**Files touched:** `ios-app/Earflow/Core/Playback/NowPlayingController.swift`, `ios-app/Earflow/Core/Playback/AVPlayerEngine.swift`, `ios-app/Earflow/Core/Playback/PlaybackActor.swift`
+**Tests:** `verify:ios-native` build CLOSED + **71** unit tests PASS (iPhone 17 Simulator, 0 failures). **Device memory gate OPEN** (`PEND-IOS-004`): требуется Instruments (Allocations + Leaks + memory graph) на устройстве, ~15 мин непрерывного воспроизведения + переключение треков + background. Юнит-тесты память не покрывают.
+**Чтобы не повторилось:** кандидат-инвариант **INV-IOS-003** (формализовать в `ARCHITECTURE_INVARIANTS.md`): на непрерывном playback-пути нет unbounded-аккумуляции — артефакты (обложки) кэшируются с жёстким лимитом + eviction; высокочастотный latest-value `AsyncStream` использует bounded buffering; каждый `load` AVPlayer полностью освобождает предыдущий плеер. Red flags: `dict`/`array` как property растёт по уникальному ключу без eviction; `AsyncStream {}` без `bufferingPolicy` для high-freq потока; новый `AVPlayer` без полного release старого; full-res `UIImage`, удерживаемый бессрочно.
+
+---
+
+## 2026-06-25 — iOS background audio: NowPlayingController (lock screen + Remote Command + AVAudioSession single owner)
+
+**Status:** accepted
+**Area:** streaming | ios-native
+**Context:** После того как native HLS заработал, в фоне/на lock screen ничего не было: системный плеер пуст, контролы не появлялись, прерывания (звонок) и отключение наушников не обрабатывались. Причина: в приложении полностью отсутствовали `MPNowPlayingInfoCenter` и `MPRemoteCommandCenter`; `AVAudioSession` настраивался ad-hoc внутри `AVPlayerEngine.configureAudioSessionOnce()`. `UIBackgroundModes: audio` уже был в `project.yml`.
+**Decision:** Новый единственный системный слой `NowPlayingController` (`@MainActor`), создаётся в `AppDependencies`, управляется существующим единым источником `PlaybackCoordinator` (через Combine на `$nowPlaying/$state/$progress/$queue`). Он владеет: (1) `AVAudioSession` — категория `.playback`, активация по play-intent, деактивация с `.notifyOthersOnDeactivation` на stop, обработка `interruptionNotification` (pause/resume по `.shouldResume`) и `routeChangeNotification` (`.oldDeviceUnavailable` → pause); (2) `MPNowPlayingInfoCenter` — title/artist/album/duration/elapsed/rate + обложка (async, кэш); (3) `MPRemoteCommandCenter` — play/pause/toggle/next/prev/changePlaybackPosition → методы координатора. `AVAudioSession` из `AVPlayerEngine` **удалён** (один владелец, `INV-ARCH-001`).
+**Alternatives considered:** (1) Управлять сессией в `AVPlayerEngine` + Now Playing где-то ещё — отвергнуто: два владельца аудиосессии. (2) Обновлять Now Playing на каждый progress-тик (0.5с) — отвергнуто: Apple рекомендует ставить elapsed+rate на событиях, система экстраполирует; делаю throttle ~1с только для коррекции дрейфа. (3) Куки в Now Playing/обложку через основной cookie jar — отвергнуто (security: обложка тянется отдельной ephemeral-сессией без `mp_*` cookies).
+**Consequences:** Combine sinks используют `.receive(on: .main)` (чтобы читать уже обновлённые `@Published`, а не `willSet`-stale) + `MainActor.assumeIsolated`. `AVURLAssetHTTPCookiesKey`/header injection (запись выше) не затронуты. Активация сессии по `.loadingSession` происходит задолго до `engine.play()` — таймингового риска нет. Открытие приложения **не** прерывает чужой звук (категория ≠ активация).
+**Files touched:** **создан** `ios-app/Earflow/Core/Playback/NowPlayingController.swift`; `AVPlayerEngine.swift` (удалён `configureAudioSessionOnce`); `AppDependencies.swift` (+`nowPlaying`)
+**Tests:** `NowPlayingControllerTests` (info-dict: title/artist/album/duration/elapsed/rate, fallback пустых полей, clamp elapsed; `hasNext` границы очереди). `verify:ios-native` build+**71** PASS. **Manual gate OPEN** (device): фон/lock screen/звонок/наушники/CarPlay — юнит-тесты не покрывают системную интеграцию.
+**Чтобы не повторилось:** новый `INV-IOS-002` — `AVAudioSession` + Now Playing + Remote Command единым владельцем (`NowPlayingController`), управляемым `PlaybackCoordinator`; запрещён второй настройщик аудиосессии и второй playback-путь из remote-команд.
+
+---
+
+## 2026-06-25 — iOS HLS: native AVURLAsset header/cookie injection (удалён resource loader, root cause -12881)
+
+**Status:** accepted
+**Area:** streaming | ios-native
+**Context:** На устройстве HLS падал: `[playback] session ready ... path=/api/ebap-hls/v1/hls/N/master.m3u8` (preflight 200 — auth/cookies/Origin/token уже чинились ранее и работают), затем `avplayer failed: CoreMediaErrorDomain error -12881`. Предыдущая архитектура отдавала **все** HLS-байты (master + variants + segments) через `AuthenticatedStreamResourceLoader` (`AVAssetResourceLoaderDelegate`, custom scheme `earflow-stream://`, `dataRequest.respond(with:)`).
+**Decision:** Удалить resource loader из playback-пути. Отдать HLS нативному `AVPlayer`; auth прокидывать через `AVURLAsset(options:)` — `AVURLAssetHTTPHeaderFieldsKey` (Origin/Referer/UA/Sec-Fetch) + `AVURLAssetHTTPCookiesKey` (mp_hls и пр.). master резолвится на `api.earflow.ru` (`StreamURLResolver.nativePlaybackURL`), variants/segments относительные → AVPlayer переиспользует те же заголовки/куки на каждый запрос. `HLSPlaybackPreflight` остаётся как ранний auth-чек с понятным сообщением (AVPlayer-ошибки непрозрачны).
+**Root cause (подтверждено Apple DTS, Apple Developer Forums thread 113063, StackOverflow 29752028):** для HLS `AVAssetResourceLoaderDelegate` может возвращать **только** ключи шифрования, плейлисты (.m3u8) и **редиректы**. Сегменты (.m4s/.ts/.mp4) через `respondWithData` AVPlayer **отклоняет** → `-12881`. То есть resource-loader-подход был архитектурно невозможен для сегментов: master грузился (плейлист разрешён), сегмент — мгновенный отказ. Юнит-тесты этого не ловили, т.к. AVPlayer нельзя перехватить через `URLProtocol`.
+**Исходная ошибочная посылка (исправлена):** «native AVPlayer HTTPS → nginx 403 из-за `Sec-Fetch-Dest: document`» — неверна. AVPlayer не шлёт `Sec-Fetch-*`. Реальный блокер native-пути — отсутствие `Origin` (nginx `cors_earflow_origin=""` → 401) и `?st=`; оба уже закрыты. Origin теперь инжектится через `AVURLAssetHTTPHeaderFieldsKey`.
+**Alternatives considered:** (1) Локальный reverse-proxy на устройстве (GCDWebServer/HLSCachingReverseProxyServer) — отвергнуто: тяжелее, больше attack surface, не нужно (нам нужен только Origin+cookie, не кэш). (2) Редирект сегментов через `loadingRequest.redirect` — отвергнуто: после редиректа AVPlayer тянет сегмент **без** наших заголовков → снова нет Origin → 401. (3) Ослабить nginx Origin-чек для iOS UA — отвергнуто (security review, `INV-ARCH-001`, ослабление периметра).
+**Consequences:** `AVURLAssetHTTPHeaderFieldsKey` — недокументированный (но де-факто стандартный) ключ → техдолг `PEND-IOS-003`. `AVURLAssetHTTPCookiesKey` — документированный. Один control path (`INV-ARCH-001`): удалён весь resource loader, нет native-HTTPS fallback. Куки только через `AVURLAssetHTTPCookiesKey` (не inline `Cookie` в заголовках) — единый источник.
+**Files touched:** `ios-app/Earflow/Core/Playback/AVPlayerEngine.swift` (native `loadWithNativeAsset` + `makeAuthenticatedAsset`/`assetOptions`), `StreamCookieHeaders.swift` (`assetHeaderFields` без Cookie + `playbackCookies` → `[HTTPCookie]`), **удалён** `AuthenticatedStreamResourceLoader.swift`
+**Tests:** `HLSPlaybackContractTests` — `assetHeaderFields`/`playbackCookies`/`assetOptions` контракт (Origin без inline Cookie, mp_hls в куках); nginx-mock parity сохранён; `verify:ios-native` build+**67** tests PASS. **Manual gate OPEN** (device): нужен `engine ready` + слышимый звук — юнит-тесты НЕ доказывают реальный playback.
+**Чтобы не повторилось:** новый `INV-IOS-001` — HLS сегменты на iOS **никогда** не отдавать через `AVAssetResourceLoaderDelegate` (`respondWithData` → -12881); auth для native AVPlayer только через `AVURLAsset(options:)` header/cookie injection.
 
 ---
 

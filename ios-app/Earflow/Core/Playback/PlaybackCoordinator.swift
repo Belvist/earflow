@@ -31,6 +31,7 @@ final class PlaybackCoordinator: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var lastPlayTrackId: Int?
     private var lastPlayStartedAt = Date.distantPast
+    private var prefetchedTrackId: Int?
 
     init(playback: PlaybackActor) {
         self.playback = playback
@@ -78,6 +79,7 @@ final class PlaybackCoordinator: ObservableObject {
             guard let self else { return }
             for await tick in await self.playback.progressStream() {
                 self.progress = self.resolvedProgress(tick)
+                await self.maybePrefetchNextTrack()
             }
         }
     }
@@ -113,7 +115,17 @@ final class PlaybackCoordinator: ObservableObject {
         await play(track, expandSheet: false)
     }
 
-    func play(_ track: TrackItem, expandSheet: Bool = false) async {
+    /// Cold-start auto-resume — rebuilds the queue + now-playing track and continues from the saved
+    /// position through the normal play pipeline (re-resolves a fresh HLS stream; never replays a
+    /// persisted URL). `NowPlayingController` picks up the restored state automatically because it
+    /// observes this coordinator. No-op if playback already started this launch.
+    func restore(queue tracks: [TrackItem], current: TrackItem, position: Double) async {
+        guard nowPlaying == nil, state == .idle, !tracks.isEmpty else { return }
+        syncQueue(tracks)
+        await play(current, startAt: position)
+    }
+
+    func play(_ track: TrackItem, expandSheet: Bool = false, startAt: Double = 0) async {
         guard NetworkMonitor.isReachable else {
             playbackError = "Нет интернета. Проверьте сеть и повторите."
             nowPlaying = track
@@ -135,6 +147,7 @@ final class PlaybackCoordinator: ObservableObject {
         }
         lastPlayTrackId = track.id
         lastPlayStartedAt = now
+        prefetchedTrackId = nil
         playbackError = nil
         nowPlaying = track
         if queue.isEmpty || !queue.contains(where: { $0.id == track.id }) {
@@ -145,7 +158,7 @@ final class PlaybackCoordinator: ObservableObject {
             playerSheet.open()
         }
         await EarflowLog.shared.info("playback", "play track \(track.id)")
-        await playback.play(trackId: track.id)
+        await playback.play(trackId: track.id, startAt: startAt)
     }
 
     func togglePlayPause() async {
@@ -186,6 +199,17 @@ final class PlaybackCoordinator: ObservableObject {
 
     func pause() async {
         await playback.pause()
+    }
+
+    /// Re-start AVPlayer after a deferred `AVAudioSession` activation (cold-start / `!pux` retry).
+    func reassertPlaybackAfterAudioSessionRecovery() async {
+        guard nowPlaying != nil else { return }
+        switch state {
+        case .playing, .buffering, .paused, .ready, .loadingMedia, .loadingSession:
+            await playback.resume()
+        default:
+            break
+        }
     }
 
     func stop() async {
@@ -231,5 +255,20 @@ final class PlaybackCoordinator: ObservableObject {
     private func resolvedProgress(_ tick: PlaybackProgress) -> PlaybackProgress {
         let duration = tick.duration > 0 ? tick.duration : displayDuration
         return PlaybackProgress(currentTime: tick.currentTime, duration: duration)
+    }
+
+    private func maybePrefetchNextTrack() async {
+        guard state == .playing || state == .buffering else { return }
+        guard let current = nowPlaying,
+              let index = queue.firstIndex(where: { $0.id == current.id }),
+              index + 1 < queue.count else { return }
+        let next = queue[index + 1]
+        guard prefetchedTrackId != next.id else { return }
+        let duration = displayDuration
+        guard duration > 0 else { return }
+        let remaining = duration - progress.currentTime
+        guard remaining > 0, remaining < 30 else { return }
+        prefetchedTrackId = next.id
+        await playback.prefetchSession(trackId: next.id)
     }
 }

@@ -1,4 +1,5 @@
 import XCTest
+import AVFoundation
 @testable import Earflow
 
 /// Contract tests for prod HLS path — these MUST fail if we regress nginx/auth parity.
@@ -24,6 +25,34 @@ final class HLSPlaybackContractTests: XCTestCase {
         XCTAssertEqual(fields["Sec-Fetch-Dest"], "empty")
         XCTAssertEqual(fields["Sec-Fetch-Mode"], "cors")
         XCTAssertTrue((fields["Cookie"] ?? "").contains("mp_hls="))
+    }
+
+    // MARK: - Native asset options (root cause of -12881: segments cannot go through resource loader)
+
+    func testAssetHeaderFieldsCarryOriginWithoutInlineCookie() {
+        let url = URL(string: "https://api.earflow.ru/api/ebap-hls/v1/hls/42/master.m3u8?token=t")!
+        let fields = StreamCookieHeaders.assetHeaderFields(for: url)
+        XCTAssertEqual(fields["Origin"], "https://earflow.ru")
+        XCTAssertEqual(fields["Sec-Fetch-Dest"], "empty")
+        // Cookies travel via AVURLAssetHTTPCookiesKey — never inline (single cookie source).
+        XCTAssertNil(fields["Cookie"])
+    }
+
+    func testPlaybackCookiesIncludeMpHls() {
+        HLSContractTestHarness.seedMpHlsCookie()
+        let url = URL(string: "https://api.earflow.ru/api/ebap-hls/v1/hls/42/master.m3u8")!
+        let cookies = StreamCookieHeaders.playbackCookies(for: url)
+        XCTAssertTrue(cookies.contains { $0.name == "mp_hls" })
+    }
+
+    func testAuthenticatedAssetOptionsInjectOriginAndCookies() {
+        HLSContractTestHarness.seedMpHlsCookie()
+        let url = URL(string: "https://api.earflow.ru/api/ebap-hls/v1/hls/42/master.m3u8?token=t")!
+        let options = AVPlayerEngine.assetOptions(for: url)
+        let headers = options["AVURLAssetHTTPHeaderFieldsKey"] as? [String: String]
+        XCTAssertEqual(headers?["Origin"], "https://earflow.ru")
+        let cookies = options[AVURLAssetHTTPCookiesKey] as? [HTTPCookie]
+        XCTAssertTrue(cookies?.contains { $0.name == "mp_hls" } ?? false)
     }
 
     func testNginxMockRejectsMasterWithoutOrigin() async {

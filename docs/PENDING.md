@@ -26,6 +26,81 @@
 
 ---
 
+### PEND-IOS-003 — iOS native HLS: device playback gate + undocumented AVURLAsset key
+
+**Priority:** high
+**Status:** code done (native `AVURLAsset` header/cookie injection заменил resource loader; `-12881` root cause закрыт), **device playback OPEN**
+
+**Implemented:** `AVPlayerEngine.makeAuthenticatedAsset`/`assetOptions` — `AVURLAssetHTTPHeaderFieldsKey` (Origin/Referer/UA/Sec-Fetch) + `AVURLAssetHTTPCookiesKey` (mp_hls). Удалён `AuthenticatedStreamResourceLoader` (Apple: сегменты через `respondWithData` → `-12881`). См. `DECISIONS.md` 2026-06-25, `INV-IOS-001`. `verify:ios-native` build+67 PASS.
+
+**Техдолг:** `AVURLAssetHTTPHeaderFieldsKey` — **недокументированный** Apple ключ (де-факто стандарт, используется повсеместно, App Store его не реджектит — это строковый ключ словаря, не private API call). Если Apple когда-нибудь его уберёт — Origin перестанет инжектиться → nginx 401. Документированной альтернативы для произвольного заголовка нет; запасной путь — локальный reverse-proxy (тяжелее, больше attack surface) или ослабление nginx Origin-чека (security review).
+
+**Remaining (cannot validate from repo — нужен реальный девайс):**
+1. Login → один трек → лог `engine ready path=/api/ebap-hls/v1/hls/N/master.m3u8` + слышимый звук, **без** `-12881`.
+2. Быстрое переключение треков без `playback_load_timeout` шторма.
+3. Проверить с VPN (исходный кейс TLS/VPN флейки).
+
+---
+
+### PEND-IOS-004 — iOS playback memory: on-device Instruments confirmation (jetsam OOM)
+
+**Priority:** high
+**Status:** static fixes applied (code + `verify:ios-native` 71 tests PASS), **device profiling OPEN — НЕ доказано закрытым**
+
+**Context:** iPhone 14 / iOS 26.5 — jetsam OOM через ~12 мин непрерывного воспроизведения (code 9). См. `DECISIONS.md` 2026-06-25 «iOS playback: устранение unbounded-памяти».
+
+**Applied (static, ранжировано по уверенности):**
+1. **HIGH** — `NowPlayingController.artworkCache` был unbounded (retained `MPMediaItemArtwork` с full-res `UIImage` на каждый уникальный cover) → лимит 16 (FIFO) + downscale 600px.
+2. **Defense-in-depth** — `AVPlayerEngine.loadUncancelled` полностью освобождает старый плеер (`releaseActivePlayer`).
+3. **Hypothesis/hardening** — `AVPlayerItem.preferredForwardBufferDuration = 60` (нельзя доказать из репо; зависит от HLS-сервера).
+4. **Hardening** — `progressStream()` → `.bufferingNewest(1)`.
+
+**Remaining (cannot validate from repo — нужен реальный девайс):**
+1. Instruments **Allocations** (mark generation каждые 2-3 мин) + **Leaks** + **Memory Graph** — ~15 мин непрерывного воспроизведения **+ активное переключение треков** (главный множитель для artwork) + уход в background и обратно. Подтвердить, что resident memory выходит на плато, а не растёт линейно.
+2. Если рост остаётся — снять generation-snapshot, найти класс с растущим числом инстансов (вероятные кандидаты: `AVPlayerItem`/`AVURLAsset` если плеер не освобождается; `MPMediaItemArtwork`/`UIImage`; CoreAnimation-слои от 2 Гц re-render).
+3. Профилировать с VPN (исходный кейс был с VPN).
+
+**Latent (не текущая причина, но реальный баг):** `AnalyticsQueue.sentKeys: Set<String>` растёт без границы (idempotencyKey уникален per-event из-за timestamp; `flushIfPossible` чистит `pending`, но не `sentKeys`). Сейчас **мёртвый код** — `enqueue`/`trackPlayback` нигде не вызываются. Ограничить (bounded set / clear on flush) при подключении аналитики, иначе тот же OOM-паттерн.
+
+---
+
+### PEND-IOS-005 — iOS playback device verification gate (background + lock screen + cold-start)
+
+**Priority:** high  
+**Status:** P0 code prepared (`verify:ios-native` build + **91** tests PASS), **device verification OPEN — НЕ доказано закрытым**
+
+**Scope:** единый gate для (1) background audio / lock screen / remote commands после P0 AVAudioSession fix; (2) cold-start auto-resume; (3) track switch без auth storm; (4) UI/audio desync. Симулятор и unit-тесты **не доказывают** lock screen / audio route.
+
+**Smoke instruction (обязательна перед CLOSED):** `ios-app/.project-memory/IPHONE_PLAYBACK_SMOKE_INSTRUCTIONS.md`
+
+**Implemented (code):**
+- P0 (2026-06-25): `AVAudioSession` не в `init`; `.playback` без `.allowAirPlay`; state от `timeControlStatus`; skip HLS preflight после `createSession`; auth revalidate debounce + `preferRefresh: false` на foreground; logs `user=@handle` не numeric id. См. `DECISIONS.md` 2026-06-25 «iOS P0 playback…».
+- `NowPlayingController` — `AVAudioSession` + Now Playing + Remote Command (`INV-IOS-002`).
+- `PlaybackStateStore` — secret-free persist + auto-resume (`INV-IOS-004`); throttle/flush (`INV-IOS-003`).
+
+**Acceptance (все пункты на real iPhone — см. smoke doc):**
+
+```text
+[ ] no OSStatus -50 on device
+[ ] background audio continues when phone locked (≥60s)
+[ ] lock screen play/pause works with real sound
+[ ] lock screen next works
+[ ] progress never runs while audio is silent
+[ ] no auth bootstrap on every track switch
+[ ] no internal numeric userId in client logs
+[ ] no stream tickets / cookies in logs
+[ ] verify:ios-native PASS
+```
+
+**Remaining (cannot validate from repo):**
+1. Полный сценарий A–E в `IPHONE_PLAYBACK_SMOKE_INSTRUCTIONS.md` (launch log, lock 60s+, lock controls, 3–5 track switch, optional cold-start auto-resume).
+2. Evidence bundle: launch log (~30 строк), log play→lock→pause→play→next, скрин lock screen, UI после unlock.
+3. При PASS — prepend `DECISIONS.md`, обновить `CURRENT_STATE` / `HANDOFF` / `CHANGELOG`, удалить эту запись из `PENDING.md`.
+
+**Если частичный FAIL:** см. таблицу «Если FAIL» в smoke doc (не закрывать gate; не возвращать auth refresh в hot path при slow switch).
+
+---
+
 ### PEND-WAVE-001 — Server-side waveform peaks for hero / seek UI
 
 **Priority:** medium
@@ -38,6 +113,41 @@
 ---
 
 ## Streaming / Home UI (closed)
+
+### PEND-STREAM-002 — HLS prefetch prod gate (prepared ≠ closed)
+
+**Priority:** high
+**Status:** open
+
+**Context:** Platform prefetch contract implemented in repo (`DECISIONS.md` 2026-06-25). Code review PASS; **prod evidence missing**.
+
+**Deploy order (VPS `/opt/music-platform`):**
+```bash
+git pull origin main   # must include prefetch + nginx CORS
+DEPLOY_SERVICES="nginx ebap-hls-adapter api-gateway" bash scripts/vps-deploy-from-git.sh
+bash scripts/verify-hls-prefetch-prod.sh
+```
+
+**Close gate only when ALL pass:**
+- [ ] OPTIONS `Allow-Headers` contains `X-Earflow-Session-Intent` on prod
+- [ ] POST play → `Set-Cookie: mp_hls` exactly once
+- [ ] POST `{ prefetch: true }` → no `Set-Cookie: mp_hls`
+- [ ] POST header `X-Earflow-Session-Intent: prefetch` → no `Set-Cookie: mp_hls`
+- [ ] Current track segments stay 200 after prefetch next (manual or e2e)
+- [ ] iPhone smoke (`PEND-IOS-005`) — no 403 / silence / progress-without-sound
+
+**Verify script:** `scripts/verify-hls-prefetch-prod.sh` (session POST needs `PROD_GATEWAY_COOKIE`, `PROD_CSRF_TOKEN`, `IT_TRACK_READY_ID`).
+
+**Prod CORS snapshot (pre-deploy, 2026-06-25):** OPTIONS missing `X-Earflow-Session-Intent` in Allow-Headers.
+
+### PEND-STREAM-001 — Direct-stream prefetch still overwrites `mp_stream` cookie
+
+**Priority:** medium
+**Status:** open
+
+**Context:** HLS prefetch fixed (`prefetch: true` → no `Set-Cookie`) — see `DECISIONS.md` 2026-06-25. Web `useHlsPrefetch` still calls `getSongDirectSession` for non-HLS tracks, which rotates `mp_stream` mid-playback (same bug class).
+
+**Needed:** mirror HLS prefetch intent on `direct-stream-service` session endpoint + web client; or disable direct prefetch until contract exists.
 
 ## DeviceSync / Playback
 
