@@ -86,7 +86,7 @@ export default function TelegramUnlinkSection({ embedded = false }) {
       {notice ? <Notice>{notice}</Notice> : null}
       {hasTelegram ? (
         <Actions>
-          <Button type="button" onClick={unlink} disabled={busy || !hasPassword} $danger>
+          <Button type="button" $embedded={embedded} onClick={unlink} disabled={busy || !hasPassword} $danger>
             {busy ? 'Отвязываем…' : 'Отвязать Telegram'}
           </Button>
           {!hasPassword ? (
@@ -132,7 +132,7 @@ const ErrorText = styled.div`
 `;
 
 const Notice = styled.div`
-  color: #7dcea0;
+  color: rgba(255, 255, 255, 0.75);
   font-size: 0.85rem;
 `;
 
@@ -145,12 +145,17 @@ const Actions = styled.div`
 
 const Button = styled.button`
   padding: 10px 16px;
-  border-radius: 8px;
+  border-radius: 999px;
   border: none;
   font-weight: 600;
   cursor: pointer;
-  background: ${(p) => (p.$danger ? '#c0392b' : '#1db954')};
-  color: #fff;
+  background: ${(p) =>
+    p.$danger
+      ? '#c0392b'
+      : p.$embedded
+        ? '#fff'
+        : '#1db954'};
+  color: ${(p) => (p.$danger ? '#fff' : '#000')};
   &:disabled {
     opacity: 0.55;
     cursor: default;

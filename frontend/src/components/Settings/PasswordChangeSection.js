@@ -158,7 +158,7 @@ export default function PasswordChangeSection({ embedded = false }) {
       {notice ? <Notice>{notice}</Notice> : null}
 
       <Actions>
-        <Button type="button" onClick={submit} disabled={busy}>
+        <Button type="button" $embedded={embedded} onClick={submit} disabled={busy}>
           {busy ? 'Сохраняем…' : 'Сменить пароль'}
         </Button>
       </Actions>
@@ -212,7 +212,7 @@ const Input = styled.input`
 
 const Strength = styled.span`
   font-size: 0.78rem;
-  color: ${(p) => (p.$ok ? '#7dcea0' : '#f5b7b1')};
+  color: ${(p) => (p.$ok ? 'rgba(255, 255, 255, 0.75)' : '#f5b7b1')};
 `;
 
 const ErrorText = styled.div`
@@ -221,7 +221,7 @@ const ErrorText = styled.div`
 `;
 
 const Notice = styled.div`
-  color: #7dcea0;
+  color: rgba(255, 255, 255, 0.75);
   font-size: 0.85rem;
 `;
 
@@ -232,9 +232,9 @@ const Actions = styled.div`
 
 const Button = styled.button`
   padding: 10px 16px;
-  border-radius: 8px;
+  border-radius: 999px;
   border: none;
-  background: #1db954;
+  background: ${(p) => (p.$embedded ? '#fff' : '#1db954')};
   color: #000;
   font-weight: 600;
   cursor: pointer;
