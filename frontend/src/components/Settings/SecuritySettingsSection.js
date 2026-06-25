@@ -127,6 +127,13 @@ export default function SecuritySettingsSection() {
     loadSessions();
   }, [loadSessions]);
 
+  const groups = useMemo(() => groupSessionsByDevice(sessions), [sessions]);
+  const { currentGroup, otherGroups } = useMemo(() => splitDeviceGroups(groups), [groups]);
+  const otherSessionsTotal = useMemo(
+    () => sessions.filter((s) => s.current !== true).length,
+    [sessions],
+  );
+
   useEffect(() => {
     if (groups.length === 0) return;
     setExpandedKeys((prev) => {
@@ -140,13 +147,6 @@ export default function SecuritySettingsSection() {
       return next;
     });
   }, [groups, currentGroup?.key]);
-
-  const groups = useMemo(() => groupSessionsByDevice(sessions), [sessions]);
-  const { currentGroup, otherGroups } = useMemo(() => splitDeviceGroups(groups), [groups]);
-  const otherSessionsTotal = useMemo(
-    () => sessions.filter((s) => s.current !== true).length,
-    [sessions],
-  );
 
   const busy = busyKey !== '';
 

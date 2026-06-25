@@ -609,6 +609,7 @@ const GlobalPlayerBarComponent = ({ onOpenEq }) => {
             >
               <DeviceSyncPanelBody>
                 <DevicesPanel
+                  showTitle
                   devices={deviceSync.devices}
                   nowPlaying={deviceSync.nowPlaying}
                   currentDeviceId={deviceSync.deviceId}
