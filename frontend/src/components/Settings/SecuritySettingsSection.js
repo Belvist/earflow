@@ -6,12 +6,10 @@ import {
   FaTabletAlt,
   FaSync,
   FaTimes,
-  FaHandPaper,
-  FaCircle,
-  FaChevronDown,
   FaKey,
   FaTelegramPlane,
   FaBroom,
+  FaChevronDown,
 } from 'react-icons/fa';
 import apiClient from '../../api/client';
 import StepUpModal from './StepUpModal';
@@ -30,6 +28,8 @@ const DEVICE_ICONS = {
   mobile: FaMobileAlt,
   tablet: FaTabletAlt,
 };
+
+const SURFACE = '#282828';
 
 function resolveDeviceIcon(type) {
   return DEVICE_ICONS[type] || FaDesktop;
@@ -50,43 +50,18 @@ function formatActionError(e, fallback) {
   return e?.message || fallback;
 }
 
-function Collapsible({ icon: Icon, title, subtitle, children }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <AccCard>
-      <AccHead type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-        <AccIcon aria-hidden="true">
-          <Icon size={15} />
-        </AccIcon>
-        <AccText>
-          <AccTitle>{title}</AccTitle>
-          {subtitle ? <AccSub>{subtitle}</AccSub> : null}
-        </AccText>
-        <AccChevron $open={open} aria-hidden="true">
-          <FaChevronDown size={12} />
-        </AccChevron>
-      </AccHead>
-      {open ? <AccBody>{children}</AccBody> : null}
-    </AccCard>
-  );
+function formatSessionLine(session) {
+  const parts = [];
+  if (session?.lastSeenLabel) parts.push(`активность ${session.lastSeenLabel}`);
+  if (session?.createdAtLabel) parts.push(`вход ${session.createdAtLabel}`);
+  if (session?.ip) parts.push(session.ip);
+  return parts.join(' · ');
 }
 
-function SessionDetailsRow({ session, pending, disabled, onRevoke }) {
+function SessionDetailRow({ session, pending, disabled, onRevoke }) {
   return (
     <DetailRow $current={session.current === true}>
-      <DetailMain>
-        <DetailChips>
-          {session.current === true ? (
-            <CurrentPill>
-              <FaCircle size={6} aria-hidden="true" />
-              Текущая
-            </CurrentPill>
-          ) : null}
-          {session.lastSeenLabel ? <MetaChip>Активность: {session.lastSeenLabel}</MetaChip> : null}
-          {session.createdAtLabel ? <MetaChip $dim>Вход: {session.createdAtLabel}</MetaChip> : null}
-          {session.ip ? <MetaChip $dim>{session.ip}</MetaChip> : null}
-        </DetailChips>
-      </DetailMain>
+      <DetailText>{formatSessionLine(session) || 'Сессия'}</DetailText>
       {session.current !== true ? (
         <RevokeBtn
           type="button"
@@ -94,7 +69,7 @@ function SessionDetailsRow({ session, pending, disabled, onRevoke }) {
           disabled={pending || disabled}
           onClick={() => onRevoke(session.sid)}
         >
-          <FaTimes size={13} />
+          <FaTimes size={12} />
         </RevokeBtn>
       ) : null}
     </DetailRow>
@@ -159,8 +134,6 @@ export default function SecuritySettingsSection() {
     });
   };
 
-  // Revokes sids one by one inside a single step-up window. Already-gone
-  // sessions are skipped; step-up errors bubble up to open the modal.
   const revokeSids = useCallback(async (sids) => {
     for (const sid of sids) {
       try {
@@ -215,103 +188,90 @@ export default function SecuritySettingsSection() {
     }
   };
 
-  const renderDeviceCard = (group) => {
+  const renderGroupRow = (group) => {
     const Icon = resolveDeviceIcon(group.deviceType);
     const expanded = expandedKeys.has(group.key);
     const groupBusy = busyKey === `group:${group.key}`;
     const primarySession = group.primary || group.sessions[0];
-    const lastSeen = primarySession?.lastSeenLabel || '';
-    const createdAt = primarySession?.createdAtLabel || '';
-    const ip = primarySession?.ip || '';
-    const collapsible =
-      group.sessions.length > 1 || group.duplicateCount > 0;
+    const collapsible = group.sessions.length > 1 || group.duplicateCount > 0;
+    const subtitle = group.current
+      ? `Это устройство · ${formatSessionLine(primarySession)}`
+      : formatSessionLine(primarySession);
 
-    const metaRow = (
-      <DeviceMeta>
-        {group.current ? (
-          <CurrentPill>
-            <FaCircle size={6} aria-hidden="true" />
-            Это устройство
-          </CurrentPill>
+    const headContent = (
+      <>
+        <RowIcon aria-hidden>
+          <Icon size={18} />
+        </RowIcon>
+        <RowMain>
+          <RowName>{group.label}</RowName>
+          <RowSub>{subtitle || '—'}</RowSub>
+        </RowMain>
+        {collapsible ? (
+          <ChevronWrap $open={expanded} aria-hidden>
+            <FaChevronDown size={12} />
+          </ChevronWrap>
         ) : null}
-        {lastSeen ? <MetaChip>Активность: {lastSeen}</MetaChip> : null}
-        {createdAt ? <MetaChip $dim>Вход: {createdAt}</MetaChip> : null}
-        {ip ? <MetaChip $dim>{ip}</MetaChip> : null}
-        {group.duplicateCount > 0 ? (
-          <MetaChip $warn>
-            {group.current
-              ? `ещё входов: ${group.duplicateCount}`
-              : `сессий: ${group.sessions.length}`}
-          </MetaChip>
+        {!collapsible && !group.current && primarySession?.current !== true ? (
+          <RevokeBtn
+            type="button"
+            aria-label="Завершить сессию"
+            disabled={busy || busyKey === `sid:${primarySession?.sid}`}
+            onClick={() => handleRevokeSession(primarySession.sid)}
+          >
+            <FaTimes size={12} />
+          </RevokeBtn>
         ) : null}
-      </DeviceMeta>
+      </>
     );
 
     if (!collapsible) {
       return (
-        <DeviceCard key={group.key} $current={group.current}>
-          <DeviceHeadStatic>
-            <DeviceIcon aria-hidden="true" $current={group.current}>
-              <Icon size={18} />
-            </DeviceIcon>
-            <DeviceMain>
-              <DeviceName>{group.label}</DeviceName>
-              {metaRow}
-            </DeviceMain>
-          </DeviceHeadStatic>
-        </DeviceCard>
+        <SessionRow key={group.key} $current={group.current}>
+          {headContent}
+        </SessionRow>
       );
     }
 
     return (
-      <DeviceCard key={group.key} $current={group.current}>
-        <DeviceHead
+      <div key={group.key}>
+        <SessionRow
+          as="button"
           type="button"
+          $current={group.current}
+          $clickable
           onClick={() => toggleExpanded(group.key)}
-          aria-expanded={expanded}
         >
-          <DeviceIcon aria-hidden="true" $current={group.current}>
-            <Icon size={18} />
-          </DeviceIcon>
-          <DeviceMain>
-            <DeviceName>{group.label}</DeviceName>
-            {metaRow}
-          </DeviceMain>
-          <DeviceChevron $open={expanded} aria-hidden="true">
-            <FaChevronDown size={12} />
-          </DeviceChevron>
-        </DeviceHead>
-
+          {headContent}
+        </SessionRow>
         {expanded ? (
-          <DeviceBody>
-            <DetailList>
-              {group.sessions.map((session) => (
-                <SessionDetailsRow
-                  key={session.sid}
-                  session={session}
-                  pending={busyKey === `sid:${session.sid}`}
-                  disabled={busy}
-                  onRevoke={handleRevokeSession}
-                />
-              ))}
-            </DetailList>
+          <ExpandedBlock>
+            {group.sessions.map((session) => (
+              <SessionDetailRow
+                key={session.sid}
+                session={session}
+                pending={busyKey === `sid:${session.sid}`}
+                disabled={busy}
+                onRevoke={handleRevokeSession}
+              />
+            ))}
             {staleSidsForGroup(group).length > 0 ? (
               <GroupAction
                 type="button"
                 disabled={busy}
                 onClick={() => handleRevokeGroupStale(group)}
               >
-                <FaBroom size={13} aria-hidden="true" />
+                <FaBroom size={12} aria-hidden />
                 {groupBusy
                   ? 'Завершаем…'
                   : group.current
                     ? `Завершить старые входы (${group.duplicateCount})`
-                    : 'Завершить сеансы устройства'}
+                    : 'Завершить все сессии устройства'}
               </GroupAction>
             ) : null}
-          </DeviceBody>
+          </ExpandedBlock>
         ) : null}
-      </DeviceCard>
+      </div>
     );
   };
 
@@ -319,74 +279,98 @@ export default function SecuritySettingsSection() {
     <Wrap>
       <StepUpModal open={stepUp.open} onClose={stepUp.close} onSuccess={stepUp.onSuccess} />
       {stepUp.error ? <ErrorStrip>{stepUp.error}</ErrorStrip> : null}
-
-      <Intro>
-        Здесь только <strong>входы в аккаунт</strong> — браузеры и приложения, где вы
-        авторизованы. Передача музыки между колонками и телефонами — в разделе
-        «Синхронизация».
-      </Intro>
-
       {error ? <ErrorStrip>{error}</ErrorStrip> : null}
 
-      {loading && sessions.length === 0 ? <Empty>Загружаем устройства…</Empty> : null}
-      {!loading && sessions.length === 0 && !error ? (
-        <Empty>Активных сессий не найдено.</Empty>
-      ) : null}
+      <Section>
+        <SectionHead>
+          <SectionTitle>Активные входы</SectionTitle>
+          <RefreshBtn type="button" onClick={loadSessions} disabled={loading || busy}>
+            <FaSync size={11} aria-hidden />
+            Обновить
+          </RefreshBtn>
+        </SectionHead>
+        <InfoCard>
+          Здесь только входы в аккаунт. Передача музыки между устройствами — в разделе
+          «Синхронизация».
+        </InfoCard>
 
-      {currentGroup ? (
-        <Block>
-          <BlockHead>
-            <BlockTitle>Текущий вход</BlockTitle>
-            <RefreshBtn type="button" onClick={loadSessions} disabled={loading || busy}>
-              <FaSync size={11} aria-hidden="true" />
-              Обновить
-            </RefreshBtn>
-          </BlockHead>
-          {renderDeviceCard(currentGroup)}
-        </Block>
-      ) : null}
+        {loading && sessions.length === 0 ? (
+          <MutedState>Загружаем сессии…</MutedState>
+        ) : null}
+        {!loading && sessions.length === 0 && !error ? (
+          <MutedState>Активных сессий не найдено.</MutedState>
+        ) : null}
 
-      {otherGroups.length > 0 ? (
-        <Block>
-          <BlockHead>
-            <BlockTitle>Другие входы</BlockTitle>
-            <BlockCount>{otherGroups.length}</BlockCount>
-          </BlockHead>
-          <DeviceList>{otherGroups.map(renderDeviceCard)}</DeviceList>
-        </Block>
-      ) : null}
+        {currentGroup ? (
+          <HeroCard>
+            {(() => {
+              const Icon = resolveDeviceIcon(currentGroup.deviceType);
+              const primary = currentGroup.primary || currentGroup.sessions[0];
+              return (
+                <>
+                  <HeroIcon aria-hidden>
+                    <Icon size={22} />
+                  </HeroIcon>
+                  <HeroCopy>
+                    <HeroName>{currentGroup.label}</HeroName>
+                    <HeroSub>Текущий вход · {formatSessionLine(primary)}</HeroSub>
+                  </HeroCopy>
+                  <CurrentBadge>сейчас</CurrentBadge>
+                </>
+              );
+            })()}
+          </HeroCard>
+        ) : null}
 
-      {otherSessionsTotal > 0 ? (
-        <Block>
-          <TerminateOthers type="button" onClick={handleRevokeOthers} disabled={busy}>
-            <FaHandPaper size={14} aria-hidden="true" />
-            {busyKey === 'others' ? 'Завершаем…' : `Завершить все другие сеансы (${otherSessionsTotal})`}
-          </TerminateOthers>
-          <TerminateHint>Выйти на всех устройствах, кроме текущего</TerminateHint>
-        </Block>
-      ) : null}
+        {otherGroups.length > 0 ? (
+          <>
+            <SectionLabel>Другие входы · {otherGroups.length}</SectionLabel>
+            <GroupCard>{otherGroups.map(renderGroupRow)}</GroupCard>
+          </>
+        ) : null}
 
-      {sessions.length > 0 ? (
-        <TerminateAll type="button" onClick={handleRevokeAll} disabled={busy}>
-          {busyKey === 'all' ? 'Завершаем…' : 'Выйти на всех устройствах (включая это)'}
-        </TerminateAll>
-      ) : null}
+        {otherSessionsTotal > 0 ? (
+          <DangerCard>
+            <DangerBtn type="button" onClick={handleRevokeOthers} disabled={busy}>
+              {busyKey === 'others'
+                ? 'Завершаем…'
+                : `Выйти на всех устройствах, кроме этого (${otherSessionsTotal})`}
+            </DangerBtn>
+            {sessions.length > 0 ? (
+              <DangerBtnOutline type="button" onClick={handleRevokeAll} disabled={busy}>
+                {busyKey === 'all' ? 'Завершаем…' : 'Выйти везде, включая это устройство'}
+              </DangerBtnOutline>
+            ) : null}
+          </DangerCard>
+        ) : null}
+      </Section>
 
-      <Collapsible
-        icon={FaKey}
-        title="Пароль"
-        subtitle="Смена пароля, проверка надёжности"
-      >
-        <PasswordChangeSection embedded />
-      </Collapsible>
-
-      <Collapsible
-        icon={FaTelegramPlane}
-        title="Telegram"
-        subtitle="Привязка аккаунта и отвязка"
-      >
-        <TelegramUnlinkSection embedded />
-      </Collapsible>
+      <Section>
+        <SectionTitle>Аккаунт</SectionTitle>
+        <AccountCard>
+          <AccountBlock>
+            <AccountHead>
+              <AccountIcon aria-hidden><FaKey size={14} /></AccountIcon>
+              <AccountHeadText>
+                <AccountHeadTitle>Пароль</AccountHeadTitle>
+                <AccountHeadSub>Смена пароля и проверка надёжности</AccountHeadSub>
+              </AccountHeadText>
+            </AccountHead>
+            <PasswordChangeSection embedded />
+          </AccountBlock>
+          <Divider />
+          <AccountBlock>
+            <AccountHead>
+              <AccountIcon aria-hidden><FaTelegramPlane size={14} /></AccountIcon>
+              <AccountHeadText>
+                <AccountHeadTitle>Telegram</AccountHeadTitle>
+                <AccountHeadSub>Привязка и отвязка аккаунта</AccountHeadSub>
+              </AccountHeadText>
+            </AccountHead>
+            <TelegramUnlinkSection embedded />
+          </AccountBlock>
+        </AccountCard>
+      </Section>
     </Wrap>
   );
 }
@@ -394,19 +378,50 @@ export default function SecuritySettingsSection() {
 const Wrap = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 28px;
 `;
 
-const Intro = styled.p`
-  margin: 0;
-  color: rgba(255, 255, 255, 0.55);
-  font-size: 13px;
-  line-height: 1.55;
+const Section = styled.section`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+`;
 
-  strong {
-    color: rgba(255, 255, 255, 0.82);
-    font-weight: 600;
-  }
+const SectionHead = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+`;
+
+const SectionTitle = styled.h4`
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+`;
+
+const SectionLabel = styled.div`
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.5);
+`;
+
+const InfoCard = styled.p`
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: ${SURFACE};
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.55);
+`;
+
+const MutedState = styled.div`
+  padding: 16px;
+  text-align: center;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.45);
 `;
 
 const ErrorStrip = styled.div`
@@ -417,46 +432,13 @@ const ErrorStrip = styled.div`
   font-size: 13px;
 `;
 
-const Empty = styled.div`
-  padding: 24px 12px;
-  text-align: center;
-  color: rgba(255, 255, 255, 0.45);
-  font-size: 13px;
-`;
-
-const Block = styled.section`
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-`;
-
-const BlockHead = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-`;
-
-const BlockTitle = styled.h4`
-  margin: 0;
-  color: #fff;
-  font-size: 14px;
-  font-weight: 600;
-`;
-
-const BlockCount = styled.span`
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.45);
-  font-weight: 600;
-`;
-
 const RefreshBtn = styled.button`
   appearance: none;
-  border: 0;
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: transparent;
   color: rgba(255, 255, 255, 0.85);
   border-radius: 999px;
-  padding: 6px 11px;
+  padding: 6px 12px;
   font-size: 12px;
   font-weight: 600;
   display: inline-flex;
@@ -469,169 +451,181 @@ const RefreshBtn = styled.button`
     opacity: 0.5;
     cursor: not-allowed;
   }
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.06);
+  }
 `;
 
-const DeviceList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-`;
-
-const DeviceCard = styled.div`
-  border-radius: 12px;
-  background: ${(p) => (p.$current ? 'rgba(29, 185, 84, 0.08)' : 'rgba(255, 255, 255, 0.04)')};
-  border: 1px solid ${(p) => (p.$current ? 'rgba(29, 185, 84, 0.22)' : 'rgba(255, 255, 255, 0.06)')};
-  overflow: hidden;
-`;
-
-const DeviceHead = styled.button`
-  appearance: none;
-  border: 0;
-  background: transparent;
-  width: 100%;
+const HeroCard = styled.div`
   display: grid;
-  grid-template-columns: 44px 1fr auto;
-  gap: 12px;
+  grid-template-columns: auto 1fr auto;
+  gap: 14px;
   align-items: center;
-  padding: 12px;
-  cursor: pointer;
-  text-align: left;
-  font-family: inherit;
-  color: inherit;
-`;
-
-const DeviceHeadStatic = styled.div`
-  width: 100%;
-  display: grid;
-  grid-template-columns: 44px 1fr;
-  gap: 12px;
-  align-items: center;
-  padding: 12px;
-`;
-
-const DeviceIcon = styled.div`
-  width: 44px;
-  height: 44px;
+  padding: 16px;
   border-radius: 12px;
+  background: ${SURFACE};
+  border: 1px solid rgba(255, 255, 255, 0.14);
+`;
+
+const HeroIcon = styled.div`
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: ${(p) => (p.$current ? 'rgba(29, 185, 84, 0.16)' : 'rgba(255, 255, 255, 0.06)')};
-  color: ${(p) => (p.$current ? '#1db954' : 'rgba(255, 255, 255, 0.85)')};
+  color: #fff;
 `;
 
-const DeviceMain = styled.div`
+const HeroCopy = styled.div`
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 `;
 
-const DeviceName = styled.div`
+const HeroName = styled.div`
+  font-size: 15px;
+  font-weight: 700;
   color: #fff;
-  font-size: 14px;
-  font-weight: 600;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 `;
 
-const DeviceMeta = styled.div`
+const HeroSub = styled.div`
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.5);
+`;
+
+const CurrentBadge = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  flex-shrink: 0;
+`;
+
+const GroupCard = styled.div`
+  border-radius: 12px;
+  background: ${SURFACE};
+  overflow: hidden;
+`;
+
+const SessionRow = styled.div`
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: left;
+  font-family: inherit;
+  color: inherit;
+  border: 0;
+  background: ${(p) => (p.$current ? 'rgba(255, 255, 255, 0.04)' : 'transparent')};
+  cursor: ${(p) => (p.$clickable ? 'pointer' : 'default')};
+
+  & + &,
+  div + & {
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  &:hover {
+    background: ${(p) => (p.$clickable ? 'rgba(255, 255, 255, 0.05)' : p.$current ? 'rgba(255, 255, 255, 0.04)' : 'transparent')};
+  }
+`;
+
+const RowIcon = styled.div`
+  width: 32px;
+  height: 32px;
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.88);
+  flex-shrink: 0;
 `;
 
-const DeviceChevron = styled.span`
+const RowMain = styled.div`
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+`;
+
+const RowName = styled.div`
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
+const RowSub = styled.div`
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.48);
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
+const ChevronWrap = styled.span`
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.6);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.55);
+  flex-shrink: 0;
   transition: transform 0.18s ease;
   transform: rotate(${(p) => (p.$open ? '180deg' : '0deg')});
 `;
 
-const DeviceBody = styled.div`
-  padding: 0 12px 12px;
+const ExpandedBlock = styled.div`
+  padding: 0 14px 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-`;
-
-const DetailList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
 `;
 
 const DetailRow = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  background: ${(p) => (p.$current ? 'rgba(29, 185, 84, 0.07)' : 'rgba(0, 0, 0, 0.18)')};
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.2);
 
   @media (max-width: 520px) {
     flex-direction: column;
     align-items: stretch;
-    gap: 10px;
   }
 `;
 
-const DetailMain = styled.div`
-  min-width: 0;
-`;
-
-const DetailChips = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-`;
-
-const MetaChip = styled.span`
-  font-size: 11px;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: ${(p) => (p.$warn ? 'rgba(255, 214, 10, 0.1)' : 'rgba(255, 255, 255, 0.06)')};
-  color: ${(p) =>
-    p.$warn
-      ? '#ffd60a'
-      : p.$dim
-        ? 'rgba(255, 255, 255, 0.45)'
-        : 'rgba(255, 255, 255, 0.65)'};
-`;
-
-const CurrentPill = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: rgba(29, 185, 84, 0.15);
-  color: #1db954;
-  font-weight: 700;
-
-  svg {
-    color: #1db954;
-  }
+const DetailText = styled.div`
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.62);
 `;
 
 const RevokeBtn = styled.button`
   appearance: none;
   border: 0;
-  width: 30px;
-  height: 30px;
-  flex: 0 0 auto;
-  border-radius: 9px;
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.7);
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.75);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -653,10 +647,10 @@ const GroupAction = styled.button`
   border: 0;
   width: 100%;
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: 8px;
   background: rgba(255, 69, 58, 0.1);
   color: #ff8a84;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   display: inline-flex;
   align-items: center;
@@ -671,20 +665,23 @@ const GroupAction = styled.button`
   }
 `;
 
-const TerminateOthers = styled.button`
+const DangerCard = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 4px;
+`;
+
+const DangerBtn = styled.button`
   appearance: none;
   border: 0;
   width: 100%;
   padding: 12px 14px;
   border-radius: 12px;
-  background: rgba(255, 69, 58, 0.1);
+  background: rgba(255, 69, 58, 0.12);
   color: #ff8a84;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
   cursor: pointer;
   font-family: inherit;
 
@@ -694,14 +691,7 @@ const TerminateOthers = styled.button`
   }
 `;
 
-const TerminateHint = styled.p`
-  margin: 0;
-  text-align: center;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.4);
-`;
-
-const TerminateAll = styled.button`
+const DangerBtnOutline = styled.button`
   appearance: none;
   border: 1px solid rgba(255, 69, 58, 0.35);
   width: 100%;
@@ -720,71 +710,54 @@ const TerminateAll = styled.button`
   }
 `;
 
-const AccCard = styled.div`
+const AccountCard = styled.div`
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: ${SURFACE};
   overflow: hidden;
 `;
 
-const AccHead = styled.button`
-  appearance: none;
-  border: 0;
-  background: transparent;
-  width: 100%;
-  display: grid;
-  grid-template-columns: 36px 1fr auto;
-  gap: 12px;
-  align-items: center;
-  padding: 12px;
-  cursor: pointer;
-  text-align: left;
-  font-family: inherit;
-  color: inherit;
+const AccountBlock = styled.div`
+  padding: 16px;
 `;
 
-const AccIcon = styled.div`
+const AccountHead = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+`;
+
+const AccountIcon = styled.div`
   width: 36px;
   height: 36px;
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  flex-shrink: 0;
 `;
 
-const AccText = styled.div`
+const AccountHeadText = styled.div`
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 3px;
 `;
 
-const AccTitle = styled.div`
-  color: #fff;
+const AccountHeadTitle = styled.div`
   font-size: 14px;
   font-weight: 600;
+  color: #fff;
 `;
 
-const AccSub = styled.div`
-  color: rgba(255, 255, 255, 0.45);
+const AccountHeadSub = styled.div`
   font-size: 12px;
+  color: rgba(255, 255, 255, 0.48);
 `;
 
-const AccChevron = styled.span`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.55);
-  transition: transform 0.18s ease;
-  transform: rotate(${(p) => (p.$open ? '180deg' : '0deg')});
-`;
-
-const AccBody = styled.div`
-  padding: 0 12px 14px;
+const Divider = styled.div`
+  height: 1px;
+  background: rgba(255, 255, 255, 0.06);
 `;

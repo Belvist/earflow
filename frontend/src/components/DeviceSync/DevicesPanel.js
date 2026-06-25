@@ -28,7 +28,6 @@ const KIND_ICON = {
   other: FaQuestionCircle,
 };
 
-const ACCENT = '#1db954';
 const MENU_Z = 10100;
 const MENU_WIDTH = 220;
 const MENU_EST_HEIGHT = 96;
@@ -380,7 +379,7 @@ const HeroCard = styled.div`
   padding: 16px;
   border-radius: 12px;
   background: #282828;
-  border: 1px solid ${(p) => (p.$active ? 'rgba(29, 185, 84, 0.35)' : 'rgba(255, 255, 255, 0.06)')};
+  border: 1px solid ${(p) => (p.$active ? 'rgba(255, 255, 255, 0.28)' : 'rgba(255, 255, 255, 0.06)')};
 `;
 
 const HeroTop = styled.div`
@@ -396,7 +395,7 @@ const HeroIcon = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: ${(p) => (p.$active ? ACCENT : 'rgba(255, 255, 255, 0.88)')};
+  color: ${(p) => (p.$active ? '#fff' : 'rgba(255, 255, 255, 0.88)')};
   flex-shrink: 0;
 `;
 
@@ -410,7 +409,7 @@ const HeroText = styled.div`
 const HeroName = styled.div`
   font-size: 15px;
   font-weight: 700;
-  color: ${(p) => (p.$active ? ACCENT : '#fff')};
+  color: #fff;
   line-height: 1.25;
 `;
 
@@ -491,7 +490,7 @@ const DeviceRowShell = styled.div`
   align-items: center;
   gap: 4px;
   padding: ${(p) => (p.$compact ? '4px 6px 4px 4px' : '6px 8px 6px 6px')};
-  background: ${(p) => (p.$active ? 'rgba(29, 185, 84, 0.06)' : 'transparent')};
+  background: ${(p) => (p.$active ? 'rgba(255, 255, 255, 0.08)' : 'transparent')};
   transition: background 0.15s ease;
 
   & + & {
@@ -543,7 +542,7 @@ const RowIcon = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: ${(p) => (p.$active ? ACCENT : 'rgba(255, 255, 255, 0.85)')};
+  color: ${(p) => (p.$active ? '#fff' : 'rgba(255, 255, 255, 0.85)')};
   flex-shrink: 0;
 `;
 
@@ -557,7 +556,7 @@ const RowText = styled.div`
 const RowName = styled.div`
   font-size: 14px;
   font-weight: 600;
-  color: ${(p) => (p.$active ? ACCENT : '#fff')};
+  color: #fff;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
