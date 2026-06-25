@@ -4,6 +4,20 @@
 
 ---
 
+## 2026-06-26 — iOS audio session hard gate: no `engine.play()` without active session
+
+**Status:** accepted *(code prepared — **`PEND-IOS-005` remains OPEN** until real iPhone smoke)*
+**Area:** ios-native | playback
+**Context:** Even with background activation fix, `PlaybackActor` could call `engine.play()` when `prepareAudioSessionForPlayback()` returned false — UI/progress advanced without audible output. Remote command center returned `.success` before async play completed.
+**Decision:** (1) `AudioSessionPrepareResult` — `.active` / `.deferred` / `.failed`. (2) `PlaybackActor.tryStartEngineAfterSessionActivation()` — hard gate: `.failed` → state `.failed`, error `audio_session_not_active`, no `engine.play()`; `.deferred` → state `.ready`, `pendingEngineStart`, retry once on `didBecomeActive` / explicit user play (no infinite retry). (3) UI `.playing` only from `AVPlayer.timeControlStatus` KVO. (4) Remote play — async outcome; `.commandFailed` on hard session fail; deferred `.success` only if state is not fake `.playing`.
+**Alternatives considered:** Optimistic `engine.play()` + hope session activates — отвергнуто (progress-without-sound). Immediate infinite retry loop — отвергнуто (battery / `!pux` spam).
+**Consequences:** Protective state machine in place; device gate **not closed** — lock screen 60s, pause/play, next, cold-start auto-resume need real iPhone evidence.
+**Files touched:** `AudioSessionPrepareResult.swift`, `PlaybackActor.swift`, `NowPlayingController.swift`, `PlaybackCoordinator.swift`, `AppDependencies.swift`, `PlaybackActorAudioGateTests.swift`
+**Tests:** `PlaybackActorAudioGateTests`, `RemotePlayCommandPolicyTests`, `PlaybackEngineStartPolicyTests`; `verify:ios-native` 104 PASS
+**Чтобы не повторилось:** red flags — `engine.play()` without session prepare result `.active`; coordinator `.playing` set in `resume()`/`seek()` without `timeControlStatus`; remote command `.success` before play pipeline completes.
+
+---
+
 ## 2026-06-25 — HLS session prefetch: no `mp_hls` rotation mid-playback
 
 **Status:** accepted *(platform contract — device playback gate `PEND-IOS-005` still open)*

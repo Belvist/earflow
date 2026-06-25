@@ -53,6 +53,7 @@
 		631A7273DA16B9D0BA6B998F /* AuthActorLifecycleIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C4A950112EA3198B11956F0 /* AuthActorLifecycleIntegrationTests.swift */; };
 		63B62230E4C353425151BC7E /* AppDependencies.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B40CB4752D34689F4D23C9E /* AppDependencies.swift */; };
 		63B769D86880242C87BFFDCD /* StreamCookieHeaders.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5EC37E36D391CEF8D5ACC58 /* StreamCookieHeaders.swift */; };
+		64350633C6E032BFBC91271E /* PlaybackActorAudioGateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADEFA88B49F444291BB0C78C /* PlaybackActorAudioGateTests.swift */; };
 		698BE8BB0C21A892566CEED1 /* CanonicalProofStringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCF50C5245C451BB729FB2E6 /* CanonicalProofStringTests.swift */; };
 		6A3EF0DFC1B6B202F3822396 /* Unbounded.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 1525BB343C7F0070600193F4 /* Unbounded.ttf */; };
 		6C5604578A763F022D7DB0EE /* SessionLifecycleHooks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13F71746618E29102342B786 /* SessionLifecycleHooks.swift */; };
@@ -82,6 +83,7 @@
 		9E955562BA77640B47C192E9 /* MediaURLResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAFBABC665CDE40BAF6EE6D0 /* MediaURLResolver.swift */; };
 		A0F3C03D6382C4052086829B /* Sprint1ConcurrencyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2991B876A1B4B7B25F52C745 /* Sprint1ConcurrencyTests.swift */; };
 		A0F5995E65EC38B860487DE6 /* CoverAccentCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CDEA0A1F00612315B219ECF /* CoverAccentCache.swift */; };
+		A1597FB86FC507392D8E8D59 /* AudioSessionPrepareResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0907404231E1A2DE03EEBE4 /* AudioSessionPrepareResult.swift */; };
 		ACBC0BEC879DA230503CC751 /* AVPlayerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = D495E3BDB37D372D10D9D6CB /* AVPlayerEngine.swift */; };
 		ACF6E7A57D8B33CD2A753242 /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48C13EA5DFF271440105A060 /* NetworkMonitor.swift */; };
 		B0F2F36DC017A44B9130F421 /* StreamURLResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A40B035519052240A507B0F8 /* StreamURLResolverTests.swift */; };
@@ -178,12 +180,14 @@
 		A7C19CCBC8D37417662BB62A /* LogRedactor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogRedactor.swift; sourceTree = "<group>"; };
 		A970BCAC70D1099241D29470 /* SearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchService.swift; sourceTree = "<group>"; };
 		AA32BBF3C58EB52FF103DADB /* EarflowApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EarflowApp.swift; sourceTree = "<group>"; };
+		ADEFA88B49F444291BB0C78C /* PlaybackActorAudioGateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackActorAudioGateTests.swift; sourceTree = "<group>"; };
 		B249A358CCE6BA5ACE56AA78 /* SessionCookieStorePlaybackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionCookieStorePlaybackTests.swift; sourceTree = "<group>"; };
 		B4340552CF181A9EEC859E84 /* AuthSessionPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthSessionPolicyTests.swift; sourceTree = "<group>"; };
 		B4797CA332279F17C422B2BB /* PlaybackCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackCoordinator.swift; sourceTree = "<group>"; };
 		B72CDEF897A91883006D3233 /* StreamTicketURLTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamTicketURLTests.swift; sourceTree = "<group>"; };
 		BAFBABC665CDE40BAF6EE6D0 /* MediaURLResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaURLResolver.swift; sourceTree = "<group>"; };
 		BCF50C5245C451BB729FB2E6 /* CanonicalProofStringTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanonicalProofStringTests.swift; sourceTree = "<group>"; };
+		C0907404231E1A2DE03EEBE4 /* AudioSessionPrepareResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioSessionPrepareResult.swift; sourceTree = "<group>"; };
 		C245E53ADC595655429DFAC6 /* MainShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainShellView.swift; sourceTree = "<group>"; };
 		C6870DE333755E285E79E9D8 /* SearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchView.swift; sourceTree = "<group>"; };
 		C6DE0E6419ADE065AC98FB05 /* EarflowLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EarflowLog.swift; sourceTree = "<group>"; };
@@ -442,6 +446,7 @@
 		8D9D3BB638BEC7912DFB6A0F /* Playback */ = {
 			isa = PBXGroup;
 			children = (
+				C0907404231E1A2DE03EEBE4 /* AudioSessionPrepareResult.swift */,
 				D495E3BDB37D372D10D9D6CB /* AVPlayerEngine.swift */,
 				75EC4AD98BCA383A2C6A4171 /* HLSPlaybackPreflight.swift */,
 				3A74C6DB81EEF1C1DA086814 /* NowPlayingController.swift */,
@@ -570,6 +575,7 @@
 				09AC15A5D40610C2EFC50DFD /* HLSPlaybackContractTests.swift */,
 				8B02E085557583E82DC4FB73 /* NetworkTransientRetryTests.swift */,
 				EABE76263EC117ED09FFF3A5 /* NowPlayingControllerTests.swift */,
+				ADEFA88B49F444291BB0C78C /* PlaybackActorAudioGateTests.swift */,
 				8E04EABC754963437BA644AD /* PlaybackStateStoreTests.swift */,
 				A2858535D8FDA704FE02308C /* PlaybackTimeFormatTests.swift */,
 				B249A358CCE6BA5ACE56AA78 /* SessionCookieStorePlaybackTests.swift */,
@@ -689,6 +695,7 @@
 				FF45B6052EB3711673F9DF11 /* MockNginxHLSURLProtocol.swift in Sources */,
 				37B21CEBB3723E5B6F4E1C21 /* NetworkTransientRetryTests.swift in Sources */,
 				2C24EA730D1E5880F99E39C2 /* NowPlayingControllerTests.swift in Sources */,
+				64350633C6E032BFBC91271E /* PlaybackActorAudioGateTests.swift in Sources */,
 				4B113489761FDD62F73C78B6 /* PlaybackStateStoreTests.swift in Sources */,
 				9130F79CA535396F18E4C166 /* PlaybackTimeFormatTests.swift in Sources */,
 				0A9FABD7B4CAF20F15049F01 /* SessionCookieStorePlaybackTests.swift in Sources */,
@@ -711,6 +718,7 @@
 				63B62230E4C353425151BC7E /* AppDependencies.swift in Sources */,
 				8BB1CCDB6162F80273A1B9A4 /* AppShellMode.swift in Sources */,
 				C3B98D574752C441790BB80C /* AppShellNavigation.swift in Sources */,
+				A1597FB86FC507392D8E8D59 /* AudioSessionPrepareResult.swift in Sources */,
 				0462E13D745C03EE988DF0F5 /* AuthActor.swift in Sources */,
 				9C670E8D8015B9AF1CEA1D20 /* AuthDiagnostics.swift in Sources */,
 				2C8511E68361647142794E3D /* AuthDiagnosticsView.swift in Sources */,

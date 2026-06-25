@@ -1,5 +1,12 @@
 # Changelog — Earflow iOS (agent memory)
 
+## 2026-06-26 — Audio session hard gate before `engine.play()` (`PEND-IOS-005` still OPEN)
+
+- **Risk closed (code):** `prepareAudioSessionForPlayback()` failure/defer no longer calls `engine.play()` — prevents progress-without-sound when session inactive.
+- **Fix:** `AudioSessionPrepareResult` (`.active` / `.deferred` / `.failed`); `PlaybackActor.tryStartEngineAfterSessionActivation()` hard gate; `pendingEngineStart` + single retry on `didBecomeActive` (no infinite loop); remote play waits for async outcome (`.commandFailed` on hard fail, no fake `.success` when state is `.playing` without engine); UI `.playing` only from `AVPlayer.timeControlStatus`.
+- **Tests:** `PlaybackActorAudioGateTests` + policy tests (9 new).
+- **Gate:** `PEND-IOS-005` **остаётся OPEN** — real iPhone smoke required. `verify:ios-native` **104** tests PASS.
+
 ## 2026-06-26 — Background AVAudioSession activation fix (`PEND-IOS-005` still OPEN)
 
 - **Root cause (code audit):** `NowPlayingController.activateSession` блокировал `setActive(true)` когда `UIApplication.applicationState != .active` — на lock screen state = `.background`, remote play / re-activate не могли включить сессию → progress без звука.
