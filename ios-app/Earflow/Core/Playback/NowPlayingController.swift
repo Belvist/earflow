@@ -37,11 +37,18 @@ final class NowPlayingController {
     private var categoryConfigured = false
     private var sessionActive = false
     private var lastProgressPush = Date.distantPast
-    private var loggedAudioSessionConfigFailure = false
+    private var loggedAudioSessionCategoryFailure = false
     private var pendingSessionActivation = false
 
-    /// `AVAudioSessionErrorCodeCannotStartPlaying` (`!pux`) — `setActive(true)` while app is not `.active`.
+    /// `AVAudioSessionErrorCodeCannotStartPlaying` (`!pux`) — `setActive(true)` while app is `.inactive`
+    /// (launch transition before first `.active`, or transient resign-active).
     static let cannotStartPlayingCode = 561015905
+
+    /// Whether `setActive(true)` must wait for a later lifecycle moment (cold-start / `!pux`).
+    /// `.background` is allowed — lock screen and Control Center remote play run there with `UIBackgroundModes: audio`.
+    nonisolated static func shouldDeferAudioSessionActivation(applicationState: UIApplication.State) -> Bool {
+        applicationState == .inactive
+    }
 
     /// Cookie-less session: cover art is public; never leak `mp_*` auth cookies to the image host.
     private let artworkSession: URLSession = {
@@ -78,6 +85,7 @@ final class NowPlayingController {
             && coordinator.state != .revoked
         activateSession(force: true)
         guard sessionActive, shouldReassert else { return }
+        await EarflowLog.shared.info("playback", "intent=session_retry result=ok source=didBecomeActive")
         await coordinator.reassertPlaybackAfterAudioSessionRecovery()
     }
 
@@ -345,8 +353,10 @@ final class NowPlayingController {
         guard categoryConfigured else { return }
         if !force, sessionActive { return }
 
-        if UIApplication.shared.applicationState != .active {
+        let appState = UIApplication.shared.applicationState
+        if Self.shouldDeferAudioSessionActivation(applicationState: appState) {
             pendingSessionActivation = true
+            logSessionActivation(intent: "activate", result: "deferred", appState: appState, reason: "inactive")
             return
         }
 
@@ -354,26 +364,78 @@ final class NowPlayingController {
             try session.setActive(true)
             sessionActive = true
             pendingSessionActivation = false
+            logSessionActivation(intent: "activate", result: "ok", appState: appState)
         } catch {
             let code = (error as NSError).code
             if code == Self.cannotStartPlayingCode {
                 pendingSessionActivation = true
+                logSessionActivation(intent: "activate", result: "deferred", appState: appState, reason: "cannot_start_playing", code: code)
                 return
             }
             sessionActive = false
-            logAudioSessionFailure(phase: "activate", error: error)
+            logSessionActivation(intent: "activate", result: "fail", appState: appState, phase: "activate", code: code)
         }
     }
 
     private func logAudioSessionFailure(phase: String, error: Error) {
-        guard !loggedAudioSessionConfigFailure else { return }
-        loggedAudioSessionConfigFailure = true
-        let code = (error as NSError).code
-        Task {
-            await EarflowLog.shared.error(
-                "playback",
-                "audio_session_\(phase)_failed category=playback mode=default code=\(code)"
+        guard phase == "category" else {
+            let code = (error as NSError).code
+            logSessionActivation(
+                intent: "configure",
+                result: "fail",
+                appState: UIApplication.shared.applicationState,
+                phase: phase,
+                code: code
             )
+            return
+        }
+        guard !loggedAudioSessionCategoryFailure else { return }
+        loggedAudioSessionCategoryFailure = true
+        let code = (error as NSError).code
+        logSessionActivation(
+            intent: "configure",
+            result: "fail",
+            appState: UIApplication.shared.applicationState,
+            phase: phase,
+            code: code
+        )
+    }
+
+    private func logSessionActivation(
+        intent: String,
+        result: String,
+        appState: UIApplication.State,
+        reason: String? = nil,
+        phase: String? = nil,
+        code: Int? = nil
+    ) {
+        var parts = [
+            "intent=session_\(intent)",
+            "result=\(result)",
+            "appState=\(Self.logAppState(appState))",
+        ]
+        if let reason { parts.append("reason=\(reason)") }
+        if let phase { parts.append("phase=\(phase)") }
+        if let code { parts.append("code=\(code)") }
+        let message = parts.joined(separator: " ")
+        Task {
+            switch result {
+            case "fail":
+                await EarflowLog.shared.error("playback", message)
+            case "deferred":
+                await EarflowLog.shared.info("playback", message)
+            default:
+                await EarflowLog.shared.info("playback", message)
+            }
+        }
+    }
+
+    nonisolated static func logAppState(_ state: UIApplication.State) -> String {
+        switch state {
+        case .active: return "active"
+        case .inactive: return "inactive"
+        case .background: return "background"
+        @unknown default: return "unknown"
         }
     }
 
@@ -381,10 +443,18 @@ final class NowPlayingController {
         guard sessionActive else { return }
         do {
             try session.setActive(false, options: [.notifyOthersOnDeactivation])
+            sessionActive = false
+            logSessionActivation(intent: "deactivate", result: "ok", appState: UIApplication.shared.applicationState)
         } catch {
-            Task { await EarflowLog.shared.warning("playback", "audio session deactivate failed: \(error.localizedDescription)") }
+            let code = (error as NSError).code
+            logSessionActivation(
+                intent: "deactivate",
+                result: "fail",
+                appState: UIApplication.shared.applicationState,
+                phase: "deactivate",
+                code: code
+            )
         }
-        sessionActive = false
     }
 
     private func observeSessionNotifications() {

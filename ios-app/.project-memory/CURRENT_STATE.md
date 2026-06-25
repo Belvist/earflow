@@ -1,6 +1,6 @@
 # Current State — Earflow iOS
 
-**Updated:** 2026-06-25  
+**Updated:** 2026-06-26  
 **Phase:** 3 — playback / Device Sync (auth gate **closed**)  
 **Gate:** `PEND-IOS-005` **OPEN** — device playback smoke: `IPHONE_PLAYBACK_SMOKE_INSTRUCTIONS.md`
 
@@ -43,12 +43,12 @@
 ## Playback infrastructure (Phase 3 engineering — 2026-06-23, native HLS 2026-06-25)
 
 - **Native HLS:** `AVPlayerEngine` грузит `AVURLAsset` с `AVURLAssetHTTPHeaderFieldsKey` (Origin) + `AVURLAssetHTTPCookiesKey` (mp_hls). Resource loader **удалён** — отдача HLS-сегментов через `AVAssetResourceLoaderDelegate` запрещена Apple (`-12881`, `INV-IOS-001`).
-- **Background / lock screen (P0 fix 2026-06-25):** `NowPlayingController` — единственный владелец `AVAudioSession` (configure **не** в `init`; `.playback` без `.allowAirPlay`; activate на play-intent; deactivate только при `nowPlaying == nil`) + `MPNowPlayingInfoCenter` + `MPRemoteCommandCenter`. `AVPlayer` state от `timeControlStatus` (не optimistic `.playing`). `audiovisualBackgroundPlaybackPolicy = .continuesIfPossible`. `UIBackgroundModes: audio` в `project.yml` (`INV-IOS-002`).
+- **Background / lock screen (P0 fix 2026-06-25 + 2026-06-26):** `NowPlayingController` — единственный владелец `AVAudioSession` (configure **не** в `init`; `.playback` без `.allowAirPlay`; activate на play-intent; **`setActive` разрешён в `.background`** для lock screen remote play; defer только в `.inactive`; deactivate только при `nowPlaying == nil`) + `MPNowPlayingInfoCenter` + `MPRemoteCommandCenter`. Smoke logs: `intent=session_activate result=ok|deferred|fail appState=…`. `AVPlayer` state от `timeControlStatus`. `audiovisualBackgroundPlaybackPolicy = .continuesIfPossible`. `UIBackgroundModes: audio` (`INV-IOS-002`).
 - `StreamSessionService` cache + logout clear; `playbackError` on coordinator
 - **Track switch:** skip HLS preflight после успешного `createSession` (−1 RTT); auth `revalidateSession` debounce 45s, foreground `preferRefresh: false`; **HLS prefetch** (`prefetch: true` / no `mp_hls` rotation) + next-track prewarm when &lt;30s remain (`StreamSessionService.prefetchSession`, platform contract `DECISIONS.md` 2026-06-25)
 - **Memory (2026-06-25):** `artworkCache` cap 16 + downscale; `releaseActivePlayer`; `preferredForwardBufferDuration=60`; `progressStream` → `.bufferingNewest(1)`. Gate: `PEND-IOS-004` (Instruments on device).
 - **Cold-start auto-resume:** `PlaybackStateStore` + `INV-IOS-004`; throttle/flush `INV-IOS-003`.
-- Tests: `HLSPlaybackContractTests`, `NowPlayingControllerTests`, `PlaybackStateStoreTests`, `UserProfileLogSafeTests`; `verify:ios-native` build+**92** PASS
+- Tests: `HLSPlaybackContractTests`, `NowPlayingControllerTests`, `PlaybackStateStoreTests`, `UserProfileLogSafeTests`; `verify:ios-native` build+**94** PASS
 - **Device gate OPEN (`PEND-IOS-005`):** background audio, lock screen controls, UI/audio sync, cold-start auto-resume — **только real iPhone**. Инструкция: `IPHONE_PLAYBACK_SMOKE_INSTRUCTIONS.md`. Unit-тесты и Simulator **не закрывают** gate.
 - **HLS device gate OPEN (`PEND-IOS-003`):** audible stream on device без `-12881`.
 - **Memory gate OPEN (`PEND-IOS-004`):** Instruments ~15 мин на device.
@@ -61,5 +61,5 @@ Design split: `ios-app/.project-memory/PLAYBACK_PHASE3.md`
 
 ```bash
 npm run verify:monorepo-integrity
-npm run verify:ios-native   # build + 91 tests
+npm run verify:ios-native   # build + 94 tests
 ```

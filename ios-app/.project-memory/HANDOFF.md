@@ -1,6 +1,6 @@
 # iOS Handoff — читать ПЕРВЫМ в новом чате
 
-**Updated:** 2026-06-25  
+**Updated:** 2026-06-26  
 **Global index:** `docs/AGENT_SESSION_HANDOFF.md`  
 **Gate:** `PEND-IOS-005` **OPEN** — playback **prepared in code**, **not closed** without real iPhone smoke
 
@@ -17,7 +17,7 @@
 | `verify:ios-native` перед device run | Новые UI-фичи до PASS playback gate |
 | Обновлять docs при изменении playback/auth | «background audio готово» по unit-тестам |
 
-**Оценка:** до P0-фикса — broken lifecycle на device; после фикса в коде — **prepared, needs device evidence**.
+**Оценка:** до P0-фикса — broken lifecycle на device; после 2026-06-25 P0 + **2026-06-26 background activation fix** (`setActive` в `.background`, не только `.active`) — **prepared, needs device evidence**.
 
 **UX:** guest-first shell; login — sheet.
 

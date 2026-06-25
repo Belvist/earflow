@@ -61,4 +61,16 @@ final class NowPlayingControllerTests: XCTestCase {
     func testCannotStartPlayingCodeIsPux() {
         XCTAssertEqual(NowPlayingController.cannotStartPlayingCode, 561015905)
     }
+
+    func testShouldDeferAudioSessionActivationOnlyWhenInactive() {
+        XCTAssertTrue(NowPlayingController.shouldDeferAudioSessionActivation(applicationState: .inactive))
+        XCTAssertFalse(NowPlayingController.shouldDeferAudioSessionActivation(applicationState: .active))
+        XCTAssertFalse(NowPlayingController.shouldDeferAudioSessionActivation(applicationState: .background))
+    }
+
+    func testLogAppStateLabels() {
+        XCTAssertEqual(NowPlayingController.logAppState(.active), "active")
+        XCTAssertEqual(NowPlayingController.logAppState(.inactive), "inactive")
+        XCTAssertEqual(NowPlayingController.logAppState(.background), "background")
+    }
 }

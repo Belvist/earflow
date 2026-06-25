@@ -52,7 +52,8 @@ open Earflow.xcodeproj
 4. **Логи (первые ~30 строк после launch + момент play):**
    - **Нет** `audio session category failed`
    - **Нет** `OSStatus -50` / `SessionCore.mm:546 Failed to set properties`
-   - Допустимо: `[app] bootstrap`, `[playback] play track`, `[playback] session ready`, `[playback] engine ready`
+   - Допустимо: `[app] bootstrap`, `[playback] play track`, `[playback] session ready`, `[playback] engine ready`, `intent=session_activate result=ok appState=active`
+   - **Нет** `audio_session_category_failed` / `audio_session_activate_failed` (legacy); вместо них: `intent=session_configure result=fail` или `intent=session_activate result=fail`
    - **Нет** `userId=157` (или любого numeric internal id) — ожидается `user=@username` или `account`
    - **Нет** значений stream tickets / cookies / `st=`, `mp_hls` (только `[REDACTED]` или boolean `token=true`)
 
@@ -123,9 +124,9 @@ open Earflow.xcodeproj
 | Симптом | Следующий шаг |
 |---------|----------------|
 | `OSStatus -50` / `audio session category failed` сразу после launch | Прислать **первые 30 строк** лога; проверить `NowPlayingController` (не `setCategory` в `init`; category `.playback` без `.allowAirPlay`) |
-| `561015905` / `audio_session_activate_failed` | `!pux` (`cannotStartPlaying`) — activate до `.active` или без prepare перед `play`. Ожидается fix: defer auto-resume + `prepareAudioSessionForPlayback` перед `AVPlayer.play`. Если остаётся — свежий лог |
-| Звук стоп при lock, progress идёт | AVAudioSession не active / desync `timeControlStatus` — лог + `PEND-IOS-005` остаётся OPEN |
-| Play на lock screen — progress без звука | То же; проверить re-activate session перед remote play |
+| `561015905` / `intent=session_activate result=fail code=561015905` | `!pux` — activate в `.inactive` до первого `.active`. Ожидается `result=deferred reason=cannot_start_playing` + `intent=session_retry result=ok source=didBecomeActive`. Lock screen play: `result=ok appState=background` |
+| Звук стоп при lock, progress идёт | AVAudioSession не active — ищите `intent=session_activate result=deferred|fail`; `PEND-IOS-005` остаётся OPEN |
+| Play на lock screen — progress без звука | Проверить `intent=session_activate result=ok appState=background` перед resume |
 | Switch >2 с каждый раз | **Не** возвращать auth refresh в hot path; следующий фокус: HLS session latency, prefetch next, `AVPlayerItem` prewarm (`DECISIONS.md`) |
 | `userId=157` в логах | Регрессия log redaction — `UserProfile.logSafeHandle` |
 | Auth refresh на каждый next | Регрессия `revalidateSession` debounce / `preferRefresh: false` на foreground |

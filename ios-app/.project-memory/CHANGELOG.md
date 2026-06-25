@@ -1,5 +1,11 @@
 # Changelog — Earflow iOS (agent memory)
 
+## 2026-06-26 — Background AVAudioSession activation fix (`PEND-IOS-005` still OPEN)
+
+- **Root cause (code audit):** `NowPlayingController.activateSession` блокировал `setActive(true)` когда `UIApplication.applicationState != .active` — на lock screen state = `.background`, remote play / re-activate не могли включить сессию → progress без звука.
+- **Fix:** defer только в `.inactive` (cold-start / `!pux`); `.background` разрешён. Structured smoke logs: `intent=session_activate|configure|deactivate|retry result=… appState=…`.
+- **Gate:** `PEND-IOS-005` **остаётся OPEN** — нужен real iPhone smoke. `verify:ios-native` **94** tests PASS.
+
 ## 2026-06-25 — P0 playback lifecycle fix + device smoke doc (`PEND-IOS-005`)
 
 - **Root cause (device):** `AVAudioSession.setCategory` в `NowPlayingController.init` + `.allowAirPlay` на `.playback` → `OSStatus -50`; фон/lock screen сломаны; progress desync от optimistic `.playing`.

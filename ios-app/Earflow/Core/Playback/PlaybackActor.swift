@@ -240,7 +240,7 @@ actor PlaybackActor {
         guard let prepare = audioSessionPrepare else { return }
         let active = await prepare()
         if !active {
-            await EarflowLog.shared.warning("playback", "audio session inactive before avplayer.play")
+            await EarflowLog.shared.warning("playback", "intent=session_activate result=inactive_before_play")
         }
     }
 
