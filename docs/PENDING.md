@@ -117,28 +117,21 @@
 ### PEND-STREAM-002 — HLS prefetch prod gate (prepared ≠ closed)
 
 **Priority:** high
-**Status:** open
+**Status:** CORS gate closed 2026-07-29; authenticated playback gates still open
 
-**Context:** Platform prefetch contract implemented in repo (`DECISIONS.md` 2026-06-25). Code review PASS; **prod evidence missing**.
+**Context:** Platform prefetch contract implemented in repo (`DECISIONS.md` 2026-06-25 + 2026-07-29). Deployed to prod 2026-07-29.
 
-**Deploy order (VPS `/opt/music-platform`):**
-```bash
-git pull origin main   # must include prefetch + nginx CORS
-DEPLOY_SERVICES="nginx ebap-hls-adapter api-gateway" bash scripts/vps-deploy-from-git.sh
-bash scripts/verify-hls-prefetch-prod.sh
-```
-
-**Close gate only when ALL pass:**
-- [ ] OPTIONS `Allow-Headers` contains `X-Earflow-Session-Intent` on prod
-- [ ] POST play → `Set-Cookie: mp_hls` exactly once
-- [ ] POST `{ prefetch: true }` → no `Set-Cookie: mp_hls`
-- [ ] POST header `X-Earflow-Session-Intent: prefetch` → no `Set-Cookie: mp_hls`
+**CORS verified (2026-07-29):**
+- [x] OPTIONS `Allow-Headers` contains `X-Earflow-Session-Intent` on prod ✅
+- [ ] POST play → `Set-Cookie: mp_hls` exactly once (needs auth cookie)
+- [ ] POST `{ prefetch: true }` → no `Set-Cookie: mp_hls` (needs auth cookie)
+- [ ] POST header `X-Earflow-Session-Intent: prefetch` → no `Set-Cookie: mp_hls` (needs auth cookie)
 - [ ] Current track segments stay 200 after prefetch next (manual or e2e)
 - [ ] iPhone smoke (`PEND-IOS-005`) — no 403 / silence / progress-without-sound
 
 **Verify script:** `scripts/verify-hls-prefetch-prod.sh` (session POST needs `PROD_GATEWAY_COOKIE`, `PROD_CSRF_TOKEN`, `IT_TRACK_READY_ID`).
 
-**Prod CORS snapshot (pre-deploy, 2026-06-25):** OPTIONS missing `X-Earflow-Session-Intent` in Allow-Headers.
+**Prod CORS snapshot (2026-07-29):** `Access-Control-Allow-Headers: Content-Type,Authorization,X-CSRF-Token,X-Correlation-ID,Cache-Control,Pragma,X-Lyrics-Key,X-Earflow-Session-Intent,X-Auth-Device-Id,X-Auth-Device-Proof,X-Auth-Device-Proof-Ts,X-Auth-Device-Proof-Nonce,X-Auth-Proof-Access-Token`
 
 ### PEND-STREAM-001 — ~~Direct-stream prefetch still overwrites `mp_stream` cookie~~ — закрыто 2026-07-29
 
