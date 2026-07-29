@@ -202,38 +202,14 @@ final class PlaybackCoordinator: ObservableObject {
     }
 
     /// Re-start AVPlayer after a deferred `AVAudioSession` activation (cold-start / `!pux` retry).
-    func retryPlaybackAfterAudioSessionRecovery() async {
+    func reassertPlaybackAfterAudioSessionRecovery() async {
         guard nowPlaying != nil else { return }
         switch state {
         case .playing, .buffering, .paused, .ready, .loadingMedia, .loadingSession:
-            await playback.retryPendingEngineStartIfNeeded()
+            await playback.resume()
         default:
             break
         }
-    }
-
-    /// Lock screen / Control Center play — uses hard audio-session gate inside `PlaybackActor`.
-    func resumeFromRemoteCommand() async {
-        guard nowPlaying != nil else { return }
-        switch state {
-        case .playing, .buffering, .loadingSession, .loadingMedia:
-            return
-        case .idle, .ended, .failed:
-            if let track = nowPlaying {
-                await play(track)
-            }
-        default:
-            await playback.resume()
-        }
-    }
-
-    func hasPendingEngineStart() async -> Bool {
-        await playback.hasPendingEngineStart()
-    }
-
-    /// Deprecated alias — use `retryPlaybackAfterAudioSessionRecovery`.
-    func reassertPlaybackAfterAudioSessionRecovery() async {
-        await retryPlaybackAfterAudioSessionRecovery()
     }
 
     func stop() async {

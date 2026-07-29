@@ -41,6 +41,11 @@ export class DirectSession implements PlaybackSession {
     private activeStreamUrl: string | null = null;
     private activeStreamMime: string | null = null;
     private readonly qualityPreference: QualityPreference;
+    private currentQualityTag: string | null = null;
+    private adaptiveCheckAtMs = 0;
+    private switchingQuality = false;
+    private lastQualitySwitchAtMs = 0;
+    private playbackStartedAtMs = 0;
 
     private volume = 1;
     private rate = 1;
@@ -888,6 +893,14 @@ export class DirectSession implements PlaybackSession {
     }
 
     private applyQualitySelection(): void {
+        if (this.qualityPreference === 'auto') {
+            this.activeStreamUrl = this.url;
+            this.activeStreamMime = this.mime;
+            this.currentQualityTag = 'source';
+            this.selectedQuality = null;
+            return;
+        }
+
         const estimator = getSharedBandwidthEstimator();
         const chosen = selectQuality(this.qualities, this.qualityPreference, estimator);
         this.selectedQuality = chosen;
@@ -895,12 +908,14 @@ export class DirectSession implements PlaybackSession {
         if (chosen) {
             this.activeStreamUrl = chosen.url;
             this.activeStreamMime = chosen.mime || null;
+            this.currentQualityTag = chosen.tag;
             if (chosen.loudness) {
                 this.loudness = chosen.loudness;
             }
         } else {
             this.activeStreamUrl = this.url;
             this.activeStreamMime = this.mime;
+            this.currentQualityTag = 'source';
         }
     }
 
@@ -1075,6 +1090,7 @@ export class DirectSession implements PlaybackSession {
         this.measureBandwidth();
 
         this.hasStartedPlayback = false;
+        this.playbackStartedAtMs = Date.now();
 
         this.resetProgressTracking();
         this.startWatchdog();
@@ -1247,6 +1263,123 @@ export class DirectSession implements PlaybackSession {
         return this.qualities;
     }
 
+    private checkAdaptiveSwitch(): void {
+        if (!this.qualities || this.qualities.length === 0) return;
+
+        const estimator = getSharedBandwidthEstimator();
+        if (!estimator.isConfident()) return;
+
+        const bwBps = estimator.getEstimateBps();
+        if (bwBps === null || bwBps <= 0) return;
+
+        const now = Date.now();
+
+        // Don't switch in the first 10s of playback — let estimator stabilize
+        if (now - this.playbackStartedAtMs < 10_000) return;
+
+        // Hysteresis: no switch more often than every 30s
+        if (now - this.lastQualitySwitchAtMs < 30_000) return;
+
+        const AAC_256_BITRATE = 256_000;
+        const LOSSLESS_ESTIMATED_BITRATE = 900_000;
+        const DOWN_HEADROOM = 1.3;
+        const UP_HEADROOM = 1.5;
+
+        // Downswitch: source → aac_256 when bandwidth is too low for lossless
+        if (this.currentQualityTag === 'source' || this.currentQualityTag === null) {
+            if (bwBps < LOSSLESS_ESTIMATED_BITRATE * DOWN_HEADROOM && bwBps >= AAC_256_BITRATE * DOWN_HEADROOM) {
+                const aac256 = this.qualities.find((q) => q.tag === 'aac_256');
+                if (aac256) {
+                    void this.switchToQuality('aac_256');
+                }
+            }
+            return;
+        }
+
+        // Upswitch: aac_256 → source when bandwidth is comfortably above lossless
+        if (this.currentQualityTag === 'aac_256') {
+            if (bwBps >= LOSSLESS_ESTIMATED_BITRATE * UP_HEADROOM) {
+                void this.switchToQuality('source');
+            }
+        }
+    }
+
+    private async switchToQuality(tag: string): Promise<void> {
+        if (this.switchingQuality) return;
+        if (this.currentQualityTag === tag) return;
+        if (!this.qualities) return;
+
+        // 'source' means use the base session URL (lossless/original)
+        const isSource = tag === 'source';
+        const target = isSource ? null : this.qualities.find((q) => q.tag === tag);
+        if (!isSource && !target) return;
+
+        this.switchingQuality = true;
+        this.emitBuffering(true);
+        const audio = this.audio;
+        const pos = Number(audio.currentTime);
+        const wasPlaying = !audio.paused;
+
+        try {
+            if (isSource) {
+                this.activeStreamUrl = this.url;
+                this.activeStreamMime = this.mime;
+                this.selectedQuality = null;
+            } else {
+                this.activeStreamUrl = target!.url;
+                this.activeStreamMime = target!.mime || null;
+                this.selectedQuality = target!;
+            }
+
+            const absoluteUrl = this.resolveActiveUrl();
+            this.configureCrossOrigin(absoluteUrl);
+
+            const mime = isSource ? this.mime : target!.mime;
+            if (mime) {
+                try { audio.setAttribute('type', mime); } catch { }
+            }
+
+            this.destroyHls();
+            audio.preload = 'metadata';
+            audio.src = absoluteUrl;
+            audio.load();
+
+            await this.waitForReadyShort();
+
+            if (Number.isFinite(pos) && pos > 0.5) {
+                try { audio.currentTime = pos; } catch { }
+            }
+
+            if (wasPlaying) {
+                try { await audio.play(); } catch { }
+            }
+
+            this.currentQualityTag = tag;
+            this.lastQualitySwitchAtMs = Date.now();
+            this.resetProgressTracking();
+        } catch {
+        } finally {
+            this.switchingQuality = false;
+            this.emitBuffering(false);
+        }
+    }
+
+    private waitForReadyShort(): Promise<void> {
+        return new Promise<void>((resolve) => {
+            const audio = this.audio;
+            const deadline = Date.now() + 5000;
+            const check = () => {
+                // readyState >= 2 (HAVE_CURRENT_DATA) ensures seek will work
+                if (audio.readyState >= 2 || Date.now() > deadline) {
+                    resolve();
+                    return;
+                }
+                setTimeout(check, 100);
+            };
+            check();
+        });
+    }
+
     private async watchdogTick(): Promise<void> {
         if (this.recovering) return;
         if (!this.wantsToPlay()) return;
@@ -1282,6 +1415,14 @@ export class DirectSession implements PlaybackSession {
 
         if (!this.hasStartedPlayback) {
             return;
+        }
+
+        if (this.qualityPreference === 'auto' && !this.switchingQuality && !this.recovering) {
+            const checkInterval = 5000;
+            if (now - this.adaptiveCheckAtMs > checkInterval) {
+                this.adaptiveCheckAtMs = now;
+                this.checkAdaptiveSwitch();
+            }
         }
 
         if (this.lastProgressAtMs != null && now - this.lastProgressAtMs > this.stallThresholdMs) {

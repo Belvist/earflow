@@ -780,21 +780,36 @@ function hlsPlaybackSessionJson(record: PlaybackSessionRecord, token: string, to
     }, noStoreHeaders());
 }
 
-function directPlaybackSessionJson(record: PlaybackSessionRecord, entry: SessionCacheEntry, streamCookie: string): Response {
+function directPlaybackSessionJson(record: PlaybackSessionRecord, entry: SessionCacheEntry, streamCookie: string, prefetch?: boolean): Response {
     const expSec = Math.floor(record.expiresAt / 1000);
+    const baseUrl = buildDirectStreamUrl(record.sessionId);
+    const qualities = Array.isArray(entry.qualities)
+        ? entry.qualities.map((q) => ({
+            tag: q.tag,
+            bitrate: q.bitrate,
+            codec: q.codec || 'aac',
+            url: `${baseUrl}?quality=${encodeURIComponent(q.tag)}`,
+            mime: q.mime,
+            ...(q.loudness ? { loudness: q.loudness } : {}),
+        }))
+        : [];
+    // Prefetch warms session URL in client cache without rotating the stream cookie —
+    // overwriting it mid-playback breaks range requests for the track still playing.
+    const extraHeaders: Record<string, string> = prefetch ? {} : { 'Set-Cookie': streamCookie };
     return json(200, {
         sessionId: record.sessionId,
         mode: 'direct',
         trackId: record.trackRef,
-        url: buildDirectStreamUrl(record.sessionId),
-        streamUrl: buildDirectStreamUrl(record.sessionId),
+        url: baseUrl,
+        streamUrl: baseUrl,
         mime: entry.mime,
         expiresAt: expSec,
         expiresAtMs: record.expiresAt,
         sessionExpiresAt: expSec,
         sessionExpiresAtMs: record.expiresAt,
-        qualities: null,
-    }, noStoreHeaders({ 'Set-Cookie': streamCookie }));
+        qualities,
+        ...(prefetch ? { prefetch: true } : {}),
+    }, noStoreHeaders(extraHeaders));
 }
 
 async function createPlaybackSession(params: {
@@ -1010,25 +1025,26 @@ async function authorizeDirectStream(req: Request, sessionId: string, url: URL):
     if (streamTicketVerifier) {
         const ticketTry = await streamTicketVerifier.tryVerify(req, url, { sessionId });
         if (ticketTry.present) {
-            if (!ticketTry.ok) {
-                return { ok: false, response: streamFailure(401, 'STREAM_TICKET_INVALID') };
+            if (ticketTry.ok) {
+                const record = await loadPlaybackSession(sessionId).catch(() => null);
+                if (!record) {
+                    return { ok: false, response: streamFailure(401, 'PLAYBACK_SESSION_EXPIRED') };
+                }
+                if (record.mode !== 'direct' || record.userId !== ticketTry.ticket.userId) {
+                    return { ok: false, response: streamFailure(403, 'PLAYBACK_SESSION_DENIED') };
+                }
+                const scopeTrack = String(ticketTry.ticket.scope.trackId || '').trim().toLowerCase();
+                const trackCandidates = new Set([
+                    String(record.trackId),
+                    String(record.trackRef || '').toLowerCase(),
+                ]);
+                if (scopeTrack && !trackCandidates.has(scopeTrack)) {
+                    return { ok: false, response: streamFailure(403, 'PLAYBACK_TRACK_MISMATCH') };
+                }
+                return finalizePlaybackAuthorization(record);
             }
-            const record = await loadPlaybackSession(sessionId).catch(() => null);
-            if (!record) {
-                return { ok: false, response: streamFailure(401, 'PLAYBACK_SESSION_EXPIRED') };
-            }
-            if (record.mode !== 'direct' || record.userId !== ticketTry.ticket.userId) {
-                return { ok: false, response: streamFailure(403, 'PLAYBACK_SESSION_DENIED') };
-            }
-            const scopeTrack = String(ticketTry.ticket.scope.trackId || '').trim().toLowerCase();
-            const trackCandidates = new Set([
-                String(record.trackId),
-                String(record.trackRef || '').toLowerCase(),
-            ]);
-            if (scopeTrack && !trackCandidates.has(scopeTrack)) {
-                return { ok: false, response: streamFailure(403, 'PLAYBACK_TRACK_MISMATCH') };
-            }
-            return finalizePlaybackAuthorization(record);
+            // st present but expired/invalid — fall back to cookie auth
+            // (stream ticket TTL=90s, cookie TTL=session TTL=900s)
         }
         if (cfg.streamTicket.enforce) {
             return { ok: false, response: streamFailure(401, 'STREAM_TICKET_REQUIRED') };
@@ -1094,13 +1110,14 @@ function parseDirectRange(req: Request, totalBytes: number): { start: number; en
     return { start, end, partial: true };
 }
 
-async function resolveDirectStreamAsset(record: PlaybackSessionRecord): Promise<{ objectKey: string; mime: string; entry: SessionCacheEntry } | null> {
+async function resolveDirectStreamAsset(record: PlaybackSessionRecord, qualityOverride?: string): Promise<{ objectKey: string; mime: string; entry: SessionCacheEntry } | null> {
     const entry = await resolveSessionEntry(record.trackId);
     if (!entry || entry.isAvailable === false) return null;
-    if (record.quality !== 'auto' && record.quality !== 'lossless') {
+    const effectiveQuality = qualityOverride || record.quality;
+    if (effectiveQuality !== 'auto' && effectiveQuality !== 'lossless') {
         const song = await getSongForStreaming(sql, record.trackId);
         if (song) {
-            const variant = resolveVariantObjectKey(song, record.quality);
+            const variant = resolveVariantObjectKey(song, effectiveQuality);
             if (variant) return { objectKey: variant.key, mime: variant.mime, entry };
         }
     }
@@ -1117,7 +1134,14 @@ async function handleDirectPlaybackStream(req: Request, url: URL): Promise<Respo
     const auth = await authorizeDirectStream(req, parts[3] || '', url);
     if (!auth.ok) return auth.response;
 
-    const asset = await resolveDirectStreamAsset(auth.record);
+    const qualityOverride = (() => {
+        const raw = String(url.searchParams.get('quality') || '').trim().toLowerCase();
+        if (!raw) return undefined;
+        if (/^(auto|lossless|aac_128|aac_256|aac_320|opus_64|opus_128|opus_256|source)$/.test(raw)) return raw;
+        return undefined;
+    })();
+
+    const asset = await resolveDirectStreamAsset(auth.record, qualityOverride);
     if (!asset) return streamFailure(404, 'STREAM_ASSET_NOT_FOUND');
 
     const info = await headObjectInfo({
@@ -1551,6 +1575,9 @@ Bun.serve({
                             return json(400, { error: 'Invalid trackId', code: 'INVALID_TRACK_ID' }, noStoreHeaders());
                         }
 
+                        const prefetchIntent = req.headers.get('x-earflow-session-intent')?.toLowerCase() === 'prefetch'
+                            || body?.prefetch === true;
+
                         const song = await getSongForStreaming(sql, trackId);
                         if (!song) {
                             return json(404, { error: 'Track not found', code: 'TRACK_NOT_FOUND' }, noStoreHeaders());
@@ -1596,7 +1623,7 @@ Bun.serve({
                                 deviceId: normalizeDeviceId(body?.deviceId),
                                 manifestHash8B64Url,
                             });
-                            return directPlaybackSessionJson(record, entry, createDirectStreamCookieHeader(record, req));
+                            return directPlaybackSessionJson(record, entry, createDirectStreamCookieHeader(record, req), prefetchIntent);
                         }
 
                         const record = await createPlaybackSession({

@@ -85,6 +85,9 @@ function resolveObjectKey(rawKey) {
   if (!key || key.includes('..') || key.includes('\0')) {
     throw new Error('invalid object key');
   }
+  if (key.startsWith('library/')) {
+    return `audio/${key}`;
+  }
   return key;
 }
 

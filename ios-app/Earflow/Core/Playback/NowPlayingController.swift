@@ -73,14 +73,8 @@ final class NowPlayingController {
     /// Must run immediately before `AVPlayer.play()` — returns whether the session is active.
     @discardableResult
     func prepareAudioSessionForPlayback() -> Bool {
-        prepareAudioSessionForPlaybackResult() == .active
-    }
-
-    func prepareAudioSessionForPlaybackResult() -> AudioSessionPrepareResult {
         activateSession(force: true)
-        if sessionActive { return .active }
-        if pendingSessionActivation { return .deferred }
-        return .failed
+        return sessionActive
     }
 
     /// Retry activation after cold-start auto-resume once UIApplication is `.active`.
@@ -92,7 +86,7 @@ final class NowPlayingController {
         activateSession(force: true)
         guard sessionActive, shouldReassert else { return }
         await EarflowLog.shared.info("playback", "intent=session_retry result=ok source=didBecomeActive")
-        await coordinator.retryPlaybackAfterAudioSessionRecovery()
+        await coordinator.reassertPlaybackAfterAudioSessionRecovery()
     }
 
     // MARK: - Coordinator observation
@@ -260,7 +254,8 @@ final class NowPlayingController {
         commandCenter.playCommand.removeTarget(nil)
         _ = commandCenter.playCommand.addTarget { [weak self] _ in
             guard let self else { return .commandFailed }
-            return self.handleRemotePlayCommand()
+            Task { @MainActor in await self.ensurePlaying() }
+            return .success
         }
 
         commandCenter.pauseCommand.removeTarget(nil)
@@ -273,13 +268,8 @@ final class NowPlayingController {
         commandCenter.togglePlayPauseCommand.removeTarget(nil)
         _ = commandCenter.togglePlayPauseCommand.addTarget { [weak self] _ in
             guard let self else { return .commandFailed }
-            switch self.coordinator.state {
-            case .playing, .buffering:
-                Task { @MainActor in await self.ensurePaused() }
-                return .success
-            default:
-                return self.handleRemotePlayCommand()
-            }
+            Task { @MainActor in await self.coordinator.togglePlayPause() }
+            return .success
         }
 
         commandCenter.nextTrackCommand.removeTarget(nil)
@@ -325,53 +315,13 @@ final class NowPlayingController {
         return index + 1 < queue.count
     }
 
-    private func handleRemotePlayCommand() -> MPRemoteCommandHandlerStatus {
-        var status: MPRemoteCommandHandlerStatus = .commandFailed
-        let semaphore = DispatchSemaphore(value: 0)
-        Task { @MainActor [weak self] in
-            guard let self else {
-                semaphore.signal()
-                return
-            }
-            status = await self.remotePlayOutcome()
-            semaphore.signal()
-        }
-        _ = semaphore.wait(timeout: .now() + 8)
-        return status
-    }
-
-    private func remotePlayOutcome() async -> MPRemoteCommandHandlerStatus {
-        let prepareResult = prepareAudioSessionForPlaybackResult()
-        switch prepareResult {
-        case .failed:
-            return .commandFailed
-        case .deferred, .active:
-            break
-        }
-
-        switch coordinator.state {
-        case .playing, .buffering, .loadingMedia, .loadingSession:
-            return .success
-        default:
-            await coordinator.resumeFromRemoteCommand()
-        }
-
-        let pending = await coordinator.hasPendingEngineStart()
-        let outcome = RemotePlayCommandPolicy.handlerStatus(
-            prepareResult: prepareResult,
-            coordinatorState: coordinator.state,
-            pendingEngineStart: pending
-        )
-        return outcome == .success ? .success : .commandFailed
-    }
-
     private func ensurePlaying() async {
         _ = prepareAudioSessionForPlayback()
         switch coordinator.state {
         case .playing, .buffering, .loadingSession, .loadingMedia:
             return
         default:
-            await coordinator.resumeFromRemoteCommand()
+            await coordinator.togglePlayPause()
         }
     }
 
@@ -545,8 +495,7 @@ final class NowPlayingController {
             guard let optionsRaw else { return }
             let options = AVAudioSession.InterruptionOptions(rawValue: optionsRaw)
             if options.contains(.shouldResume) {
-                let result = prepareAudioSessionForPlaybackResult()
-                guard result != .failed else { return }
+                _ = prepareAudioSessionForPlayback()
                 Task { await self.ensurePlaying() }
             }
         @unknown default:

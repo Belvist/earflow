@@ -4,17 +4,17 @@
 
 ---
 
-## 2026-06-26 — iOS audio session hard gate: no `engine.play()` without active session
+## 2026-07-29 — Direct-stream prefetch intent: no `mp_stream` rotation mid-playback (closes PEND-STREAM-001)
 
-**Status:** accepted *(code prepared — **`PEND-IOS-005` remains OPEN** until real iPhone smoke)*
-**Area:** ios-native | playback
-**Context:** Even with background activation fix, `PlaybackActor` could call `engine.play()` when `prepareAudioSessionForPlayback()` returned false — UI/progress advanced without audible output. Remote command center returned `.success` before async play completed.
-**Decision:** (1) `AudioSessionPrepareResult` — `.active` / `.deferred` / `.failed`. (2) `PlaybackActor.tryStartEngineAfterSessionActivation()` — hard gate: `.failed` → state `.failed`, error `audio_session_not_active`, no `engine.play()`; `.deferred` → state `.ready`, `pendingEngineStart`, retry once on `didBecomeActive` / explicit user play (no infinite retry). (3) UI `.playing` only from `AVPlayer.timeControlStatus` KVO. (4) Remote play — async outcome; `.commandFailed` on hard session fail; deferred `.success` only if state is not fake `.playing`.
-**Alternatives considered:** Optimistic `engine.play()` + hope session activates — отвергнуто (progress-without-sound). Immediate infinite retry loop — отвергнуто (battery / `!pux` spam).
-**Consequences:** Protective state machine in place; device gate **not closed** — lock screen 60s, pause/play, next, cold-start auto-resume need real iPhone evidence.
-**Files touched:** `AudioSessionPrepareResult.swift`, `PlaybackActor.swift`, `NowPlayingController.swift`, `PlaybackCoordinator.swift`, `AppDependencies.swift`, `PlaybackActorAudioGateTests.swift`
-**Tests:** `PlaybackActorAudioGateTests`, `RemotePlayCommandPolicyTests`, `PlaybackEngineStartPolicyTests`; `verify:ios-native` 104 PASS
-**Чтобы не повторилось:** red flags — `engine.play()` without session prepare result `.active`; coordinator `.playing` set in `resume()`/`seek()` without `timeControlStatus`; remote command `.success` before play pipeline completes.
+**Status:** accepted
+**Area:** streaming | direct-stream-service | frontend-player
+**Context:** HLS prefetch was fixed in 2026-06-25 (`prefetch: true` → no `Set-Cookie: mp_hls`). Direct-stream prefetch still called `getSongDirectSession` without intent flag, rotating `mp_stream` cookie mid-playback — breaking range requests for the track still playing. Same bug class as the HLS issue.
+**Decision:** Mirror HLS prefetch contract on direct-stream-service: `POST /api/stream/v3/session` with body `{ prefetch: true }` or header `X-Earflow-Session-Intent: prefetch` → return session data **without** `Set-Cookie`. Default (play) path unchanged — always sets cookie. Frontend `getSongDirectSession` accepts `options.prefetch`, uses separate LRU cache keys `play:` vs `prefetch:`. `useHlsPrefetch` now calls direct prefetch with `{ prefetch: true }` instead of falling back to HLS when `preferDirect`.
+**Alternatives considered:** (1) Disable direct prefetch entirely — отвергнуто (latency regression on track switch for direct-mode users). (2) Two separate cookie names per track — отвергнуто (same reasons as HLS: nginx auth complexity, browser cookie limits).
+**Consequences:** Safe next-track prewarm for direct-mode users; play/skip still rotates cookie normally. PEND-STREAM-001 closed. PEND-STREAM-002 (HLS prefetch prod deploy) remains open — requires VPS deploy.
+**Files touched:** `backend/direct-stream-service/src/main.ts`, `frontend/src/api/client.js`, `frontend/src/context/player/useHlsPrefetch.js`
+**Tests:** manual code review; integration tests (`direct|session` grep)
+**Чтобы не повторилось:** red flag — any `POST /session` for next track without `prefetch` flag while another track is still playing on cookie-based auth path.
 
 ---
 

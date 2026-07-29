@@ -104,11 +104,11 @@
 ### PEND-WAVE-001 — Server-side waveform peaks for hero / seek UI
 
 **Priority:** medium
-**Status:** in progress (API + transcode-worker; backfill `waveform_status=pending` on existing catalog)
+**Status:** code complete; backfill script ready — **VPS exec pending**
 
 **Implemented:** `waveform_peaks` JSONB on `songs`, generation in `transcode-worker` (ffmpeg), `GET /api/songs/:id/waveform`, frontend `useTrackWaveformPeaks` → API only.
 
-**Remaining:** one-time backfill for tracks uploaded before migration (`UPDATE songs SET waveform_status='pending' WHERE waveform_peaks IS NULL AND is_available`).
+**Backfill:** `scripts/backfill-waveform-status.sql` + `scripts/run-waveform-backfill.sh` — marks existing tracks without peaks as `waveform_status='pending'` for transcode-worker. Run on VPS: `bash scripts/run-waveform-backfill.sh`.
 
 ---
 
@@ -140,14 +140,9 @@ bash scripts/verify-hls-prefetch-prod.sh
 
 **Prod CORS snapshot (pre-deploy, 2026-06-25):** OPTIONS missing `X-Earflow-Session-Intent` in Allow-Headers.
 
-### PEND-STREAM-001 — Direct-stream prefetch still overwrites `mp_stream` cookie
+### PEND-STREAM-001 — ~~Direct-stream prefetch still overwrites `mp_stream` cookie~~ — закрыто 2026-07-29
 
-**Priority:** medium
-**Status:** open
-
-**Context:** HLS prefetch fixed (`prefetch: true` → no `Set-Cookie`) — see `DECISIONS.md` 2026-06-25. Web `useHlsPrefetch` still calls `getSongDirectSession` for non-HLS tracks, which rotates `mp_stream` mid-playback (same bug class).
-
-**Needed:** mirror HLS prefetch intent on `direct-stream-service` session endpoint + web client; or disable direct prefetch until contract exists.
+Реализовано: `POST /api/stream/v3/session` с `{ prefetch: true }` / `X-Earflow-Session-Intent: prefetch` → ответ **без** `Set-Cookie` (cookie `mp_stream` не ротируется). Frontend `getSongDirectSession` принимает `options.prefetch`, кэш разделён `play:` / `prefetch:`. `useHlsPrefetch` вызывает direct prefetch с `{ prefetch: true }`. См. `DECISIONS.md` 2026-07-29.
 
 ## DeviceSync / Playback
 

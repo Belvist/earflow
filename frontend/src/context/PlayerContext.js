@@ -597,6 +597,67 @@ export const PlayerProvider = ({
     resumeAppliedRef.current = true;
   }, [queueManager?.effectiveTracks, state]);
 
+  // Server-authoritative resume: after the fast localStorage restore above,
+  // fetch the backend NowPlaying (device-sync Redis) and override local state
+  // if the server has a more recent trackId. This is the source of truth —
+  // localStorage is only a best-effort instant fallback.
+  const serverResumeAppliedRef = useRef(false);
+  useEffect(() => {
+    if (serverResumeAppliedRef.current) return;
+    if (!isAuthenticated) return;
+    const tracks = queueManager?.effectiveTracks;
+    if (!Array.isArray(tracks) || tracks.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const resp = await apiClient.getNowPlayingRemote();
+        if (cancelled) return;
+        const np = resp?.nowPlaying || resp;
+        const serverTrackId = np?.trackId ? String(np.trackId) : '';
+        if (!serverTrackId) return;
+
+        const serverPos = Number(np?.positionSec);
+        const pos = Number.isFinite(serverPos) && serverPos >= 0 ? serverPos : 0;
+
+        const foundIdx = tracks.findIndex(
+          (t) => String(t?.id ?? '') === serverTrackId
+        );
+        if (foundIdx < 0) {
+          // Server track not in current queue — keep localStorage result
+          // but update localStorage for next reload consistency
+          try { localStorage.setItem('lastTrackId', serverTrackId); } catch {}
+          return;
+        }
+
+        // Apply server-authoritative state
+        try { state.setCurrentTrackIndex(foundIdx); } catch {}
+        if (pos > 0 && state.currentTimeRef) {
+          state.currentTimeRef.current = pos;
+          const t = tracks[foundIdx];
+          const tid = t && t.id != null ? String(t.id) : '';
+          if (tid) {
+            resumeHintRef.current = { trackId: tid, positionSeconds: pos };
+          }
+        }
+        // Sync localStorage with server truth
+        try {
+          localStorage.setItem('lastTrackId', serverTrackId);
+          localStorage.setItem('lastTrackIndex', String(foundIdx));
+          if (pos > 0) {
+            localStorage.setItem('lastPositionSeconds', String(Math.floor(pos * 1000) / 1000));
+          }
+        } catch {}
+      } catch {
+        // Server unavailable — localStorage fallback already applied
+      } finally {
+        if (!cancelled) serverResumeAppliedRef.current = true;
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [isAuthenticated, queueManager?.effectiveTracks, state]);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (typeof localStorage === 'undefined') return;
@@ -633,6 +694,21 @@ export const PlayerProvider = ({
       }
     };
   }, [state.currentTimeRef, state.isPlaying]);
+
+  // Persist the current track ID on every track change so that page reload
+  // restores the correct track even when DeviceSync is inactive.
+  // deviceSyncPlayback.js also writes this key when sync is active — both
+  // writers produce the same value, so there is no conflict.
+  useEffect(() => {
+    if (typeof localStorage === 'undefined') return;
+    const tracks = queueManager?.effectiveTracks;
+    if (!Array.isArray(tracks) || tracks.length === 0) return;
+    const idx = state.currentTrackIndex;
+    const track = tracks[idx];
+    const id = track && track.id != null ? String(track.id) : '';
+    if (!id) return;
+    try { localStorage.setItem('lastTrackId', id); } catch {}
+  }, [state.currentTrackIndex, queueManager?.effectiveTracks]);
 
   const { currentTrack, activeTrackId } = useDisplayTrackDuringTransition({
     rawCurrentTrack: queueManager.currentTrack,

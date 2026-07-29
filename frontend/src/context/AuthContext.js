@@ -252,6 +252,33 @@ async function recoverDeviceProofAndProfile(signal) {
 async function bootstrapAuthState(options = {}) {
     const signal = options.signal;
     const softRevalidate = options.softRevalidate === true;
+
+    const BOOTSTRAP_DEADLINE_MS = 5000;
+
+    const deadline = new Promise((resolve) => {
+        // eslint-disable-next-line no-restricted-globals
+        const w = typeof window !== 'undefined' ? window : self;
+        const id = w.setTimeout?.(() => {
+            const cached = cachedAuthUser();
+            if (hasUser(cached)) {
+                resolve(degradedAuthResult(0, 'bootstrap_timeout', 'bootstrap_timeout'));
+            } else {
+                resolve({ status: AUTH_STATUSES.GUEST });
+            }
+        }, BOOTSTRAP_DEADLINE_MS);
+        if (signal) {
+            const onAbort = () => { w.clearTimeout?.(id); };
+            try { signal.addEventListener('abort', onAbort, { once: true }); } catch {}
+        }
+    });
+
+    const work = bootstrapAuthStateCore(options);
+    return await Promise.race([work, deadline]);
+}
+
+async function bootstrapAuthStateCore(options = {}) {
+    const signal = options.signal;
+    const softRevalidate = options.softRevalidate === true;
     if (options.preferRefresh === true) {
         return await refreshThenProfile(signal, { softRevalidate });
     }

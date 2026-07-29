@@ -1223,7 +1223,8 @@ class ApiClient {
       throw err;
     }
 
-    const cacheKey = String(trackId);
+    const prefetch = options?.prefetch === true;
+    const cacheKey = prefetch ? `prefetch:${trackId}` : `play:${trackId}`;
     const cached = this._directSessionCache?.get?.(cacheKey);
     if (cached && typeof cached === 'object') {
       const cachedUrl = typeof cached.url === 'string' ? cached.url : '';
@@ -1297,11 +1298,15 @@ class ApiClient {
 
     const load = (async () => {
       const makeRequest = async () => {
+        const sessionHeaders = {
+          ...headers,
+          ...(prefetch ? { 'X-Earflow-Session-Intent': 'prefetch' } : {}),
+        };
         return await this._apiHttpClientRaw.requestRaw({
           url,
           method: 'POST',
-          headers,
-          body: JSON.stringify({ trackId, mode: 'direct', supportedCodecs: this._getSupportedCodecs() }),
+          headers: sessionHeaders,
+          body: JSON.stringify({ trackId, mode: 'direct', supportedCodecs: this._getSupportedCodecs(), ...(prefetch ? { prefetch: true } : {}) }),
           credentials: 'include',
           signal: options?.signal,
           meta: {

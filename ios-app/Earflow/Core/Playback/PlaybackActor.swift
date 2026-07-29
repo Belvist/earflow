@@ -14,8 +14,7 @@ actor PlaybackActor {
     private var playGeneration: UInt64 = 0
     private var prefetchGeneration: UInt64 = 0
     private var storedPlaybackError: String?
-    private var audioSessionPrepare: (@Sendable () async -> AudioSessionPrepareResult)?
-    private var pendingEngineStart = false
+    private var audioSessionPrepare: (@Sendable () async -> Bool)?
     private let engine = AVPlayerEngineBox()
 
     init(gateway: GatewayClient, auth: AuthActor, streamTickets: StreamTicketService) {
@@ -64,7 +63,6 @@ actor PlaybackActor {
         }
         playGeneration += 1
         prefetchGeneration += 1
-        pendingEngineStart = false
         let generation = playGeneration
         playTask?.cancel()
         await engine.stop()
@@ -81,27 +79,13 @@ actor PlaybackActor {
     }
 
     func resume() async {
-        _ = await tryStartEngineAfterSessionActivation()
-    }
-
-    func hasPendingEngineStart() -> Bool {
-        pendingEngineStart
-    }
-
-    /// After `AVAudioSession` becomes active (`didBecomeActive` / lock-screen recovery).
-    func retryPendingEngineStartIfNeeded() async {
-        guard pendingEngineStart else { return }
-        guard currentSession != nil else {
-            pendingEngineStart = false
-            return
-        }
-        _ = await tryStartEngineAfterSessionActivation()
+        await ensureAudioSessionForPlayback()
+        await engine.play()
     }
 
     func stop() async {
         playTask?.cancel()
         prefetchGeneration += 1
-        pendingEngineStart = false
         await engine.stop()
         currentSession = nil
         await setProgress(.zero)
@@ -114,7 +98,7 @@ actor PlaybackActor {
         let tick = await engine.currentProgress()
         await setProgress(tick)
         if wasPlaying {
-            await transition(to: .seeking)
+            await transition(to: .playing)
         } else if state != .idle && state != .failed && state != .revoked {
             await transition(to: .paused)
         }
@@ -123,7 +107,6 @@ actor PlaybackActor {
     func handleRevoked() async {
         playTask?.cancel()
         prefetchGeneration += 1
-        pendingEngineStart = false
         await engine.stop()
         currentSession = nil
         await streamSessions.clearCache()
@@ -147,25 +130,9 @@ actor PlaybackActor {
         generation == prefetchGeneration
     }
 
-    /// Injected by `AppDependencies` — `NowPlayingController.prepareAudioSessionForPlaybackResult()`.
-    func bindAudioSessionPrepare(_ prepare: @escaping @Sendable () async -> AudioSessionPrepareResult) {
+    /// Injected by `AppDependencies` — `NowPlayingController.prepareAudioSessionForPlayback()`.
+    func bindAudioSessionPrepare(_ prepare: @escaping @Sendable () async -> Bool) {
         audioSessionPrepare = prepare
-    }
-
-    // MARK: - Test support (@testable)
-
-    internal func testMarkMediaReady(trackId: Int, masterURL: URL = URL(string: "https://api.earflow.ru/api/ebap-hls/v1/tracks/1/master.m3u8")!) async {
-        currentSession = PlaybackSessionRef(
-            playbackSessionId: "test-hls-\(trackId)",
-            trackId: trackId,
-            masterURL: masterURL,
-            expiresAtMs: Int64(Date().timeIntervalSince1970 * 1000) + 300_000
-        )
-        await transition(to: .ready)
-    }
-
-    internal func testEnginePlayCount() async -> Int {
-        await engine.playCountForTesting()
     }
 
     // MARK: - Private
@@ -222,7 +189,8 @@ actor PlaybackActor {
             if startAt > 0 {
                 await engine.seek(to: startAt) // resume from the persisted position before audio starts
             }
-            guard await tryStartEngineAfterSessionActivation(generation: generation) else { return }
+            await ensureAudioSessionForPlayback()
+            await engine.play()
         } catch let error as GatewayError {
             guard isCurrentGeneration(generation) else { return }
             await EarflowLog.shared.error("playback", "track \(trackId): \(error)")
@@ -268,36 +236,12 @@ actor PlaybackActor {
         generation == playGeneration && !Task.isCancelled
     }
 
-    /// Hard gate: never call `engine.play()` unless `AVAudioSession` is active.
-    @discardableResult
-    private func tryStartEngineAfterSessionActivation(generation: UInt64? = nil) async -> Bool {
-        if let generation, !isCurrentGeneration(generation) { return false }
-
-        let prepareResult = await prepareSessionForEngineStart()
-        guard PlaybackEngineStartPolicy.shouldInvokeEnginePlay(for: prepareResult) else {
-            pendingEngineStart = PlaybackEngineStartPolicy.setsPendingEngineStart(for: prepareResult)
-            if let blockedState = PlaybackEngineStartPolicy.stateWhenEngineStartBlocked(for: prepareResult) {
-                await transition(to: blockedState)
-            }
-            if let code = PlaybackEngineStartPolicy.playbackErrorCode(for: prepareResult) {
-                storedPlaybackError = code
-                await EarflowLog.shared.error("playback", "audio_session_not_active reason=failed")
-            } else if pendingEngineStart {
-                storedPlaybackError = nil
-                await EarflowLog.shared.info("playback", "audio_session_not_active reason=deferred pending_engine_start=true")
-            }
-            return false
+    private func ensureAudioSessionForPlayback() async {
+        guard let prepare = audioSessionPrepare else { return }
+        let active = await prepare()
+        if !active {
+            await EarflowLog.shared.warning("playback", "intent=session_activate result=inactive_before_play")
         }
-
-        pendingEngineStart = false
-        storedPlaybackError = nil
-        await engine.play()
-        return true
-    }
-
-    private func prepareSessionForEngineStart() async -> AudioSessionPrepareResult {
-        guard let prepare = audioSessionPrepare else { return .active }
-        return await prepare()
     }
 
     private func applyProgress(_ tick: PlaybackProgress, generation: UInt64) async {
@@ -373,17 +317,8 @@ private actor AVPlayerEngineBox {
         try await engine.load(url: url, skipPreflight: skipPreflight)
     }
 
-    private var playInvocationCount = 0
-
     func play() async {
-        playInvocationCount += 1
-        await MainActor.run {
-            engine.play()
-        }
-    }
-
-    func playCountForTesting() async -> Int {
-        playInvocationCount
+        await MainActor.run { engine.play() }
     }
 
     func pause() async {

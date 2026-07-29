@@ -40,7 +40,7 @@ final class AppDependencies: ObservableObject {
         Task { [nowPlaying, playback] in
             await playback.bindAudioSessionPrepare {
                 await MainActor.run {
-                    nowPlaying.prepareAudioSessionForPlaybackResult()
+                    nowPlaying.prepareAudioSessionForPlayback()
                 }
             }
         }

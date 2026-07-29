@@ -71,11 +71,10 @@ export const useHlsPrefetch = ({
         const hasDirect = typeof api.getSongDirectSession === 'function';
         const hasHls = typeof api.getSongHlsSession === 'function';
 
-        // Direct stream auth uses one mp_stream cookie bound to a single sessionId.
-        // Prefetching the next track's direct session overwrites that cookie and breaks
-        // range requests for the track that is still playing.
+        // Direct-stream prefetch with { prefetch: true } omits Set-Cookie on the server,
+        // so mp_stream is not rotated mid-playback (mirrors HLS prefetch contract).
         const primaryFetch = preferDirect
-            ? (hasHls ? 'hls' : null)
+            ? (hasDirect ? 'direct' : hasHls ? 'hls' : null)
             : hasHls
                 ? 'hls'
                 : hasDirect
@@ -105,7 +104,7 @@ export const useHlsPrefetch = ({
             inFlightRef.current = controller;
 
             const fetcher = primaryFetch === 'direct'
-                ? api.getSongDirectSession(nextTrackId, { signal: controller.signal })
+                ? api.getSongDirectSession(nextTrackId, { signal: controller.signal, prefetch: true })
                 : api.getSongHlsSession(nextTrackId, { signal: controller.signal, prefetch: true });
 
             fetcher

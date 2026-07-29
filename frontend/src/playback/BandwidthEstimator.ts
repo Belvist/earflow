@@ -59,7 +59,7 @@ export class BandwidthEstimator {
     }
 
     isConfident(): boolean {
-        return this.samples.length >= 3 && this.ewmaBps !== null;
+        return this.samples.length >= 5 && this.ewmaBps !== null;
     }
 
     reset(): void {

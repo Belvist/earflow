@@ -417,27 +417,58 @@ export default function useDeviceSync({
                 // before the WS `init` frame arrives. Failures here are silent: the
                 // WS handshake below either succeeds and overwrites state, or fails
                 // and triggers the retry path with its own user-visible error.
+                //
+                // Critical: this is also the only place on the connect path where we
+                // cross-check the locally cached deviceId against the server-owned
+                // device set. device-sync-service Redis evicts idle devices after
+                // DEVICE_TTL (~10 min), but sessionStorage keeps the id across tab
+                // reloads. Without this guard, every subsequent WS upgrade and
+                // /api/devices/commands POST 403s with NOT_OWNED because
+                // TouchDevice(staleId) returns nil — while the gateway still mints
+                // opaque ws_connect tickets (it does not consult device-sync Redis),
+                // so the frontend loops on freshly-minted tickets bound to a
+                // device that no longer exists. See DECISIONS.md 2026-07-16.
                 try {
                     const listed = await apiClient.listDevices();
-                    if (mountedRef.current) {
-                        const nextNowPlaying = listed?.nowPlaying || null;
-                        updateSyncDiagnosticsState({
-                            deviceId: deviceIdRef.current,
-                            ownerDeviceId: nextNowPlaying?.deviceId || null,
-                            nowPlayingRevision: readNowPlayingRevision(nextNowPlaying),
-                            nowPlayingUpdatedAtMs: readNowPlayingUpdatedAt(nextNowPlaying),
-                        });
-                        patchState({
-                            devices: dedupeDevicesById(
-                                Array.isArray(listed?.devices) ? listed.devices : []
-                            ),
-                            nowPlaying: nextNowPlaying,
-                            timeline: nextNowPlaying,
-                            lease: listed?.lease || stateRef.current.lease || null,
-                        });
+                    if (!mountedRef.current) return;
+                    const serverDeviceIds = new Set(
+                        Array.isArray(listed?.devices)
+                            ? listed.devices
+                                .map((d) => d && typeof d === 'object' && typeof d.id === 'string' ? d.id : null)
+                                .filter(Boolean)
+                            : []
+                    );
+                    if (deviceIdRef.current && !serverDeviceIds.has(deviceIdRef.current)) {
+                        // The cached deviceId is no longer registered on the
+                        // backend. Drop it and re-register before attempting the
+                        // WS handshake — otherwise mintWsConnectStreamTicket
+                        // succeeds (gateway doesn't consult device-sync Redis) but
+                        // /ws/devices 403s on TouchDevice, and sendDeviceCommand
+                        // 403s with NOT_OWNED on every intent.
+                        deviceIdRef.current = null;
+                        writeStoredDeviceId(null);
+                        return attemptConnection(false);
                     }
+                    const nextNowPlaying = listed?.nowPlaying || null;
+                    updateSyncDiagnosticsState({
+                        deviceId: deviceIdRef.current,
+                        ownerDeviceId: nextNowPlaying?.deviceId || null,
+                        nowPlayingRevision: readNowPlayingRevision(nextNowPlaying),
+                        nowPlayingUpdatedAtMs: readNowPlayingUpdatedAt(nextNowPlaying),
+                    });
+                    patchState({
+                        devices: dedupeDevicesById(
+                            Array.isArray(listed?.devices) ? listed.devices : []
+                        ),
+                        nowPlaying: nextNowPlaying,
+                        timeline: nextNowPlaying,
+                        lease: listed?.lease || stateRef.current.lease || null,
+                    });
                 } catch {
-                    /* WS init will fill the gap */
+                    /* WS init will fill the gap; if listDevices 403s we still
+                       fall through to the WS handshake — the existing onclose
+                       retry path handles a stale device via the 2-streak reset
+                       below. */
                 }
 
                 let ticket = null;
@@ -767,6 +798,19 @@ export default function useDeviceSync({
                     }
                     if (!sawWsOpen) {
                         preWsOpenStreakRef.current += 1;
+                        // Safety net: a WS upgrade that never reaches onopen is
+                        // almost always a stale deviceId (TouchDevice nil → 403)
+                        // or an expired ws_connect ticket. After two consecutive
+                        // pre-open failures, drop the cached deviceId so the next
+                        // scheduleRetry iteration re-registers instead of looping
+                        // on a dead id for up to HANDSHAKE_STORM_THRESHOLD tries.
+                        // The primary guard is the listDevices cross-check above;
+                        // this catches the case where listDevices itself 403s or
+                        // the device expired between listDevices and the upgrade.
+                        if (preWsOpenStreakRef.current >= 2 && deviceIdRef.current) {
+                            deviceIdRef.current = null;
+                            writeStoredDeviceId(null);
+                        }
                     }
                     if (!mountedRef.current) return;
                     if (!FEATURE_ENABLED) return;
