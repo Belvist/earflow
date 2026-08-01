@@ -4,6 +4,19 @@
 
 ---
 
+## 2026-08-01 — Server-side range clamping for direct-stream (chunked playback)
+
+**Status:** accepted
+**Area:** streaming | direct-stream-service
+**Context:** Browser `<audio>` with `preload=auto` requests `Range: bytes=0-` (entire file). Server returned full file (4+ MB) in one response — causing slow start, wasted bandwidth on skip, and broken playback on slow connections.
+**Decision:** Add server-side range clamping in `parseDirectRange()`: if requested range exceeds `maxChunkBytes` (default 256 KiB, configurable via `DIRECT_STREAM_MAX_CHUNK_BYTES`), clamp `end = start + maxChunkBytes - 1` and return `206 Partial Content` with `Content-Range`. The `<audio>` element automatically issues follow-up range requests. No frontend changes needed — standard HTTP/1.1 partial content behavior.
+**Alternatives considered:** (1) MediaSource Extensions — rejected (complexity, no Safari WebWorker support, overkill for simple chunking). (2) Frontend fetch + MSE — rejected (breaks `<audio>` native controls, accessibility). (3) HLS only — rejected (direct mode has lower latency for first byte).
+**Consequences:** Fast first-byte (~0.3s on 1 Mbit for 256 KiB chunk), resilient to connection drops (only lose one 256 KiB chunk), seek works immediately (new range from seek offset). `X-Chunk-Clamped: true` header for monitoring. Set `DIRECT_STREAM_MAX_CHUNK_BYTES=0` to disable.
+**Files touched:** `backend/direct-stream-service/src/main.ts`, `backend/direct-stream-service/src/config.ts`
+**Чтобы не повторилось:** red flag — `audio.src = fullUrl` without server-side chunk limit on slow networks.
+
+---
+
 ## 2026-07-29 — Direct-stream prefetch intent: no `mp_stream` rotation mid-playback (closes PEND-STREAM-001)
 
 **Status:** accepted

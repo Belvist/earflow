@@ -1079,35 +1079,55 @@ async function authorizeDirectStream(req: Request, sessionId: string, url: URL):
     return finalizePlaybackAuthorization(record);
 }
 
-function parseDirectRange(req: Request, totalBytes: number): { start: number; end: number; partial: boolean } | null {
+function parseDirectRange(req: Request, totalBytes: number, maxChunkBytes: number): { start: number; end: number; partial: boolean; clamped: boolean } | null {
     if (!Number.isFinite(totalBytes) || totalBytes <= 0) return null;
     const maxEnd = Math.trunc(totalBytes) - 1;
     const raw = String(req.headers.get('range') || '').trim().toLowerCase();
+
+    let start: number;
+    let end: number;
+    let partial: boolean;
+
     if (!raw) {
-        return { start: 0, end: maxEnd, partial: false };
+        start = 0;
+        end = maxEnd;
+        partial = false;
+    } else if (!raw.startsWith('bytes=') || raw.includes(',')) {
+        return null;
+    } else {
+        const spec = raw.slice('bytes='.length).trim();
+        const dash = spec.indexOf('-');
+        if (dash < 0) return null;
+
+        const left = spec.slice(0, dash).trim();
+        const right = spec.slice(dash + 1).trim();
+        if (!left) {
+            const suffix = Number.parseInt(right, 10);
+            if (!Number.isFinite(suffix) || suffix <= 0) return null;
+            end = maxEnd;
+            start = Math.max(0, end - Math.trunc(suffix) + 1);
+            partial = true;
+        } else {
+            start = Number.parseInt(left, 10);
+            if (!Number.isFinite(start) || start < 0 || start > maxEnd) return null;
+            const requestedEnd = right ? Number.parseInt(right, 10) : maxEnd;
+            if (!Number.isFinite(requestedEnd) || requestedEnd < start) return null;
+            end = Math.min(Math.trunc(requestedEnd), maxEnd);
+            partial = true;
+        }
     }
-    if (!raw.startsWith('bytes=') || raw.includes(',')) return null;
 
-    const spec = raw.slice('bytes='.length).trim();
-    const dash = spec.indexOf('-');
-    if (dash < 0) return null;
-
-    const left = spec.slice(0, dash).trim();
-    const right = spec.slice(dash + 1).trim();
-    if (!left) {
-        const suffix = Number.parseInt(right, 10);
-        if (!Number.isFinite(suffix) || suffix <= 0) return null;
-        const end = maxEnd;
-        const start = Math.max(0, end - Math.trunc(suffix) + 1);
-        return { start, end, partial: true };
+    // Server-side range clamping: limit response to maxChunkBytes so the browser
+    // fetches audio in small pieces. This keeps playback stable on slow networks —
+    // the <audio> element auto-requests subsequent chunks via Range headers.
+    let clamped = false;
+    if (maxChunkBytes > 0 && (end - start + 1) > maxChunkBytes) {
+        end = start + maxChunkBytes - 1;
+        partial = true;
+        clamped = true;
     }
 
-    const start = Number.parseInt(left, 10);
-    if (!Number.isFinite(start) || start < 0 || start > maxEnd) return null;
-    const requestedEnd = right ? Number.parseInt(right, 10) : maxEnd;
-    if (!Number.isFinite(requestedEnd) || requestedEnd < start) return null;
-    const end = Math.min(Math.trunc(requestedEnd), maxEnd);
-    return { start, end, partial: true };
+    return { start, end, partial, clamped };
 }
 
 async function resolveDirectStreamAsset(record: PlaybackSessionRecord, qualityOverride?: string): Promise<{ objectKey: string; mime: string; entry: SessionCacheEntry } | null> {
@@ -1153,7 +1173,7 @@ async function handleDirectPlaybackStream(req: Request, url: URL): Promise<Respo
     if (!info || info.contentLength <= 0) return streamFailure(404, 'STREAM_ASSET_NOT_FOUND');
 
     const contentType = asset.mime || info.contentType || 'audio/mpeg';
-    const range = parseDirectRange(req, info.contentLength);
+    const range = parseDirectRange(req, info.contentLength, cfg.playback.maxChunkBytes);
     if (!range) {
         return empty(416, noStoreHeaders({
             'Accept-Ranges': 'bytes',
@@ -1171,6 +1191,9 @@ async function handleDirectPlaybackStream(req: Request, url: URL): Promise<Respo
     });
     if (range.partial) {
         headers['Content-Range'] = `bytes ${range.start}-${range.end}/${info.contentLength}`;
+    }
+    if (range.clamped) {
+        headers['X-Chunk-Clamped'] = 'true';
     }
 
     if (req.method === 'HEAD') {
