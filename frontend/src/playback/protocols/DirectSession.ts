@@ -943,7 +943,7 @@ export class DirectSession implements PlaybackSession {
         // Match by base path (strip query params like _s=) so we catch all chunk requests
         const matchPrefix = (() => {
             try {
-                const u = new URL(url, location.href);
+                const u = new URL(url, globalThis.location?.href || 'https://earflow.ru');
                 return u.origin + u.pathname;
             } catch {
                 return url.slice(0, 64);
