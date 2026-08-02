@@ -4,6 +4,18 @@
 
 ---
 
+## 2026-08-02 — Smart chunking: on-demand loading + adaptive quality for direct-stream
+
+**Status:** accepted
+**Area:** frontend | DirectSession | playback
+**Context:** Server-side 256KB clamping was deployed (2026-08-01) but `preload='auto'` caused browser to eagerly download ALL chunks. On seek, browser re-requested from new position despite having data. `auto` quality preference always selected source/lossless regardless of bandwidth. Adaptive switch was hardcoded `source ↔ aac_256` only.
+**Decision:** (1) `preload='none'` — browser loads only what's needed for current playback position. (2) `applyQualitySelection()` now uses `selectQuality()` for `auto` mode — picks bandwidth-appropriate quality on first load. (3) `checkAdaptiveSwitch()` uses `selectQuality()` with full quality ladder (opus_64..lossless) instead of hardcoded pair. (4) `measureBandwidth()` now processes ALL chunk entries from PerformanceResourceTiming (not just last), giving estimator continuous samples.
+**Consequences:** On slow internet, player auto-selects lower quality (opus/aac). On fast internet, lossless. Mid-playback switching covers all available qualities. Chunks load on-demand (no wasted bandwidth). Net code change: -11 lines.
+**Files touched:** `frontend/src/playback/protocols/DirectSession.ts`
+**Чтобы не повторилось:** red flag — `preload='auto'` with range clamping = eager sequential download of entire file. `auto` quality preference must always go through `selectQuality()`.
+
+---
+
 ## 2026-08-01 — Server-side range clamping for direct-stream (chunked playback)
 
 **Status:** accepted

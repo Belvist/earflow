@@ -57,6 +57,7 @@ export class DirectSession implements PlaybackSession {
 
     private watchdogTimerId: number | null = null;
     private recovering = false;
+    private lastBwSampleAtMs = 0;
 
     private renewTimerId: number | null = null;
 
@@ -893,14 +894,6 @@ export class DirectSession implements PlaybackSession {
     }
 
     private applyQualitySelection(): void {
-        if (this.qualityPreference === 'auto') {
-            this.activeStreamUrl = this.url;
-            this.activeStreamMime = this.mime;
-            this.currentQualityTag = 'source';
-            this.selectedQuality = null;
-            return;
-        }
-
         const estimator = getSharedBandwidthEstimator();
         const chosen = selectQuality(this.qualities, this.qualityPreference, estimator);
         this.selectedQuality = chosen;
@@ -947,18 +940,30 @@ export class DirectSession implements PlaybackSession {
         const url = this.activeStreamUrl || this.url || '';
         if (!url) return;
 
+        // Match by base path (strip query params like _s=) so we catch all chunk requests
+        const matchPrefix = (() => {
+            try {
+                const u = new URL(url, location.href);
+                return u.origin + u.pathname;
+            } catch {
+                return url.slice(0, 64);
+            }
+        })();
+
         try {
             const entries = performance.getEntriesByType('resource') as PerformanceResourceTiming[];
-            for (let i = entries.length - 1; i >= 0; i--) {
+            const cutoff = this.lastBwSampleAtMs;
+            for (let i = 0; i < entries.length; i++) {
                 const entry = entries[i];
-                if (!entry.name.includes(url.slice(0, 64))) continue;
+                if (entry.responseEnd <= cutoff) continue;
+                if (!entry.name.startsWith(matchPrefix)) continue;
 
                 const bytes = entry.transferSize || entry.encodedBodySize;
                 const durationMs = entry.responseEnd - entry.responseStart;
                 if (bytes > 0 && durationMs > 0) {
                     estimator.addSample(bytes, durationMs);
+                    this.lastBwSampleAtMs = Math.max(this.lastBwSampleAtMs, entry.responseEnd);
                 }
-                break;
             }
         } catch {
         }
@@ -1075,7 +1080,7 @@ export class DirectSession implements PlaybackSession {
             await this.attachProtectedHls(absoluteUrl, signal);
         } else {
             this.destroyHls();
-            this.audio.preload = 'auto';
+            this.audio.preload = 'none';
             this.audio.src = absoluteUrl;
             this.audio.load();
         }
@@ -1269,9 +1274,6 @@ export class DirectSession implements PlaybackSession {
         const estimator = getSharedBandwidthEstimator();
         if (!estimator.isConfident()) return;
 
-        const bwBps = estimator.getEstimateBps();
-        if (bwBps === null || bwBps <= 0) return;
-
         const now = Date.now();
 
         // Don't switch in the first 10s of playback — let estimator stabilize
@@ -1280,27 +1282,13 @@ export class DirectSession implements PlaybackSession {
         // Hysteresis: no switch more often than every 30s
         if (now - this.lastQualitySwitchAtMs < 30_000) return;
 
-        const AAC_256_BITRATE = 256_000;
-        const LOSSLESS_ESTIMATED_BITRATE = 900_000;
-        const DOWN_HEADROOM = 1.3;
-        const UP_HEADROOM = 1.5;
+        // Use the full quality ladder via selectQuality — it filters by
+        // bandwidth with headroom and picks the best playable variant.
+        const best = selectQuality(this.qualities, 'auto', estimator);
+        const bestTag = best ? best.tag : 'source';
 
-        // Downswitch: source → aac_256 when bandwidth is too low for lossless
-        if (this.currentQualityTag === 'source' || this.currentQualityTag === null) {
-            if (bwBps < LOSSLESS_ESTIMATED_BITRATE * DOWN_HEADROOM && bwBps >= AAC_256_BITRATE * DOWN_HEADROOM) {
-                const aac256 = this.qualities.find((q) => q.tag === 'aac_256');
-                if (aac256) {
-                    void this.switchToQuality('aac_256');
-                }
-            }
-            return;
-        }
-
-        // Upswitch: aac_256 → source when bandwidth is comfortably above lossless
-        if (this.currentQualityTag === 'aac_256') {
-            if (bwBps >= LOSSLESS_ESTIMATED_BITRATE * UP_HEADROOM) {
-                void this.switchToQuality('source');
-            }
+        if (bestTag !== this.currentQualityTag) {
+            void this.switchToQuality(bestTag);
         }
     }
 
@@ -1421,6 +1409,7 @@ export class DirectSession implements PlaybackSession {
             const checkInterval = 5000;
             if (now - this.adaptiveCheckAtMs > checkInterval) {
                 this.adaptiveCheckAtMs = now;
+                this.measureBandwidth();
                 this.checkAdaptiveSwitch();
             }
         }
