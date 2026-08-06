@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -54,6 +55,44 @@ func (r *Registry) startTransfer(ctx context.Context, userID, did string, resume
 
 	prev, _ := r.rdb.Get(ctx, r.keyActive(uid)).Result()
 	nowMs := time.Now().UnixMilli()
+
+	// Already active on the target device: short-circuit without bumping
+	// activeRevision or emitting any publish/lease/transfer frames, otherwise
+	// other devices with the current revision would be pruned as stale later
+	// (INV-DS-001 fencing). Reuse an idempotent reconciled record so callers
+	// (UI) still receive a deterministic transfer shape.
+	if prev == did {
+		var currentRev int64
+		if rv, err := r.rdb.Get(ctx, r.keyActiveRevision(uid)).Result(); err == nil {
+			if parsed, perr := strconv.ParseInt(strings.TrimSpace(rv), 10, 64); perr == nil {
+				currentRev = parsed
+			}
+		}
+		existingTransfer := &TransferRecord{
+			TransferID:        uuid.NewString(),
+			UserID:            uid,
+			FromDeviceID:      did,
+			ToDeviceID:        did,
+			Phase:             TransferReconciled,
+			ActiveRevision:    currentRev,
+			Resume:            false,
+			IdempotencyKey:    idempotencyKey,
+			CreatedAtMs:       nowMs,
+			UpdatedAtMs:       nowMs,
+			ExpiresAtMs:       nowMs + r.cfg.Transfer.RecordTTL.Milliseconds(),
+			RevokeAcked:       true,
+			RevokeCommandID:   "",
+			ActivateCommandID: "",
+		}
+		if err := r.saveTransfer(ctx, existingTransfer); err != nil {
+			return "", 0, nil, err
+		}
+		if idempotencyKey != "" {
+			_ = r.saveTransferIdempotency(ctx, uid, idempotencyKey, existingTransfer.TransferID)
+		}
+		return prev, currentRev, existingTransfer, nil
+	}
+
 	np := r.buildBootstrappedNowPlaying(ctx, uid, did, nowMs, resumeOverride, bootstrapNowPlaying)
 	if np == nil {
 		np = r.buildTransferredNowPlaying(ctx, uid, did, nowMs, resumeOverride)

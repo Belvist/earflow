@@ -145,6 +145,8 @@ routes:
       require_user: true
       rate_limit: upload
       timeout: 180s
+      invalidate_cache_namespaces:
+        - catalog
 
   - id: artist_portal
     match:
@@ -155,3 +157,5 @@ routes:
       class: unsafe
       require_user: true
       timeout: 15s
+      invalidate_cache_namespaces:
+        - catalog

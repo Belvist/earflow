@@ -283,6 +283,60 @@ func TestSendCommandPauseFromNonActiveDeviceIsRelayedToActiveWithoutTransfer(t *
 	}
 }
 
+func TestTransferFSMSkipsNoOpWhenTargetIsAlreadyActive(t *testing.T) {
+	reg, cleanup := newTestRegistry(t)
+	defer cleanup()
+	ctx := context.Background()
+	const userID = "user-noop"
+	deviceA := registerTestDevice(t, reg, userID, "A")
+	deviceB := registerTestDevice(t, reg, userID, "B")
+
+	resume := true
+	if _, _, _, err := reg.StartTransfer(ctx, userID, deviceA, &resume, "seed"); err != nil {
+		t.Fatalf("seed active: %v", err)
+	}
+	beforeRev, err := reg.rdb.Get(ctx, reg.keyActiveRevision(userID)).Result()
+	if err != nil {
+		t.Fatalf("read active revision before: %v", err)
+	}
+
+	prev, activeRevision, transferRecord, err := reg.StartTransfer(ctx, userID, deviceA, &resume, "noop")
+	if err != nil {
+		t.Fatalf("noop transfer must not fail when device is already active: %v", err)
+	}
+	if prev != deviceA {
+		t.Fatalf("expected previous active to stay A, got %q", prev)
+	}
+	if transferRecord == nil {
+		t.Fatal("expected synthetic reconciled transfer record for noop path")
+	}
+	if transferRecord.Phase != TransferReconciled {
+		t.Fatalf("expected reconciled phase for noop path, got %s", transferRecord.Phase)
+	}
+	if transferRecord.ToDeviceID != deviceA || transferRecord.FromDeviceID != deviceA {
+		t.Fatalf("expected noop transfer scoped to A, got from=%s to=%s", transferRecord.FromDeviceID, transferRecord.ToDeviceID)
+	}
+
+	afterRev, err := reg.rdb.Get(ctx, reg.keyActiveRevision(userID)).Result()
+	if err != nil {
+		t.Fatalf("read active revision after: %v", err)
+	}
+	if beforeRev != afterRev {
+		t.Fatalf("activeRevision must not change on noop TargetIsActive: before=%s after=%s", beforeRev, afterRev)
+	}
+	if activeRevision != transferRecord.ActiveRevision {
+		t.Fatalf("returned revision must match record: returned=%d record=%d", activeRevision, transferRecord.ActiveRevision)
+	}
+
+	// still allows a real transfer to another device afterwards
+	nextResume := false
+	if _, _, transferRec, err := reg.StartTransfer(ctx, userID, deviceB, &nextResume, "real"); err != nil {
+		t.Fatalf("real transfer after noop should work: %v", err)
+	} else if transferRec == nil || transferRec.Phase == TransferReconciled {
+		t.Fatalf("after noop, a real transfer must not be pre-reconciled, got phase=%v", transferRec)
+	}
+}
+
 func TestTransferFSMRejectsStaleAckRevision(t *testing.T) {
 	reg, cleanup := newTestRegistry(t)
 	defer cleanup()
