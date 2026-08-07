@@ -1509,8 +1509,17 @@ services:
       SHUTDOWN_TIMEOUT: 30s
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
       AUTH_SERVICE_URL: http://auth-service:3001
+      # SEC-005 Phase 8: распознаём opaque WS connect tickets (device-bound stream auth)
+      # ACCEPT-двуxmode — принимает и opaque, и legacy JWT; ENFORCE отдельным gate.
+      STREAM_TICKET_ACCEPT: ${STREAM_TICKET_ACCEPT:-1}
+      STREAM_TICKET_ENFORCE: ${STREAM_TICKET_ENFORCE:-0}
+      STREAM_TICKET_AUTH_REDIS_HOST: redis-auth
+      STREAM_TICKET_AUTH_REDIS_PORT: 6379
+      STREAM_TICKET_AUTH_REDIS_PASSWORD: ${REDIS_PASSWORD:-}
     depends_on:
       redis:
+        condition: service_healthy
+      redis-auth:
         condition: service_healthy
       auth-service:
         condition: service_healthy
