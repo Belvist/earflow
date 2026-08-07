@@ -1,4 +1,4 @@
-const SW_VERSION = 'v3.3.2-pop-canonical-path-v18';
+const SW_VERSION = 'v3.3.3-ios-nav-no-cache-v19';
 const STATIC_CACHE = `static-${SW_VERSION}`;
 
 const OFFLINE_FALLBACK_URL = '/offline.html';
@@ -168,7 +168,14 @@ self.addEventListener('fetch', (event) => {
         const acceptsHtml = request.headers.get('accept') || '';
         if (request.mode === 'navigate' || acceptsHtml.includes('text/html')) {
             if (isIosWebKit()) {
-                event.respondWith(fetch(request));
+                // iOS Safari on SW with navigation requests can serve a stale
+                // index.html from disk cache even though it points to hashed
+                // chunks that were rotated. 'no-cache' forces a revalidate.
+                // Fall back to networkFirst on fetch failure so that offline
+                // still returns a fallback document instead of a blank page.
+                event.respondWith(
+                    fetch(request, { cache: 'no-cache' }).catch(() => networkFirst(request))
+                );
                 return;
             }
             event.respondWith(networkFirst(request));

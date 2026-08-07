@@ -436,7 +436,11 @@ async function checkUploadLimits(userId, getUserUploadStats) {
             remaining: LIMITS.maxDailyUploads - dailyCount
         };
     } catch (err) {
-        return { allowed: true, reason: null, remaining: LIMITS.maxDailyUploads };
+        // Fail-closed on storage/stats outage: if we cannot read upload stats,
+        // we cannot enforce daily/storage limits, so we must NOT allow. Otherwise
+        // an attacker can flood the DB or the DB connection to bypass limits
+        // (fail-open). Availability during a DB blip is traded for abuse safety.
+        return { allowed: false, reason: 'UPLOAD_STATS_UNAVAILABLE', remaining: 0 };
     }
 }
 
