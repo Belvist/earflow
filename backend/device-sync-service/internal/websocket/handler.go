@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	ws "github.com/coder/websocket"
@@ -40,6 +41,24 @@ func (h *UpgradeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		claims, err = auth.VerifyTicket(h.Config, ticket)
 	}
 	if err != nil {
+		// SEC-005 diagnostics: classify the reject without leaking the ticket.
+		ticketLen := len(ticket)
+		jwtLike := strings.Count(ticket, ".") == 2
+		verifierOn := h.Tickets != nil
+		acceptOn := false
+		enforceOn := false
+		if verifierOn {
+			acceptOn = h.Tickets.AcceptEnabled()
+			enforceOn = h.Tickets.EnforceEnabled()
+		}
+		h.Logger.Warn("ws upgrade ticket rejected",
+			slog.Any("err", err),
+			slog.Int("ticket_len", ticketLen),
+			slog.Bool("jwt_like", jwtLike),
+			slog.Bool("verifier_configured", verifierOn),
+			slog.Bool("accept", acceptOn),
+			slog.Bool("enforce", enforceOn),
+		)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
