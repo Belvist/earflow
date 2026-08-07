@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"regexp"
 	"strings"
 
@@ -63,6 +64,7 @@ func looksLikeJWT(token string) bool {
 }
 
 // VerifyUpgradeTicket returns claims for a ?ticket= value on /ws/devices.
+// Diagnostic slog should never echo the token; we only log reasons.
 func (v *Verifier) VerifyUpgradeTicket(ctx context.Context, cfg *config.Config, token string) (*auth.TicketClaims, error) {
 	token = strings.TrimSpace(token)
 	if token == "" {
@@ -70,11 +72,21 @@ func (v *Verifier) VerifyUpgradeTicket(ctx context.Context, cfg *config.Config, 
 	}
 
 	if v != nil && v.AcceptEnabled() && !looksLikeJWT(token) {
-		if claims, err := v.verifyOpaqueWS(ctx, token); err == nil && claims != nil {
+		claims, err := v.verifyOpaqueWS(ctx, token)
+		if err == nil && claims != nil {
 			return claims, nil
-		} else if v.EnforceEnabled() {
+		}
+		if v.EnforceEnabled() {
+			slog.Warn("ws opaque ticket rejected (enforce)", slog.Any("reason", err))
 			return nil, errors.New("ws stream ticket required")
 		}
+		// In ACCEPT mode we *fall back* to legacy. Surface the opaque-side
+		// reason so diagnostics on prod can distinguish "no opaque record" vs
+		// "epoch stale" vs "session revoked".
+		slog.Warn("ws opaque ticket rejected (fallback to legacy)",
+			slog.Any("reason", err),
+			slog.Int("ticket_len", len(token)),
+		)
 	} else if v != nil && v.EnforceEnabled() {
 		return nil, errors.New("ws stream ticket required")
 	}
