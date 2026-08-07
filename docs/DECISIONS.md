@@ -4,6 +4,16 @@
 
 ---
 
+## 2026-08-07 — Idempotency-Key в CORS preflight (nginx maps, не gateway)
+
+**Status:** accepted
+**Area:** gateway | nginx | device-sync | security
+**Context:** CORS-ошибка на `POST /api/devices/transfer/:id` — браузер рубил preflight, потому что `Access-Control-Allow-Headers` не содержал `Idempotency-Key`. Предыдущее исправление в `go-api-gateway/internal/httpx/middleware/cors.go` не сработало, потому что nginx отвечает на OPTIONS **сам** (`return 204` в `location /api/`), список заголовков берётся из переменных `$earflow_cors_auth_allow_headers` / `$earflow_cors_auth_range_allow_headers`.
+**Decision:** Добавлен `Idempotency-Key` в ОБЕИХ map в `nginx/conf.d/10-global-maps.conf`. Задеплоено через `nginx -s reload` (контейнер не пересоздавался, IP не менялся).
+**Чтобы не повторилось:** red flag — если добавляешь заголовок в gateway CORS middleware, а preflight всё равно падает, значит nginx отвечает сам. Править надо `nginx/conf.d/10-global-maps.conf`, НЕ gateway. Проверка: `curl -X OPTIONS -H "Access-Control-Request-Headers: <header>"`.
+
+---
+
 ## 2026-08-02 — Smart chunking: on-demand loading + adaptive quality for direct-stream
 
 **Status:** accepted
