@@ -4,6 +4,16 @@
 
 ---
 
+## 2026-08-07 — WS 401 loop: device-sync не распознавал SEC-005 opaque tickets
+
+**Status:** accepted
+**Area:** device-sync | security | SEC-005
+**Context:** После решения CORS-проблемы (`Idempotency-Key`) стал виден следующий баг: WebSocket к `/ws/devices?ticket=...` постоянно 401. Frontend Phase 8 mints opaque stream ticket через `/api/auth/stream-ticket` (43 символа base64url, НЕ JWT) и вставляет в WS. Device-sync `Verifier.VerifyUpgradeTicket` при `StreamTicketEnabled()=false` fallbackит на `auth.VerifyTicket` (legacy JWT verifier), который отвергает opaque → 401. LEGACY JWT route устарел после Phase 7-8 SEC-005.
+**Decision:** В `docker-compose.yml` device-sync добавлены `STREAM_TICKET_ACCEPT=1`, `STREAM_TICKET_ENFORCE=0`, `STREAM_TICKET_AUTH_REDIS_HOST=redis-auth`, `STREAM_TICKET_AUTH_REDIS_PORT=6379`, `STREAM_TICKET_AUTH_REDIS_PASSWORD=${REDIS_PASSWORD}` + `depends_on redis-auth`. Blast radius минимален: касается только WS upgrade, не затрагивает HLS/direct-stream ENFORCE-флаги. Деплой через `docker compose up -d --force-recreate device-sync-service` (IP и занимаемый nginx route map не меняются).
+**Чтобы не повторилось:** red flag — если `?ticket=...` имеет ~43 base64url символа без точек → это **opaque stream ticket**, нужен `Verifier` с `STREAM_TICKET_ACCEPT`. Legacy JWT ticket verifier (`auth.VerifyTicket`) при этом НЕ должен использоваться в fallback, потому что opaque → `jwt.ErrMalformed` → 401, а не осмысленная ошибка. Проверка пропиши через `docker exec music-device-sync-service env | grep STREAM_TICKET` после recreate.
+
+---
+
 ## 2026-08-07 — Idempotency-Key в CORS preflight (nginx maps, не gateway)
 
 **Status:** accepted
