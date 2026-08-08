@@ -2163,6 +2163,9 @@ services:
       REDIS_RL_PORT: 6379
       REDIS_RL_PASSWORD: ${REDIS_PASSWORD:-}
       SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-31536000}
+      # SEC-005 Phase 8: WS opaque ticket TTL. Default 60s слишком короткий
+      # для слабых сетей и пере-подключений; 120s — max безопасный.
+      STREAM_TICKET_WS_TTL_SECONDS: ${STREAM_TICKET_WS_TTL_SECONDS:-120}
     depends_on:
       auth-service:
         condition: service_healthy
