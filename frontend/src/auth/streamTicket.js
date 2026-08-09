@@ -149,11 +149,12 @@ export async function mintWsConnectStreamTicket({ deviceId, signal } = {}) {
     return null;
   }
 
-  const now = Date.now();
-  const cached = wsTicketCache.get(did);
-  if (cached && cached.expiresAtMs > now + 5000) {
-    return cached.ticket;
-  }
+  // SEC-005 ws_connect tickets are single-use (Redis GetDel). Reusing a cached
+  // ticket on WS retry → "opaque ticket missing" 401 (prod evidence
+  // 2026-08-09). ALWAYS mint fresh on each call; the caller is a WS (re)connect
+  // path, not a hot loop. Server-pushed rotation via `ticket:rotate` handles
+  // the reconnect hot path (see useDeviceSync.js rotatedTicketCache).
+  wsTicketCache.delete(did);
 
   const mintPath = '/api/auth/stream-ticket';
   const signed = await signDeviceProofRequest('POST', `${apiBaseUrl()}${mintPath}`);
@@ -202,10 +203,6 @@ export async function mintWsConnectStreamTicket({ deviceId, signal } = {}) {
     return null;
   }
 
-  const expiresIn = Number(body?.expiresIn);
-  const expiresAtMs =
-    Number.isFinite(expiresIn) && expiresIn > 0 ? now + expiresIn * 1000 : now + 60_000;
-  wsTicketCache.set(did, { ticket, expiresAtMs });
   return ticket;
 }
 
