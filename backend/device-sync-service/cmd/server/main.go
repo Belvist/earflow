@@ -110,7 +110,7 @@ func main() {
 			log.Error("stream ticket auth-redis ping failed", slog.Any("err", err))
 			os.Exit(1)
 		}
-		epochCache := streamticket.NewEpochCache()
+		epochCache := streamticket.NewEpochCache(authTicketRedis)
 		streamticket.StartRevokeSubscriber(rootCtx, authTicketRedis, epochCache, log)
 		wsTicketVerifier = streamticket.NewVerifier(cfg, authTicketRedis, epochCache)
 		log.Info("SEC-005 WS stream tickets enabled",

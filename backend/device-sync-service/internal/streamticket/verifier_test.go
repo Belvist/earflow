@@ -20,7 +20,7 @@ func TestVerifyOpaqueWSConnectTicket(t *testing.T) {
 	defer mr.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	cache := NewEpochCache()
+	cache := NewEpochCache(rdb)
 	cfg := &config.Config{}
 	cfg.StreamTicket.Accept = true
 

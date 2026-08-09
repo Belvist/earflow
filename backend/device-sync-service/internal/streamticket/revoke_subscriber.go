@@ -19,6 +19,9 @@ type revokeEvent struct {
 }
 
 // StartRevokeSubscriber listens for gateway/security revoke pub/sub events.
+// Every event updates BOTH the local cache and the shared auth-redis floor,
+// so a replica that starts after an event still enforces it (DECISIONS
+// 2026-08-09).
 func StartRevokeSubscriber(ctx context.Context, rdb *redis.Client, cache *EpochCache, logger *slog.Logger) {
 	if rdb == nil || cache == nil {
 		return
@@ -61,9 +64,15 @@ func StartRevokeSubscriber(ctx context.Context, rdb *redis.Client, cache *EpochC
 					if sid == "" {
 						continue
 					}
-					cache.MarkSessionRevoked(sid)
+					if err := cache.MarkSessionRevoked(ctx, sid); err != nil && logger != nil {
+						logger.Warn("streamticket: shared revoke tombstone write failed",
+							slog.Any("err", err))
+					}
 					if ev.SessionEpoch > 0 {
-						cache.BumpSessionEpoch(sid, ev.SessionEpoch)
+						if err := cache.BumpSessionEpoch(ctx, sid, ev.SessionEpoch); err != nil && logger != nil {
+							logger.Warn("streamticket: shared session epoch floor write failed",
+								slog.Any("err", err))
+						}
 					}
 				}
 			}

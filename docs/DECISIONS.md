@@ -4,6 +4,58 @@
 
 ---
 
+## 2026-08-09 — Device Sync reliability P0 (Spotify-grade baseline)
+
+**Status:** accepted
+**Area:** device-sync | websocket | security(Sec-005 следствие) | frontend
+**Context:** У пользователей Device Sync вел себя «через раз» на нестабильной сети. Корневых причины три — все соответствуют известному паттерну Spotify Connect.
+
+1. **Cross-replica epoch cache race.** `EpochCache` в device-sync был чисто in-memory `sync.RWMutex` map. Security публикует `RevokeEvent` с `sessionEpoch` в pub/sub — реплики видели его одинаково, но **restart** реплики терял весь floor. Хуже, mint path gateway пишет PG epoch SoT, а device-sync verify читал только локальный map → два backend-а видели разное состояние, SEC-005 opaque tickets валились то тут, то там с `session epoch stale`.
+2. **WS ticket TTL 60s vs handshake race.** Frontend mint'ит opaque ws_connect ticket и сразу открывает WebSocket на него. Если handshake занял >60s (мобильное LTE, packet loss), с момента mint до `?ticket=` use прошло больше TTL → Redis GETDEL вернул Nil → 401 → frontend ещё один mint → задержка → ещё 401 → user видит «не может подключиться». Одноразовый GetDel даёт race даже при идеальной реализации.
+3. **WS-only transport.** При срыве WS фронт впадает в retry-loop безо всякого UX. У Spotify Connect с первого дня всегда был HTTP long-poll fallback, когда WS упал.
+
+**Decision:**
+1. **Shared epoch floor в auth-redis.** `EpochCache` в `backend/device-sync-service/internal/streamticket/epoch_cache.go` теперь хранит L1 (local sync.RWMutex map) и пишет write-through в auth-redis под ключами `auth:session:epoch:{sid}` и `auth:session:revoked:{sid}` (TTL 45 дней > refresh). `VerifyUpgradeTicket` на cache miss делает GET в Redis, т.о. любая реплика видит тот же floor независимо от того, кто подписан на pub/sub. Revoke-subscriber (`internal/streamticket/revoke_subscriber.go`) пишет в оба хранилища при получении события. Override prefix: `STREAM_TICKET_EPOCH_KEY_PREFIX` (default `auth:session:` — совпадает с gateway `auth:session:meta:*`). Redis-fault в verify **fail-open**: logged, treated as not revoked (соответствует ACCEPT-семантике).
+2. **ticket:rotate frame (server-pushed rotation).** После успешного WS handshake device-sync mint'ит новый legacy JWT чрез `auth.CreateTicket` (не opaque, мы остаёмся совместимы с legacy загрузчиком; rotate только для exp-refresh) и отправляет клиенту как `{"type":"ticket:rotate","token","expiresAt","ttlSeconds"}`. Frontend хранит его НЕ в localStorage (SEC-005 red flag) в памяти `rotatedTicketCache` (module-scoped Map), использует как первый вариант ticket на ближайший retry и удаляет по мере использования. Mint по-прежнему живёт — opaque `ws_connect` один-раз билетик для ОЧЕНЬ первого входа. Чейн: rotated → opaque → legacy REST — минимальные диффы.
+3. **HTTP long-poll fallback bridge.** Если WS закрылся (onclose не expected) → `scheduleHttpFallbackTick()` запускает poll `apiClient.listDevices()` с интервалом 7.5s idle / 5s при активном nowPlaying. На успешном `onopen` WS останавливает polling. Poll применяет state ТОЧНО как `player_state` frame (INV-DS-001 — backend источник правды). Это НЕ второй authority path (INV-DS-003 соблюдён: нет periodic publish от frontend, poll только read). Grace шторма сохранён: `HANDSHAKE_STORM_THRESHOLD`, backoff, `gaveUpRef` — fallback продолжается МЕЖДУ retry, не вместо.
+
+**Alternatives considered:**
+1. Web-based epoch lookup call к gateway /api/auth/epochs/lookup per-ticket — отвергнуто (SEC-005 запрещает per-segment lookup).
+2. Single-flight ticket cache в Redis с re-expiry on every handshake — отвергнуто, потому что with fallback-ами возможны overlapping tickets и это defies Rotate-and-Forget security модели.
+3. Trans port rotation через party.HMAC — нет, device-sync и party auth стеки разнесены намеренно.
+4. Клиенту самому ре-time-mint-be себя opaque на каждый retry — отвергнуто: упиралось в TTL race.
+
+**Consequences:**
+- 2 extra Redis GET в verify path (не в mint hot path) — tolerable per SEC-005 spec.
+- Legacy JWT (`auth.ticket`) теперь имеет второй канал выпуска (server→client по WS). Это НЕ расширение attack surface — JWT живёт в httpOnly — keep-alive соединении и никогда не виден в query/logs, контроль на уровне ротации.
+- HTTP fallback НЕ default, а catheter support.
+- Контракт frontned/server не меняется, legacy clients устаренных версий просто игнорируют ticket:rotate frames.
+
+**Чтобы не повторилось:**
+- **Красный флаг:** любое новое хранилище «in-memory per replica» для auth/security состояния, которое должно быть одинаково на всех репликах. Уже было: SEC-005 вводил verify-на-redis,но floor потом был in-memory — race. Теперь — Redis SoT для floors/tombstones.
+- **Красный флаг:** Mint на каждый WS connect retry. Всегда пробовать rotated cache сначала.
+- **Красный флаг:** WS-only transport без HTTP long-poll fallback. Если сервис критический для UX — always have graceful degradation path.
+- **DoD (definition of done):** логи `streamticket: shared revoked lookup failed` и `shared epoch floor lookup failed` не должны расти под явно работающим Redis. Если растут — значит STREAM_TICKET_AUTH_REDIS_HOST/PORT/PASSWORD отвязались отauth реального.
+
+**Files touched:**
+- backend/device-sync-service/internal/streamticket/epoch_cache.go — полная переделка под Redis-backed floors
+- backend/device-sync-service/internal/streamticket/revoke_subscriber.go — shared write
+- backend/device-sync-service/internal/streamticket/verifier.go — Redis lookup на misses
+- backend/device-sync-service/cmd/server/main.go — NewEpochCache(authTicketRedis)
+- backend/device-sync-service/internal/websocket/client.go — sendRotatedTicket()
+- frontend/src/hooks/useDeviceSync.js — rotatedTicketCache, ticket:rotate handler, scheduleHttpFallbackTick/stopHttpFallback
+
+**Deploy:**
+```bash
+git pull origin main
+docker compose build --no-cache device-sync-service frontend
+docker compose up -d --force-recreate device-sync-service frontend
+# После recreate проверить: docker compose logs device-sync-service --tail=30 | grep "SEC-005" (должно быть)
+# После frontend: npm run verify:stream-ticket-phase4 (bundle marker)
+```
+
+---
+
 ## 2026-08-07 — WS 401 loop: device-sync не распознавал SEC-005 opaque tickets
 
 **Status:** accepted

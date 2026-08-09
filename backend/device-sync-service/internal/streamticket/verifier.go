@@ -132,11 +132,17 @@ func (v *Verifier) verifyOpaqueWS(ctx context.Context, id string) (*auth.TicketC
 		return nil, errors.New("opaque ticket incomplete")
 	}
 
-	if v.cache.IsSessionRevoked(sid) {
+	if revoked, err := v.cache.IsSessionRevoked(ctx, sid); revoked {
 		return nil, errors.New("session revoked")
+	} else if err != nil {
+		// Redis miss: fall back to local-only view (log for diagnostics; never
+		// echo the sid or ticket).
+		slog.Warn("streamticket: shared revoked lookup failed", slog.Any("err", err))
 	}
-	if v.cache.SessionEpochStale(sid, rec.SessionEpoch) {
+	if stale, err := v.cache.SessionEpochStale(ctx, sid, rec.SessionEpoch); stale {
 		return nil, errors.New("session epoch stale")
+	} else if err != nil {
+		slog.Warn("streamticket: shared epoch floor lookup failed", slog.Any("err", err))
 	}
 	if ad := strings.TrimSpace(rec.AuthDeviceID); ad != "" && v.cache.DeviceEpochStale(ad, rec.DeviceEpoch) {
 		return nil, errors.New("device epoch stale")

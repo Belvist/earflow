@@ -33,6 +33,7 @@
 ```
 init             — полный snapshot при подключении (включает playerState)
 player_state     — единый union-frame {devices,nowPlaying,timeline,lease,transfer,volumeByDevice} с монотонным frameRev
+ticket:rotate    — server-pushed next WS ticket (token, expiresAt, ttlSeconds). Клиент кладёт в память и использует на reconnect (2026-08-09).
 devices:update   — изменения в наборе devices (registered/touched/removed) [deprecated 1 релиз]
 devices:active   — сменился active device (содержит {deviceId, activeRevision}) [deprecated 1 релиз]
 np:update        — nowPlaying snapshot обновился [deprecated 1 релиз]
@@ -115,9 +116,19 @@ Optional (background workers):
 
 ## Recent significant changes
 
+- **2026-08-09** — **Spotify-parity reliability pack** (DECISIONS 2026-08-09):
+  - `internal/streamticket/epoch_cache.go` — epoch floors + revoke tombstones продолжаются в **auth-redis** (write-through). Раньше были in-memory per replica → cross-replica race в `VerifyUpgradeTicket` (`session epoch stale` / `session revoked` если реплика упустила pub/sub или после restart). Теперь verify на local miss читает `auth:session:epoch:{sid}` / `auth:session:revoked:{sid}` из Redis. Override prefix: `STREAM_TICKET_EPOCH_KEY_PREFIX` (default `auth:session:`).
+  - `internal/websocket/client.go` → `sendRotatedTicket()` — после успешного handshake сервис mint'ит **новый legacy JWT** и шлёт клиенту frame `ticket:rotate` (token, expiresAt, ttlSeconds). Frontend (`useDeviceSync.js`) кладёт в **in-memory** `rotatedTicketCache` (Map, не localStorage) и использует на reconnect в приоритете **выше** SEC-005 opaque mint. Снимает TTL-race `60s` на slow LTE handshake.
+  - `useDeviceSync.js` — `scheduleHttpFallbackTick()` / `stopHttpFallback()` — HTTP long-poll `listDevices` (7.5s idle / 5s при активном nowPlaying) каждый раз, когда WS закрыт. Останавливается на `onopen`. Не мутирует publish path (INV-DS-003). Frontend в состоянии fallback всё ещё только read.
 - **2026-06-12** — local play bootstrap несёт `payload.nowPlaying`; backend нормализует candidate snapshot внутри transfer FSM и публикует authoritative `player_state` с новым active device и треком.
 - **2026-06-11** — `player_state` включает `devices`; frontend отключает fragmented fallback после полного unified frame; desktop status dot показывается только при connected + 2 present devices.
 - **2026-05-27** — Этап 1: transfer-on-play на backend, удаление frontend authority. См. `docs/DECISIONS.md`.
+
+**Caveats after 2026-08-09:**
+- `ticket:rotate` JSON — **legacy JWT**, не opaque. Opaque ws_connect остаётся initial-mint механизмом (`POST /api/auth/stream-ticket`). Оба пути активны: rotation используется для refresh соединения, expose одноразового opaque ticket забирает один канал mint'а из цепочки retry.
+- Если в будущем перейдём fully-ENFORCE SEC-005 (no legacy) — rotation нужно перенести на opaque ticket (через `Verifier.issueOpaque` аналог).
+- HTTP fallback — **read-only**, всё mutations идут через WS `cmd` frames / REST POST. Если WS поднят, fallback polling выключен.
+- `redis:auth` участвует теперь в verify path (2 GET на miss). Ошибки Redis **fail-open** в ACCEPT-режиме (logged, treated not-revoked). Shared floor write через subscriber — **best-effort**, события revoke pub/sub всё равно обновляют local map.
 
 ## Tests
 

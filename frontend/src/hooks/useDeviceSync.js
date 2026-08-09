@@ -117,6 +117,40 @@ function dedupeDevicesById(devices) {
     return out;
 }
 
+/**
+ * Server-pushed rotated ticket (DECISIONS 2026-08-09): after every successful
+ * WS handshake the backend ships `ticket:rotate` with the next legacy JWT.
+ * On reconnect we reuse it instead of minting a fresh opaque ws_connect
+ * ticket — removes the "ticket TTL expired during a slow handshake" race.
+ * In-memory only (never localStorage — SEC-005 red flag).
+ */
+const rotatedTicketCache = new Map(); // deviceId -> { token, expiresAtMs }
+
+function readRotatedTicket(deviceId) {
+    if (!deviceId) return null;
+    const hit = rotatedTicketCache.get(deviceId);
+    if (!hit) return null;
+    // 3s safety margin — never reuse a ticket that is about to expire.
+    if (hit.expiresAtMs <= Date.now() + 3_000) {
+        rotatedTicketCache.delete(deviceId);
+        return null;
+    }
+    return hit.token;
+}
+
+function storeRotatedTicket(deviceId, msg) {
+    if (!deviceId || !msg || typeof msg.token !== 'string' || msg.token.length < 16) return;
+    let expiresAtMs = 0;
+    const ttlSec = Number(msg.ttlSeconds);
+    if (Number.isFinite(ttlSec) && ttlSec > 0) {
+        expiresAtMs = Date.now() + ttlSec * 1000;
+    } else {
+        const parsed = Date.parse(String(msg.expiresAt || ''));
+        expiresAtMs = Number.isFinite(parsed) ? parsed : Date.now() + 60_000;
+    }
+    rotatedTicketCache.set(deviceId, { token: msg.token, expiresAtMs });
+}
+
 const HEARTBEAT_MS = 25_000;
 // Ретрай организован как СЕРИИ. Одна серия — несколько быстрых попыток с
 // нарастающим бэкоффом; между сериями — длинная пауза, чтобы клиент не
@@ -142,6 +176,17 @@ const REALTIME_WAIT_STEP_MS = 200;
 const ONLINE_CONNECT_COOLDOWN_MS = 5_000;
 /** После 403 на heartbeat: пауза перед перерегистрацией устройства. */
 const HEARTBEAT_403_RECONNECT_MS = 8_000;
+/**
+ * HTTP long-poll fallback (DECISIONS 2026-08-09): while the WS is down the
+ * client keeps receiving PLAYBACK state through a throttled REST snapshot of
+ * the same `listDevices` source. This is an emergency bridge, not steady
+ * state: it is active only between WS close and the next successful onopen.
+ * Cadence is far below any real-time need because commands still queue
+ * client-side / via REST — the poll exists so a user on flaky LTE continues
+ * to SEE cross-device playback updates.
+ */
+const HTTP_FALLBACK_INTERVAL_MS = 7_500;
+const HTTP_FALLBACK_ACTIVE_INTERVAL_MS = 5_000;
 /** Сколько раз подряд сокет закрылся до onopen — потом стоп: не бесконечный ws-ticket. */
 const HANDSHAKE_STORM_THRESHOLD = 10;
 
@@ -226,6 +271,8 @@ export default function useDeviceSync({
     const hb403ReconnectTimeoutRef = useRef(null);
     const clientSeqRef = useRef(0);
     const stateRef = useRef(state);
+    const httpFallbackTimerRef = useRef(null);
+    const httpFallbackInFlightRef = useRef(false);
 
     useEffect(() => { onCommandRef.current = onCommand; }, [onCommand]);
     useEffect(() => { stateRef.current = state; }, [state]);
@@ -245,6 +292,9 @@ export default function useDeviceSync({
         if (st !== 403 && st !== 404) return;
         if (gaveUpRef.current) return;
         if (hb403ReconnectTimeoutRef.current) return;
+        if (deviceIdRef.current) {
+            try { rotatedTicketCache.delete(deviceIdRef.current); } catch { /* noop */ }
+        }
         deviceIdRef.current = null;
         writeStoredDeviceId(null);
         patchState({ deviceId: null });
@@ -261,6 +311,11 @@ export default function useDeviceSync({
             clearTimeout(hb403ReconnectTimeoutRef.current);
             hb403ReconnectTimeoutRef.current = null;
         }
+        if (httpFallbackTimerRef.current) {
+            clearTimeout(httpFallbackTimerRef.current);
+            httpFallbackTimerRef.current = null;
+        }
+        httpFallbackInFlightRef.current = false;
         if (listDevicesDebounceTRef.current) {
             clearTimeout(listDevicesDebounceTRef.current);
             listDevicesDebounceTRef.current = null;
@@ -363,6 +418,65 @@ export default function useDeviceSync({
     // так что сама функция пересоздаётся при смене auth — а ref всегда
     // указывает на актуальную версию.
     const connectRef = useRef(null);
+
+    /**
+     * HTTP long-poll fallback: while WS is down, periodically pull ListDevices
+     * and apply the same snapshot as a player_state frame would. Applied only
+     * as "online" fallback; commands are unchanged (they always go POST).
+     */
+    const stopHttpFallback = useCallback(() => {
+        if (httpFallbackTimerRef.current) {
+            clearTimeout(httpFallbackTimerRef.current);
+            httpFallbackTimerRef.current = null;
+        }
+        httpFallbackInFlightRef.current = false;
+    }, []);
+
+    const scheduleHttpFallbackTick = useCallback(() => {
+        if (!FEATURE_ENABLED || !mountedRef.current || gaveUpRef.current) return;
+        if (!isAuthenticated) return;
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+        // Only poll while WS is not connected.
+        const ws = wsRef.current;
+        if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+            return;
+        }
+        if (httpFallbackTimerRef.current) return;
+        const active = Boolean(stateRef.current.nowPlaying);
+        const delay = active ? HTTP_FALLBACK_ACTIVE_INTERVAL_MS : HTTP_FALLBACK_INTERVAL_MS;
+        httpFallbackTimerRef.current = setTimeout(async () => {
+            httpFallbackTimerRef.current = null;
+            if (!mountedRef.current || gaveUpRef.current) return;
+            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) return;
+            if (httpFallbackInFlightRef.current) return;
+            httpFallbackInFlightRef.current = true;
+            try {
+                const resp = await apiClient.listDevices();
+                if (!mountedRef.current) return;
+                // If WS reconnected while the request was in flight, prefer WS state.
+                if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) return;
+                const respActiveRevision = readActiveRevision(resp?.activeRevision || resp?.nowPlaying?.activeRevision);
+                const currentActiveRevision = readActiveRevision(stateRef.current.activeRevision);
+                patchState({
+                    devices: dedupeDevicesById(Array.isArray(resp?.devices) ? resp.devices : []),
+                    nowPlaying: resp?.nowPlaying || null,
+                    timeline: resp?.timeline || resp?.nowPlaying || null,
+                    lease: resp?.lease || null,
+                    transfer: resp?.transfer || null,
+                    activeRevision: respActiveRevision || currentActiveRevision,
+                });
+            } catch (e) {
+                const st = e && typeof e === 'object' ? e.status : 0;
+                if (st === 401 || st === 403 || st === 503) {
+                    // Auth/dead — stop polling; the WS retry path owns recovery.
+                    return;
+                }
+            } finally {
+                httpFallbackInFlightRef.current = false;
+            }
+            scheduleHttpFallbackTick();
+        }, delay);
+    }, [isAuthenticated, patchState]);
 
     // Connect: register → ws ticket → WebSocket. The WS `init` frame provides the
     // Ticket 403/404: одна ретрегистрация без «сдался навсегда» из-за устаревшего deviceId.
@@ -471,8 +585,13 @@ export default function useDeviceSync({
                        below. */
                 }
 
-                let ticket = null;
-                if (isStreamTicketMintEnabled()) {
+                // Ticket wallet order (DECISIONS 2026-08-09):
+                //   1) fresh rotated ticket from the previous successful
+                //      handshake (no network round-trip, no mint TTL race);
+                //   2) opaque ws_connect ticket (SEC-005);
+                //   3) legacy POST /api/devices/ws-ticket.
+                let ticket = readRotatedTicket(deviceIdRef.current);
+                if (!ticket && isStreamTicketMintEnabled()) {
                     try {
                         ticket = await mintWsConnectStreamTicket({
                             deviceId: deviceIdRef.current,
@@ -497,6 +616,11 @@ export default function useDeviceSync({
                     }
                     ticket = ticketResp?.token;
                 }
+                // Note: cached rotated ticket is NOT consumed here. A legacy
+                // JWT stays valid until exp and may be replayed while the
+                // network flakes mid-handshake; once the next handshake
+                // succeeds, the server's `ticket:rotate` frame overwrites the
+                // cache with a fresh token.
 
                 if (!mountedRef.current) return;
                 if (!ticket) throw new Error('NO_TICKET');
@@ -515,6 +639,7 @@ export default function useDeviceSync({
                 ws.onopen = () => {
                     sawWsOpen = true;
                     preWsOpenStreakRef.current = 0;
+                    stopHttpFallback();
                     if (connectionTimeoutRef.current) {
                         clearTimeout(connectionTimeoutRef.current);
                         connectionTimeoutRef.current = null;
@@ -536,6 +661,10 @@ export default function useDeviceSync({
                     if (!msg || typeof msg !== 'object' || typeof msg.type !== 'string') return;
 
                     switch (msg.type) {
+                        case 'ticket:rotate': {
+                            storeRotatedTicket(deviceIdRef.current, msg);
+                            return;
+                        }
                         case 'init': {
                             const activeRevision = readActiveRevision(
                                 msg.activeRevision || msg.nowPlaying?.activeRevision
@@ -793,6 +922,7 @@ export default function useDeviceSync({
 
                     if (expectedCloseRef.current) {
                         expectedCloseRef.current = false;
+                        stopHttpFallback();
                         patchState({ connectionState: 'disconnected' });
                         return;
                     }
@@ -822,6 +952,9 @@ export default function useDeviceSync({
                             clearTimeout(reconnectTimeoutRef.current);
                             reconnectTimeoutRef.current = null;
                         }
+                        // Never give up on state visibility: HTTP fallback keeps
+                        // Devices/mp state alive even when WS keeps dying.
+                        scheduleHttpFallbackTick();
                         gaveUpRef.current = true;
                         patchState({
                             connectionState: 'error',
@@ -833,6 +966,7 @@ export default function useDeviceSync({
                     const code = event && typeof event.code === 'number' ? event.code : 0;
                     if (FATAL_CLOSE_CODES.has(code)) {
                         preWsOpenStreakRef.current = 0;
+                        scheduleHttpFallbackTick();
                         gaveUpRef.current = true;
                         patchState({
                             connectionState: 'error',
@@ -841,6 +975,8 @@ export default function useDeviceSync({
                         return;
                     }
 
+                    // WS is down and will retry — meanwhile keep UI fresh.
+                    scheduleHttpFallbackTick();
                     scheduleRetry();
                 };
             };
@@ -877,7 +1013,7 @@ export default function useDeviceSync({
         } finally {
             connectInFlightRef.current = false;
         }
-    }, [isAuthenticated, patchState, startHeartbeat, scheduleRetry, onHeartbeatRequestError]);
+    }, [isAuthenticated, patchState, startHeartbeat, scheduleRetry, onHeartbeatRequestError, scheduleHttpFallbackTick, stopHttpFallback]);
 
     useEffect(() => { connectRef.current = connect; }, [connect]);
 
@@ -891,6 +1027,7 @@ export default function useDeviceSync({
         if (!isAuthenticated) {
             expectedCloseRef.current = true;
             cleanupTransport();
+            try { rotatedTicketCache.clear(); } catch { /* noop */ }
             deviceIdRef.current = null;
             writeStoredDeviceId(null);
             burstAttemptRef.current = 0;

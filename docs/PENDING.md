@@ -294,6 +294,8 @@ The social privacy/perf pass code is prepared locally, but the full verification
 
 После Этапа 1 WS открывается всегда → базовая нагрузка WS на gateway ×2. Если активные онлайн >5k, нужны sticky session affinity (sticky cookie на `device-sync-service` instance).
 
+**Частично снято 2026-08-09** — shared epoch cache в auth-redis (DECISIONS 2026-08-09) уже сделал verify path совместимым со всеми репликами без sticky. НЕ снято для недостающего распределения pub/sub channels (каждая реплика хранит собственные соединения → `user:{uid}` фреймы должны достичь у неё ALL подписанные devices — это делается через Redis Pub/Sub `dsync:user:{uid}`, более эффективна ат scale при sticky). Sticky остаётся рекомендацией для >5k сокетов, но не блокирует correctness.
+
 ---
 
 ## Security (PoP → production-grade) — см. `docs/SECURITY_ROADMAP.md`, `docs/AUTH_TARGET_ARCHITECTURE.md`

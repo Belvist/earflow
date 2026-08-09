@@ -9,6 +9,7 @@ import (
 	"time"
 
 	ws "github.com/coder/websocket"
+	"github.com/earflow/music-platform/device-sync-service/internal/auth"
 	"github.com/earflow/music-platform/device-sync-service/internal/config"
 	"github.com/earflow/music-platform/device-sync-service/internal/devices"
 	"github.com/earflow/music-platform/device-sync-service/internal/observability"
@@ -83,6 +84,14 @@ func (c *Client) Run() {
 		c.CloseWithCode(1011, "init failed")
 		return
 	}
+
+	// Ticket rotation (DECISIONS 2026-08-09): after a successful handshake the
+	// server hands the client the next ticket. On reconnect the client uses it
+	// immediately instead of minting a fresh opaque one — so a dropped socket
+	// on an unstable network does not require another mint round-trip (and its
+	// 60s TTL race). Rotation-on-use: the ticket is only ever sent through the
+	// already-authenticated socket of its owner device.
+	c.sendRotatedTicket()
 
 	go c.writePump()
 	c.readPump()
@@ -395,6 +404,35 @@ func (c *Client) sendInitWithRetries(attempts int, pause time.Duration) error {
 		}
 	}
 	return last
+}
+
+// sendRotatedTicket mints the next WS legacy JWT for this exact (userID,
+// deviceID) pair and ships it as a `ticket:rotate` frame. Best-effort: the
+// socket is already authenticated; a failure here just means the client
+// falls back to the regular mint path on the next reconnect.
+func (c *Client) sendRotatedTicket() {
+	ticket, err := auth.CreateTicket(c.cfg, c.UserID, c.DeviceID, c.Username)
+	if err != nil {
+		c.log.Debug("ws ticket rotate mint failed",
+			slog.String("deviceId", c.DeviceID), slog.Any("err", err))
+		return
+	}
+	payload, err := json.Marshal(map[string]any{
+		"type":       "ticket:rotate",
+		"at":         time.Now().UnixMilli(),
+		"token":      ticket.Token,
+		"expiresAt":  ticket.ExpiresAt,
+		"ttlSeconds": ticket.TTLSeconds,
+	})
+	if err != nil {
+		return
+	}
+	wctx, cancel := context.WithTimeout(c.ctx, c.cfg.WS.WriteTimeout)
+	defer cancel()
+	if err := c.conn.Write(wctx, ws.MessageText, payload); err != nil {
+		c.log.Debug("ws ticket rotate send failed",
+			slog.String("deviceId", c.DeviceID), slog.Any("err", err))
+	}
 }
 
 // CloseWithCode is idempotent and safe to call from any goroutine.
