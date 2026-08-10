@@ -110,6 +110,8 @@
 
 **Что рассмотреть:** prerender-слой для публичных роутов (`/`, `/music/*`, `/artist/*`, `/album/*`, легальные страницы) — nginx UA-switch на prerender-сервис (puppeteer/rendertron-подобный) или SSR-даунстрим. Не гнаться за Next.js-переписыванием — градация: сначала prerender прокси, SSR только если покажет ROI.
 
+**Implemented:** `backend/prerender-service` (Node + Puppeteer, Chromium non-root, read-only, no cookies, cache, rate-limit). nginx: bot UA → prerender, whitelist путей, graceful fallback на SPA. Верифицировано: H1, title, текст, JSON-LD для Googlebot/Яндекс. 504 устранён (domcontentloaded + settle 2.5s).
+
 **Verify:** `curl -A "Googlebot" https://earflow.ru/music/pop` → в HTML есть `<h1>` и текст страницы без исполнения JS.
 
 ---
