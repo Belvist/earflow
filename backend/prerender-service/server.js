@@ -103,9 +103,24 @@ async function render(url) {
     let page;
     try {
         page = await context.newPage();
-        // domcontentloaded достаточно для SPA с быстрым рендером; networkidle слишком медленный
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT_MS });
-        // Дать React смонтировать SEO-мету (title, meta, JSON-LD)
+
+        // Адаптивное ожидание: title меняется на осмысленный (не дефолт SPA)
+        const urlPath = new URL(url).pathname;
+        const isContentPage = urlPath.startsWith('/music/') || urlPath.startsWith('/artist/') || urlPath.startsWith('/album/');
+        if (isContentPage) {
+            try {
+                await page.waitForFunction(
+                    () => {
+                        const t = document.title.toLowerCase();
+                        return t && !t.includes('earflow — музыкальная платформа') && t !== 'earflow' && t !== '';
+                    },
+                    { timeout: SETTLE_MS * 2 }
+                );
+            } catch {
+                // title не обновился за SETTLE*2 — отдаём что есть (не 504)
+            }
+        }
         await page.evaluate((ms) => new Promise((r) => setTimeout(r, ms)), SETTLE_MS);
         const html = await page.content();
         const status = 200;
