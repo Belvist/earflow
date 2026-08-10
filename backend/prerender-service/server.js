@@ -57,7 +57,6 @@ async function getBrowser() {
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
             '--disable-gpu',
-            '--single-process',           // меньше потоков для VPS с 8GB
             '--js-flags=--max-old-space-size=512',
             '--disable-software-rasterizer',
             '--disable-background-networking',
