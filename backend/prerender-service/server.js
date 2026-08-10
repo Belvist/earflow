@@ -30,7 +30,15 @@ let browserPromise = null;
 let inFlight = 0;
 
 async function getBrowser() {
-    if (browserPromise) return browserPromise;
+    if (browserPromise) {
+        try {
+            const b = await browserPromise;
+            if (b.connected !== false) return b;
+        } catch {
+            /* fall-through: relaunch */
+        }
+        browserPromise = null;
+    }
     const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || '';
     const env = { ...process.env };
     // Crashpad workaround: XDG dirs must exist for Chrome's crash_handler.
@@ -41,6 +49,8 @@ async function getBrowser() {
         headless: true,
         ...(executablePath ? { executablePath } : {}),
         env,
+        protocolTimeout: 30000,
+        timeout: 15000,
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
