@@ -21,8 +21,8 @@ const ALLOWED_HOSTS = new Set(
         .map((h) => h.trim().toLowerCase())
         .filter(Boolean)
 );
-const NAV_TIMEOUT_MS = Number(process.env.PRERENDER_NAV_TIMEOUT_MS || 8000);
-const SETTLE_MS = Number(process.env.PRERENDER_SETTLE_MS || 1200);
+const NAV_TIMEOUT_MS = Number(process.env.PRERENDER_NAV_TIMEOUT_MS || 5000);
+const SETTLE_MS = Number(process.env.PRERENDER_SETTLE_MS || 2500);
 const PAGE_CACHE_TTL_MS = Number(process.env.PRERENDER_PAGE_CACHE_TTL_MS || 60 * 1000);
 
 let browserPromise = null;
@@ -91,14 +91,9 @@ async function render(url) {
     let page;
     try {
         page = await context.newPage();
-        const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), NAV_TIMEOUT_MS);
-        try {
-            await page.goto(url, { waitUntil: 'networkidle0', signal: ctrl.signal });
-        } finally {
-            clearTimeout(timer);
-        }
-        // Дать React дорисовать важные части
+        // domcontentloaded достаточно для SPA с быстрым рендером; networkidle слишком медленный
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT_MS });
+        // Дать React смонтировать SEO-мету (title, meta, JSON-LD)
         await page.evaluate((ms) => new Promise((r) => setTimeout(r, ms)), SETTLE_MS);
         const html = await page.content();
         const status = 200;
