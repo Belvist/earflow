@@ -114,35 +114,41 @@ async function ensureKeyPair() {
   }
 
   const authDeviceId = generateAuthDeviceId();
+  // DECISIONS 2026-08-11 (security review): extractable: false means the private
+  // key never leaves the WebCrypto boundary. IndexedDB stores an opaque
+  // CryptoKey handle — even full JS read access in XSS cannot export raw key
+  // material. Usage is sign-only (no verify needed here).
   const keyPair = await cryptoApi.subtle.generateKey(
     { name: 'ECDSA', namedCurve: 'P-256' },
-    true,
-    ['sign', 'verify'],
+    false,
+    ['sign'],
   );
   const publicKeySpki = await exportPublicKeySpki(keyPair.publicKey);
-  const pkcs8 = await cryptoApi.subtle.exportKey('pkcs8', keyPair.privateKey);
+  const pkcs8 = null;
 
   return {
     authDeviceId,
     sidHash: null,
     privateKey: keyPair.privateKey,
     publicKeySpki,
-    pkcs8,
+    pkcs8: null, // never exportable
     needsRegister: true,
   };
 }
 
 export async function persistAuthDeviceRecord({ authDeviceId, sidHash, privateKey, publicKeySpki, pkcs8 }) {
+  // DECISIONS 2026-08-11: key is extractable:false at creation, so the only
+  // thing we can persist is the opaque CryptoKey handle. pkcs8 export is impossible.
+  // We keep the pkcs8 param for API compatibility with older callers, but it is
+  // unused — we never write raw key material to IndexedDB.
   const cryptoApi = getCrypto();
-  let pkcs8Buf = pkcs8;
-  if (!pkcs8Buf && privateKey) {
-    pkcs8Buf = await cryptoApi.subtle.exportKey('pkcs8', privateKey);
-  }
+  void cryptoApi;
   await idbSet(IDB_KEY, {
     authDeviceId,
     sidHash: sidHash || '',
     publicKeySpki: publicKeySpki || '',
-    privateKey: pkcs8Buf,
+    privateKey,
+    pkcs8: null,
   });
 }
 

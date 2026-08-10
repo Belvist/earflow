@@ -105,7 +105,9 @@ describe('signDeviceProofRequest register path', () => {
     expect(result.authDeviceId).toMatch(/^adev_/);
     expect(typeof result.publicKeySpki).toBe('string');
     expect(result.publicKeySpki.length).toBeGreaterThan(10);
-    expect(result.pkcs8).toBeTruthy();
+    // DECISIONS 2026-08-11 (security review): private key is now extractable=false.
+    // The caller must receive null pkcs8 and rely purely on the in-memory CryptoKey.
+    expect(result.pkcs8).toBeNull();
   });
 });
 
