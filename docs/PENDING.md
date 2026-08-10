@@ -101,6 +101,19 @@
 
 ---
 
+### PEND-SEO-001 — SSR / пререндер для ботов (crawlable контент без JS)
+
+**Priority:** medium
+**Status:** open (baseline SEO закрыт 2026-08-10 — см. DECISIONS)
+
+**Context:** Earflow — чистый SPA. Мета/structured data выставляются клиентом (`utils/seo.js`), sitemap генерируется artist-service. Google рендерит JS, но: (1) при «белом экране»/ChunkLoadError бот видит пустоту; (2) Яндекс и соцсети (кроме og-превью) рендерят слабо или не рендерят; (3) `MusicSeoPage` контент индексируется нестабильно.
+
+**Что рассмотреть:** prerender-слой для публичных роутов (`/`, `/music/*`, `/artist/*`, `/album/*`, легальные страницы) — nginx UA-switch на prerender-сервис (puppeteer/rendertron-подобный) или SSR-даунстрим. Не гнаться за Next.js-переписыванием — градация: сначала prerender прокси, SSR только если покажет ROI.
+
+**Verify:** `curl -A "Googlebot" https://earflow.ru/music/pop` → в HTML есть `<h1>` и текст страницы без исполнения JS.
+
+---
+
 ### PEND-WAVE-001 — Server-side waveform peaks for hero / seek UI
 
 **Priority:** medium
@@ -166,7 +179,30 @@
 
 **Evidence to attach before closing:** DevTools WS frames или server logs с `player_state.frameRev`, `activeDeviceId`, `nowPlaying.trackId`, `transfer.phase`; команды деплоя и commit hash.
 
-### PEND-DS-005 — Server-owned queue/session context
+### PEND-DS-005 — Server-owned queue/session context (причина: track mismatch между устройствами)
+
+**Priority:** high (повышен 2026-08-10 — пользователь sees persistent track mismatch)
+**Status:** not started
+
+**Почему нужно.** Сейчас queue (список треков, текущий индекс, repeat/shuffle) живёт **только у активного устройства** (`PlayerCore.queue`). Команда `cmd:next` от controller отправляет «next» → active вызывает `playNextTrack()` → новый трек + push `np:update`. Это **happy-path only**:
+- active девайс offline/background → cmd:next теряется → mismatch.
+- active девайс переходит в другую дорожку, другие ещё не видят np:update → mismatch в UI.
+- Transfer между устройствами: новый девайс не знает queue — он получил только текущий трек.
+
+**Что делать (backend-only):**
+1. `device-sync-service` хранит `queue:{uid}` в Redis: `{trackIds[], index, repeat, shuffle, queueSource, revision}`.
+2. `cmd:next/prev` на backend **атомарно**:
+   - Читает queue (не имеет → 409 `NO_QUEUE`).
+   - Бампит index с учётом `repeat`.
+   - Резолвит trackId → обновляет `nowPlaying` с новым треком (без `IsPlaying` change).
+   - Broadcast `player_state` со всеми уже-updated.
+   - Сообщает cmd:next к active как "execute" — с **authoritative trackId** в payload. Active только воспроизводит, не решает "что за трек".
+3. `cmd:transfer` тоже несёт **полный snapshot queue** — позволяя `restore prevIdx + position` мгновенно на новом устройстве.
+4. Frontend слушает `player_state.queue` (не `queueManager.local`) и обновляет UI из backend.
+
+**Эффект:** next/prev становится мгновенным на **всех** устройствах (не только active). Track mismatch исчезает — backend SoT. No client sync needed.
+
+**Инвариант:** если это делать — устрoить through `docs/DECISIONS.md` прежде чем писать код (это INV-DS-001 territory).
 
 **Priority:** high
 **Status:** not started
