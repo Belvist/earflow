@@ -82,8 +82,12 @@ function getCached(url) {
     const hit = pageCache.get(url);
     if (!hit) return null;
     if (Date.now() > hit.expiresAt) {
-        pageCache.delete(url);
-        return null;
+        // stale while revalidate: отдать устаревшее, но запустить обновление в фоне
+        if (!hit.refreshing) {
+            hit.refreshing = true;
+            render(url).catch(() => {}).finally(() => { delete hit.refreshing; });
+        }
+        return hit;
     }
     return hit;
 }
@@ -115,10 +119,10 @@ async function render(url) {
                         const t = document.title.toLowerCase();
                         return t && !t.includes('earflow — музыкальная платформа') && t !== 'earflow' && t !== '';
                     },
-                    { timeout: SETTLE_MS * 2 }
+                    { timeout: SETTLE_MS }
                 );
             } catch {
-                // title не обновился за SETTLE*2 — отдаём что есть (не 504)
+                // title не обновился — отдаём что есть (не 504, для бота всё равно SPA fallback)
             }
         }
         await page.evaluate((ms) => new Promise((r) => setTimeout(r, ms)), SETTLE_MS);
@@ -180,8 +184,8 @@ async function handleRequest(req, res) {
     }
 
     if (inFlight >= MAX_CONCURRENT) {
-        // Защита от конкурентного OOM на VPS с малым RAM
-        res.writeHead(503, { 'Content-Type': 'text/plain; charset=utf-8', 'Retry-After': '2' });
+        // 429 (не 503) → nginx НЕ делает fallback на SPA, бот получает понятный ответ
+        res.writeHead(429, { 'Content-Type': 'text/plain; charset=utf-8', 'Retry-After': '2' });
         return res.end('Prerender busy — retry');
     }
 
