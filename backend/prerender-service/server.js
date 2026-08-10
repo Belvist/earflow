@@ -21,9 +21,9 @@ const ALLOWED_HOSTS = new Set(
         .map((h) => h.trim().toLowerCase())
         .filter(Boolean)
 );
-const NAV_TIMEOUT_MS = Number(process.env.PRERENDER_NAV_TIMEOUT_MS || 5000);
-const SETTLE_MS = Number(process.env.PRERENDER_SETTLE_MS || 2500);
-const PAGE_CACHE_TTL_MS = Number(process.env.PRERENDER_PAGE_CACHE_TTL_MS || 60 * 1000);
+const NAV_TIMEOUT_MS = Number(process.env.PRERENDER_NAV_TIMEOUT_MS || 8000);
+const SETTLE_MS = Number(process.env.PRERENDER_SETTLE_MS || 2000);
+const PAGE_CACHE_TTL_MS = Number(process.env.PRERENDER_PAGE_CACHE_TTL_MS || 60 * 60 * 1000);
 const MAX_CONCURRENT = Number(process.env.PRERENDER_MAX_CONCURRENT || 4);
 
 let browserPromise = null;
@@ -41,10 +41,10 @@ async function getBrowser() {
     }
     const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || '';
     const env = { ...process.env };
-    // Crashpad workaround: XDG dirs must exist for Chrome's crash_handler.
-    // Override to writable /tmp so crashpad can create its database.
     env.XDG_CONFIG_HOME = '/tmp';
     env.XDG_CACHE_HOME = '/tmp';
+    // /dev/shm в контейнере — tmpfs 64M. При 4+ context'ах overflow → Protocol error.
+    env.CHROME_DEVEL_SANDBOX = '/tmp/chrome_sandbox';
     browserPromise = puppeteer.launch({
         headless: true,
         ...(executablePath ? { executablePath } : {}),
