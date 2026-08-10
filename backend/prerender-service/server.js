@@ -30,9 +30,15 @@ let browserPromise = null;
 async function getBrowser() {
     if (browserPromise) return browserPromise;
     const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || '';
+    const env = { ...process.env };
+    // Crashpad workaround: XDG dirs must exist for Chrome's crash_handler.
+    // Override to writable /tmp so crashpad can create its database.
+    env.XDG_CONFIG_HOME = '/tmp';
+    env.XDG_CACHE_HOME = '/tmp';
     browserPromise = puppeteer.launch({
         headless: true,
         ...(executablePath ? { executablePath } : {}),
+        env,
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
