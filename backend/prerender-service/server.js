@@ -50,8 +50,8 @@ async function getBrowser() {
         headless: true,
         ...(executablePath ? { executablePath } : {}),
         env,
-        protocolTimeout: 30000,
-        timeout: 15000,
+        protocolTimeout: 120000,
+        timeout: 30000,
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
