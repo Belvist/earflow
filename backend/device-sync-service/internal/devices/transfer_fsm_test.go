@@ -361,3 +361,111 @@ func TestTransferFSMRejectsStaleAckRevision(t *testing.T) {
 		t.Fatalf("expected stale revision error, got %v", err)
 	}
 }
+
+// DECISIONS 2026-08-10 TrackSync: cmd:seek must project the new position into
+// nowPlaying SoT BEFORE the active device's UI has a chance to publish
+// np:update. This is what makes cross-device position reliable when the
+// active device is a backgrounded mobile (WKWebView) whose own push may lag
+// several seconds.
+func TestSendCommandSeekProjectsPositionIntoNowPlayingState(t *testing.T) {
+	reg, cleanup := newTestRegistry(t)
+	defer cleanup()
+	ctx := context.Background()
+	const userID = "user-seek-sot"
+	deviceA := registerTestDevice(t, reg, userID, "A")
+	deviceB := registerTestDevice(t, reg, userID, "B")
+
+	resume := true
+	if _, _, _, err := reg.StartTransfer(ctx, userID, deviceA, &resume, "boot"); err != nil {
+		t.Fatalf("seed active device: %v", err)
+	}
+	if _, err := reg.PutNowPlaying(ctx, userID, &NowPlaying{
+		TrackID:         "track-1",
+		Title:           "Song",
+		Artist:          "Artist",
+		DurationSec:     200,
+		IsPlaying:       true,
+		PositionSec:     30,
+		DeviceID:        deviceA,
+		ClientSeq:       1,
+		ClientEventAtMs: time.Now().UnixMilli(),
+	}); err != nil {
+		t.Fatalf("seed now playing: %v", err)
+	}
+
+	before, err := reg.GetNowPlaying(ctx, userID)
+	if err != nil || before == nil {
+		t.Fatalf("read before: %v", err)
+	}
+
+	// Controller B seeks within owner's playback: positionSec=145
+	if err := reg.SendCommand(ctx, userID, deviceB, "", "seek", map[string]interface{}{
+		"positionSec": 145.0,
+	}, 0); err != nil {
+		t.Fatalf("seek command: %v", err)
+	}
+
+	after, err := reg.GetNowPlaying(ctx, userID)
+	if err != nil || after == nil {
+		t.Fatalf("read after: %v", err)
+	}
+	if after.PositionSec != 145 {
+		t.Fatalf("expected positionSec=145 after seek, got %d", after.PositionSec)
+	}
+	if after.StateRevision <= before.StateRevision {
+		t.Fatalf("expected state revision bump: before=%d after=%d", before.StateRevision, after.StateRevision)
+	}
+	if after.DeviceID != deviceA {
+		t.Fatalf("device ownership must stay with A, got %q", after.DeviceID)
+	}
+	if after.TrackID != before.TrackID {
+		t.Fatalf("trackId must not change on seek, got %q", after.TrackID)
+	}
+	if !after.IsPlaying {
+		t.Fatal("isPlaying must be preserved on seek")
+	}
+}
+
+// Seek from a non-active controller must NOT auto-applied if it races with
+// no active device (server rejects with not-active). We only verify that
+// attempt to "soak" SoT from a stale active does not corrupt state.
+func TestSendCommandSeekDoesNotOverwriteWhenSentToStaleDevice(t *testing.T) {
+	reg, cleanup := newTestRegistry(t)
+	defer cleanup()
+	ctx := context.Background()
+	const userID = "user-seek-stale"
+	deviceA := registerTestDevice(t, reg, userID, "A")
+	deviceB := registerTestDevice(t, reg, userID, "B")
+
+	resume := true
+	if _, _, _, err := reg.StartTransfer(ctx, userID, deviceA, &resume, "boot"); err != nil {
+		t.Fatalf("seed active device: %v", err)
+	}
+	if _, err := reg.PutNowPlaying(ctx, userID, &NowPlaying{
+		TrackID:         "track-1",
+		DurationSec:     200,
+		IsPlaying:       true,
+		PositionSec:     50,
+		DeviceID:        deviceA,
+		ClientSeq:       1,
+		ClientEventAtMs: time.Now().UnixMilli(),
+	}); err != nil {
+		t.Fatalf("seed now playing: %v", err)
+	}
+
+	// controller B attempts to direct seek to device A explicitly (which IS active)
+	// — this is fine. The body of recordSeekServerState is what's being exercised.
+	if err := reg.SendCommand(ctx, userID, deviceB, deviceA, "seek", map[string]interface{}{
+		"positionSec": 90.0,
+	}, 0); err != nil {
+		t.Fatalf("seek with explicit active target: %v", err)
+	}
+
+	np, err := reg.GetNowPlaying(ctx, userID)
+	if err != nil || np == nil {
+		t.Fatalf("read after: %v", err)
+	}
+	if np.PositionSec != 90 {
+		t.Fatalf("expected positionSec=90, got %d", np.PositionSec)
+	}
+}

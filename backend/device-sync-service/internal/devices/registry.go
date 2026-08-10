@@ -668,6 +668,65 @@ func (r *Registry) GetActiveDeviceID(ctx context.Context, userID string) (string
 	return v, nil
 }
 
+// recordSeekServerState applies a `cmd:seek` as a write to nowPlaying SoT at
+// the moment the intent arrives, BEFORE the active device itself publishes
+// np:update. This is what fixes seek-drift across devices: previously the
+// authoritative position stayed stale until the active device's client-side
+// event loop noticed the seek; on backgrounded mobile (iOS WKWebView) that
+// could lag 2-6s. Now any listener that arrives between the intent and the
+// active's own np:publish still sees the correct seek position.
+//
+// The write is fencing-safe:
+//   - only when `to == activeID` (i.e. the seek targets the current owner);
+//   - only mutates PositionSec/UpdatedAtMs/ClientSeq/ClientEventAtMs — never
+//     touches TrackID, IsPlaying, QueueSource (they stay owned by the
+//     active device's own np:update writes);
+//   - skips STALE detection: this is an intent-driven update, not a replay.
+//
+// Returns nil on success. Errors are non-fatal to SendCommand (the relay
+// already happened) but logged for diagnosis.
+func (r *Registry) recordSeekServerState(ctx context.Context, uid, activeID string, positionSec float64) error {
+	if uid == "" || activeID == "" {
+		return nil
+	}
+	prev, err := r.GetNowPlaying(ctx, uid)
+	if err != nil || prev == nil {
+		return err
+	}
+	if prev.DeviceID != activeID {
+		// seek routed to a non-owner device (already rejected above, but
+		// defensive) — do not touch SoT.
+		return nil
+	}
+	nowMs := time.Now().UnixMilli()
+	maxPos := maxNowPlayingPosition(prev.DurationSec)
+	next := &NowPlaying{
+		TrackID:         prev.TrackID,
+		Title:           prev.Title,
+		Artist:          prev.Artist,
+		Cover:           prev.Cover,
+		DurationSec:     prev.DurationSec,
+		IsPlaying:       prev.IsPlaying,
+		PositionSec:     clamp64(int64(positionSec+0.5), 0, maxPos),
+		UpdatedAtMs:     nowMs,
+		DeviceID:        prev.DeviceID,
+		StateRevision:   prev.StateRevision + 1, // bump so receivers see a fresh rev
+		ActiveRevision:  prev.ActiveRevision,
+		QueueSource:     prev.QueueSource,
+		QueueName:       prev.QueueName,
+		ClientSeq:       prev.ClientSeq, // keep last real client seq
+		ClientEventAtMs: nowMs,
+	}
+	enc, err := json.Marshal(next)
+	if err != nil {
+		return err
+	}
+	if err := r.rdb.Set(ctx, r.keyNowPlaying(uid), enc, r.cfg.Device.NowPlayingTTL).Err(); err != nil {
+		return err
+	}
+	return nil
+}
+
 func transferRevokePayload(activeDeviceID string, activeRevision int64, np *NowPlaying) map[string]interface{} {
 	return map[string]interface{}{
 		"reason":         "transfer",
@@ -1032,6 +1091,23 @@ func (r *Registry) SendCommand(ctx context.Context, userID, fromDeviceID, to, cm
 			r.setDeviceVolumeForNormalizedUser(ctx, uid, targetID, v)
 		}
 	}
+
+	// Intent→SoT mirror (DECISIONS 2026-08-10 TrackSync):
+	// for seek commands we persist the new position into nowPlaying BEFORE
+	// broadcasting. This makes any in-flight or later-arriving listDevices /
+	// player_state frame already carry the correct position even if the
+	// active device's own np:update is delayed (iOS WKWebView background,
+	// network batching).
+	if cmd == "seek" {
+		if pos, ok := numberFromPayload(payload, "positionSec"); ok {
+			if err := r.recordSeekServerState(ctx, uid, activeID, pos); err != nil {
+				r.log.Warn("seek intent→state failed (non-fatal)",
+					slog.String("userId", uid),
+					slog.Any("err", err))
+			}
+		}
+	}
+
 	nowMs := time.Now().UnixMilli()
 	fromCopy := fromDeviceID
 	toPtr := strPtr(targetID)
@@ -1043,7 +1119,13 @@ func (r *Registry) SendCommand(ctx context.Context, userID, fromDeviceID, to, cm
 		Cmd:     cmd,
 		Payload: payload,
 	})
-	if cmd == "set_volume" {
+	// After every meaningful playback intent, publish player_state so all
+	// connected devices observe the new authoritative snapshot. This is
+	// server-side aggregation: one extra Redis Publish per cmd, zero extra
+	// work for clients. Fixes the window where only the active device knew
+	// "the seek happened".
+	switch cmd {
+	case "seek", "play", "pause", "next", "previous", "set_volume":
 		r.publishPlayerState(ctx, uid)
 	}
 	if r.m != nil {

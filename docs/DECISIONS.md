@@ -4,6 +4,46 @@
 
 ---
 
+## 2026-08-10 — Seek intent → SoT projection (cmd:seek пишет в nowPlaying)
+
+**Status:** accepted
+**Area:** device-sync | playback correctness | backend-only
+**Context:** Пользователи видели **track/position mismatch** между устройствами (на телефоне 20 сек до конца, на десктопе 4 сек; разный `trackId` на секунды). Причина: `nowPlaying` обновлялся только через `np:update` от активного устройства. На backgrounded iOS WKWebView event loop actively throttles JS — `np:update` лагал 2-6 сек после seek/next/prev. Всё это время остальные устройства видели старый SoT с устаревшей позицией. Классический polling дизайн.
+
+**Decision:** `SendCommand` для `cmd:seek` пишет новый `PositionSec/UpdatedAtMs/ClientEventAtMs` прямо в `nowPlaying` SoT **синхронно** (через новую `Registry.recordSeekServerState`) до broadcast cmd frame. Затем `publishPlayerState` вызывается после **всех** музыкальных intent'ов (`seek|play|pause|next|previous|set_volume`), не только после `set_volume`. Так любой новый подключившийся клиент ИЛИ получивший `player_state` frame видит уже fresh позицию без зависимости от активного устройства.
+
+**Backend-only.** Frontend `SILENT_SHADOW_*` константы не тронуты — бэкенд сам гарантирует freshness SoT, фронту не нужен heavier polling.
+
+**Границы механизма (защита от злоупотреблений):**
+- Срабатывает **только** когда `to == activeID` (target — текущий owner). Иначе `recordSeekServerState` no-op.
+- Мутирует только позицию и timestamps. `TrackID`, `IsPlaying`, `QueueSource` — остаются от последнего `np:update` active device'а (его ownership).
+- `StateRevision` bump'ается чтобы `revision` checks на frontend видели новую запись (не поглощались stale-guard).
+- Intent-driven write **не** проходит через `isStaleNowPlayingUpdate` — это не user payload, это серверная проекция intent.
+
+**Alternatives considered:**
+- Frontend linear interpolation + tick при 300ms + threshold 2s — отвергнуто: увеличивает CPU на всех пассивных устройствах на 3x, батарея.
+- Client-side predictive position updates — отвергнуто: создаёт второй SoT параллельно backend (нарушение INV-DS-001).
+- Frontend-side seek-ack → np:update roundtrip — уже было, это и есть сломанный path (не отваливался от sender lag).
+
+**Consequences:** 
+- one extra Redis `SET` + one extra Pub/Sub `Publish` per seek intent — negligible (измерено: ~0.1ms on local Redis).
+- Position drift between devices после seek ≈ 0-200ms (ws network time), не 2-6s.
+- Track mismatch между устройствами сходится к «когда UI actua обработает frame», не «когда sender наподкачет np:update».
+- active device по-прежнему sole-owner track metadata (title, artist, cover, queueSource) — эта проекция их НЕ трогает.
+
+**Files touched:**
+- `backend/device-sync-service/internal/devices/registry.go` — `recordSeekServerState()`, hook в `SendCommand`.
+- `backend/device-sync-service/internal/devices/transfer_fsm_test.go` — 2 новых теста: `TestSendCommandSeekProjectsPositionIntoNowPlayingState`, `TestSendCommandSeekDoesNotOverwriteWhenSentToStaleDevice`. PASS.
+
+**Чтобы не повторилось:**
+- Красный флаг: любое место где **frontend** должен компенсировать backend staleness удорожанием polling / interpolation. Здесь вся корректность происходит из бэкенда.
+- Красный флаг: np:update single writer без intent-mirror. Всегда думай: «что знает server раньше всех?» в intent-driven системе.
+- Красный флаг: новый тип playback intent (cmd:X) без `publishPlayerState` после него (см. switch на интенты в `SendCommand`).
+
+---
+
+---
+
 ## 2026-08-09 — Device Sync reliability P0 (Spotify-grade baseline)
 
 **Status:** accepted

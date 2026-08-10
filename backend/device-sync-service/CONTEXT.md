@@ -116,6 +116,7 @@ Optional (background workers):
 
 ## Recent significant changes
 
+- **2026-08-10** — **Seek intent→SoT projection** (DECISIONS 2026-08-10): `cmd:seek` в `SendCommand` сразу пишет новую позицию в `nowPlaying` SoT (через `Registry.recordSeekServerState`), минуя `np:update` round-trip от active device. Фиксит наблюдаемый position drift 2-6s между устройствами (особенно iOS WKWebView background). Дополнительно `publishPlayerState` теперь вызывается после всех playback intents (`seek|play|pause|next|previous|set_volume`), не только set_volume. Backend-only change; frontend код синхронизации НЕ менялся.
 - **2026-08-09** — **Spotify-parity reliability pack** (DECISIONS 2026-08-09):
   - `internal/streamticket/epoch_cache.go` — epoch floors + revoke tombstones продолжаются в **auth-redis** (write-through). Раньше были in-memory per replica → cross-replica race в `VerifyUpgradeTicket` (`session epoch stale` / `session revoked` если реплика упустила pub/sub или после restart). Теперь verify на local miss читает `auth:session:epoch:{sid}` / `auth:session:revoked:{sid}` из Redis. Override prefix: `STREAM_TICKET_EPOCH_KEY_PREFIX` (default `auth:session:`).
   - `internal/websocket/client.go` → `sendRotatedTicket()` — после успешного handshake сервис mint'ит **новый legacy JWT** и шлёт клиенту frame `ticket:rotate` (token, expiresAt, ttlSeconds). Frontend (`useDeviceSync.js`) кладёт в **in-memory** `rotatedTicketCache` (Map, не localStorage) и использует на reconnect в приоритете **выше** SEC-005 opaque mint. Снимает TTL-race `60s` на slow LTE handshake.
