@@ -2,6 +2,7 @@ package devices
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"testing"
@@ -467,5 +468,136 @@ func TestSendCommandSeekDoesNotOverwriteWhenSentToStaleDevice(t *testing.T) {
 	}
 	if np.PositionSec != 90 {
 		t.Fatalf("expected positionSec=90, got %d", np.PositionSec)
+	}
+}
+
+// DECISIONS 2026-08-10 TrackSync/#2: cmd:next/previous/seek/play/pause to
+// the active device must piggyback the authoritative NowPlaying snapshot in
+// the cmd frame. This closes the race where the receiver, acting on bare
+// payload.nowPlaying == nil, would consult context state which could still
+// hold the PREVIOUS track for a few WS roundtrips. With the snapshot inline,
+// the receive-side apply path is idempotent and cannot apply a stale trackId.
+func TestSendCommandNextPiggybacksNowPlayingSnapshot(t *testing.T) {
+	reg, cleanup := newTestRegistry(t)
+	defer cleanup()
+	ctx := context.Background()
+	const userID = "user-next-snapshot"
+	deviceA := registerTestDevice(t, reg, userID, "A")
+	deviceB := registerTestDevice(t, reg, userID, "B")
+
+	resume := true
+	if _, _, _, err := reg.StartTransfer(ctx, userID, deviceA, &resume, "boot"); err != nil {
+		t.Fatalf("seed active: %v", err)
+	}
+	if _, err := reg.PutNowPlaying(ctx, userID, &NowPlaying{
+		TrackID:         "track-going",
+		Title:           "Going",
+		Artist:          "Artist",
+		DurationSec:     180,
+		IsPlaying:       true,
+		PositionSec:     45,
+		DeviceID:        deviceA,
+		ClientSeq:       1,
+		ClientEventAtMs: time.Now().UnixMilli(),
+	}); err != nil {
+		t.Fatalf("seed nowPlaying: %v", err)
+	}
+
+	// Subscribe to user channel so we can inspect the cmd frame.
+	sub := reg.rdb.Subscribe(ctx, reg.UserChannel(userID))
+	defer sub.Close()
+	ch := sub.Channel()
+
+	if err := reg.SendCommand(ctx, userID, deviceB, "", "next", nil, 0); err != nil {
+		t.Fatalf("next: %v", err)
+	}
+
+	// Expect at least one cmd frame with cmd=next whose payload carries nowPlaying.
+	timeout := time.After(2 * time.Second)
+	sawNextWithNp := false
+	for !sawNextWithNp {
+		select {
+		case <-timeout:
+			t.Fatal("no cmd frame with piggybacked nowPlaying within 2s")
+		case msg, ok := <-ch:
+			if !ok {
+				t.Fatal("channel closed")
+			}
+			var ev Event
+			if err := json.Unmarshal([]byte(msg.Payload), &ev); err != nil {
+				continue
+			}
+			if ev.Type != "cmd" || ev.Cmd != "next" {
+				continue
+			}
+			npRaw, has := ev.Payload["nowPlaying"]
+			if !has || npRaw == nil {
+				t.Fatalf("cmd.next payload must carry nowPlaying snapshot, got keys: %v", keysOf(ev.Payload))
+			}
+			enc, _ := json.Marshal(npRaw)
+			var np NowPlaying
+			if err := json.Unmarshal(enc, &np); err != nil {
+				t.Fatalf("piggybacked nowPlaying decode: %v", err)
+			}
+			if np.TrackID != "track-going" {
+				t.Fatalf("piggybacked nowPlaying must be the CURRENT track, got %q", np.TrackID)
+			}
+			if np.PositionSec < 45 {
+				t.Fatalf("expected positionSec >= 45 (interpolated), got %d", np.PositionSec)
+			}
+			sawNextWithNp = true
+		}
+	}
+}
+
+func keysOf(m map[string]interface{}) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
+}
+
+// cmd:pause must project IsPlaying=false into nowPlaying SoT.
+func TestSendCommandPauseProjectsIsPlayingFalseIntoState(t *testing.T) {
+	reg, cleanup := newTestRegistry(t)
+	defer cleanup()
+	ctx := context.Background()
+	const userID = "user-pause-sot"
+	deviceA := registerTestDevice(t, reg, userID, "A")
+	deviceB := registerTestDevice(t, reg, userID, "B")
+
+	resume := true
+	if _, _, _, err := reg.StartTransfer(ctx, userID, deviceA, &resume, "boot"); err != nil {
+		t.Fatalf("seed active: %v", err)
+	}
+	if _, err := reg.PutNowPlaying(ctx, userID, &NowPlaying{
+		TrackID:         "track-pause-test",
+		DurationSec:     200,
+		IsPlaying:       true,
+		PositionSec:     30,
+		DeviceID:        deviceA,
+		ClientSeq:       1,
+		ClientEventAtMs: time.Now().UnixMilli(),
+	}); err != nil {
+		t.Fatalf("seed nowPlaying: %v", err)
+	}
+
+	if err := reg.SendCommand(ctx, userID, deviceB, "", "pause", nil, 0); err != nil {
+		t.Fatalf("pause: %v", err)
+	}
+
+	np, err := reg.GetNowPlaying(ctx, userID)
+	if err != nil || np == nil {
+		t.Fatalf("read after: %v", err)
+	}
+	if np.IsPlaying {
+		t.Fatalf("expected IsPlaying=false after pause intent, got %v", np.IsPlaying)
+	}
+	if np.PositionSec != 30 {
+		t.Fatalf("positionSec must be preserved on pause, got %d", np.PositionSec)
+	}
+	if np.DeviceID != deviceA {
+		t.Fatalf("deviceId remains A, got %q", np.DeviceID)
 	}
 }

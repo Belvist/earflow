@@ -727,6 +727,40 @@ func (r *Registry) recordSeekServerState(ctx context.Context, uid, activeID stri
 	return nil
 }
 
+// recordPauseServerState flips IsPlaying→false in nowPlaying SoT when a pause
+// intent arrives. Same pattern as seek projection — keeps authoritative state
+// consistent without waiting for the active device to publish np:update
+// (which may be deferred by several seconds on backgrounded mobile).
+func (r *Registry) recordPauseServerState(ctx context.Context, uid, activeID string) error {
+	if uid == "" || activeID == "" {
+		return nil
+	}
+	prev, err := r.GetNowPlaying(ctx, uid)
+	if err != nil || prev == nil {
+		return err
+	}
+	if prev.DeviceID != activeID {
+		return nil
+	}
+	if !prev.IsPlaying {
+		return nil // already paused
+	}
+	nowMs := time.Now().UnixMilli()
+	next := *prev
+	next.IsPlaying = false
+	next.UpdatedAtMs = nowMs
+	next.ClientEventAtMs = nowMs
+	next.StateRevision++
+	if next.StateRevision <= 0 {
+		next.StateRevision = 1
+	}
+	enc, err := json.Marshal(next)
+	if err != nil {
+		return err
+	}
+	return r.rdb.Set(ctx, r.keyNowPlaying(uid), enc, r.cfg.Device.NowPlayingTTL).Err()
+}
+
 func transferRevokePayload(activeDeviceID string, activeRevision int64, np *NowPlaying) map[string]interface{} {
 	return map[string]interface{}{
 		"reason":         "transfer",
@@ -1092,13 +1126,27 @@ func (r *Registry) SendCommand(ctx context.Context, userID, fromDeviceID, to, cm
 		}
 	}
 
+	// Snapshot piggyback (DECISIONS 2026-08-10 TrackSync/#2): ANY playback
+	// intent that may shift track or position carries the CURRENT NowPlaying
+	// snapshot so receivers can act authoritatively without waiting for the
+	// active device's own np:update. must be filled BEFORE
+	// normalizeCommandPayload (which strips unknown fields).
+	var snapshotForCmd *NowPlaying
+	switch cmd {
+	case "next", "previous", "seek", "play", "pause":
+		if np, npErr := r.GetNowPlaying(ctx, uid); npErr == nil && np != nil {
+			snapshotForCmd = np
+		}
+	}
+
 	// Intent→SoT mirror (DECISIONS 2026-08-10 TrackSync):
 	// for seek commands we persist the new position into nowPlaying BEFORE
 	// broadcasting. This makes any in-flight or later-arriving listDevices /
 	// player_state frame already carry the correct position even if the
 	// active device's own np:update is delayed (iOS WKWebView background,
 	// network batching).
-	if cmd == "seek" {
+	switch cmd {
+	case "seek":
 		if pos, ok := numberFromPayload(payload, "positionSec"); ok {
 			if err := r.recordSeekServerState(ctx, uid, activeID, pos); err != nil {
 				r.log.Warn("seek intent→state failed (non-fatal)",
@@ -1106,11 +1154,23 @@ func (r *Registry) SendCommand(ctx context.Context, userID, fromDeviceID, to, cm
 					slog.Any("err", err))
 			}
 		}
+	case "pause":
+		if err := r.recordPauseServerState(ctx, uid, activeID); err != nil {
+			r.log.Warn("pause intent→state failed (non-fatal)",
+				slog.String("userId", uid),
+				slog.Any("err", err))
+		}
 	}
 
 	nowMs := time.Now().UnixMilli()
 	fromCopy := fromDeviceID
 	toPtr := strPtr(targetID)
+	if snapshotForCmd != nil {
+		if payload == nil {
+			payload = make(map[string]interface{}, 4)
+		}
+		payload["nowPlaying"] = snapshotForCmd
+	}
 	r.publish(ctx, uid, Event{
 		Type:    "cmd",
 		At:      nowMs,
