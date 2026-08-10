@@ -44,6 +44,10 @@ async function getBrowser() {
             '--mute-audio',
             '--no-first-run',
             '--disable-extensions',
+            '--disable-crash-reporter',
+            '--disable-crashpad',
+            '--disable-breakpad',
+            '--no-zygote',
         ],
     }).catch((err) => {
         browserPromise = null;
