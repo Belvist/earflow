@@ -1091,7 +1091,13 @@ func (r *Registry) SendCommand(ctx context.Context, userID, fromDeviceID, to, cm
 		r.recordCommandRejected("invalid_target")
 		return ErrInvalidDeviceID
 	}
-	if targetID != activeID {
+	// queue:set is broadcast to the sync scope (user), not device-targeted.
+	// Any owned device may write the queue.
+	if cmd == "queue:set" {
+		if _, err := r.loadDevice(ctx, fromDeviceID); err != nil {
+			return err
+		}
+	} else if targetID != activeID {
 		r.recordCommandRejected("target_not_active")
 		return ErrNotActiveDevice
 	}
