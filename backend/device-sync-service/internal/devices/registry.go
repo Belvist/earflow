@@ -76,6 +76,10 @@ func (r *Registry) keyActiveRevision(uid string) string {
 func (r *Registry) keyNowPlaying(uid string) string {
 	return r.cfg.Redis.KeyPrefix + "user:" + uid + ":np"
 }
+
+func (r *Registry) keyQueue(uid string) string {
+	return r.cfg.Redis.KeyPrefix + "user:" + uid + ":queue"
+}
 func (r *Registry) keyTimeline(uid string) string {
 	return r.cfg.Redis.KeyPrefix + "user:" + uid + ":timeline"
 }
@@ -727,10 +731,6 @@ func (r *Registry) recordSeekServerState(ctx context.Context, uid, activeID stri
 	return nil
 }
 
-// recordPauseServerState flips IsPlaying→false in nowPlaying SoT when a pause
-// intent arrives. Same pattern as seek projection — keeps authoritative state
-// consistent without waiting for the active device to publish np:update
-// (which may be deferred by several seconds on backgrounded mobile).
 func (r *Registry) recordPauseServerState(ctx context.Context, uid, activeID string) error {
 	if uid == "" || activeID == "" {
 		return nil
@@ -1001,6 +1001,9 @@ var allowedCommands = map[string]struct{}{
 	"previous":   {},
 	"seek":       {},
 	"set_volume": {},
+
+	// Server-owned queue intents (DECISIONS 2026-08-10 TrackSync):
+	"queue:set": {},
 }
 
 // SendCommand validates and publishes a user-originated controller intent. The
@@ -1126,14 +1129,15 @@ func (r *Registry) SendCommand(ctx context.Context, userID, fromDeviceID, to, cm
 		}
 	}
 
-	// Snapshot piggyback (DECISIONS 2026-08-10 TrackSync/#2): ANY playback
-	// intent that may shift track or position carries the CURRENT NowPlaying
-	// snapshot so receivers can act authoritatively without waiting for the
-	// active device's own np:update. must be filled BEFORE
-	// normalizeCommandPayload (which strips unknown fields).
+	// Snapshot piggyback (DECISIONS 2026-08-10 TrackSync/#2+#3):
+	// - For queue-mutation intents (next/previous/queue:set) we resolve the
+	//   snapshot AFTER the mutation runs (below) so the piggybacked np reflects
+	//   the NEW track. Before that point snapshotForCmd is left nil.
+	// - For seek/play/pause (position-only or ownership intents), piggyback
+	//   applies to the current nowPlaying — read it up front.
 	var snapshotForCmd *NowPlaying
 	switch cmd {
-	case "next", "previous", "seek", "play", "pause":
+	case "seek", "play", "pause":
 		if np, npErr := r.GetNowPlaying(ctx, uid); npErr == nil && np != nil {
 			snapshotForCmd = np
 		}
@@ -1160,6 +1164,49 @@ func (r *Registry) SendCommand(ctx context.Context, userID, fromDeviceID, to, cm
 				slog.String("userId", uid),
 				slog.Any("err", err))
 		}
+	case "queue:set":
+		err := r.applyQueueSetIntent(ctx, uid, activeID, fromDeviceID, payload)
+		if err != nil {
+			r.log.Debug("queue:set apply outcome",
+				slog.String("userId", uid),
+				slog.Any("err", err))
+			r.recordCommandRejected("queue_set_failed")
+			return err
+		}
+	case "next", "previous":
+		if err := r.applyQueueAdvanceIntent(ctx, uid, activeID, cmd == "next"); err != nil {
+			r.log.Warn("next/prev queue advance failed (non-fatal)",
+				slog.String("userId", uid),
+				slog.String("cmd", cmd),
+				slog.Any("err", err))
+		}
+	}
+
+	// After queue mutations, refresh snapshotForCmd from the NEW state so
+	// receivers see the new track in the cmd frame itself (DECISIONS
+	// 2026-08-10 TrackSync/#3).
+	if cmd == "next" || cmd == "previous" || cmd == "queue:set" {
+		if np, npErr := r.GetNowPlaying(ctx, uid); npErr == nil && np != nil {
+			snapshotForCmd = np
+		}
+	}
+
+	// If queue was mutated and refreshed snapshot exists, ALSO persist the
+	// queue context inside nowPlaying so listDevices and player_state readers
+	// see the newest queue state without a second fetch.
+	if (cmd == "next" || cmd == "previous" || cmd == "queue:set") && snapshotForCmd != nil {
+		if q := r.queueForNormalizedUser(ctx, uid); q != nil {
+			snapshotForCmd.QueueRevision = q.Revision
+			snapshotForCmd.QueueIndex = q.Index
+			snapshotForCmd.QueueSource = q.QueueSource
+			snapshotForCmd.QueueName = q.QueueName
+			// Persist nowPlaying with the refreshed queue context so ListDevices
+			// and player_state readers see it without a second fetch.
+			enc, encErr := json.Marshal(snapshotForCmd)
+			if encErr == nil {
+				_ = r.rdb.Set(ctx, r.keyNowPlaying(uid), enc, r.cfg.Device.NowPlayingTTL).Err()
+			}
+		}
 	}
 
 	nowMs := time.Now().UnixMilli()
@@ -1184,8 +1231,11 @@ func (r *Registry) SendCommand(ctx context.Context, userID, fromDeviceID, to, cm
 	// server-side aggregation: one extra Redis Publish per cmd, zero extra
 	// work for clients. Fixes the window where only the active device knew
 	// "the seek happened".
+	// queue:set + next/previous ALSO flip track/queue state — they must trigger
+	// player_state publish too, otherwise peers learn about it only when the
+	// active device's own np:update arrives (that is the old 2s drift).
 	switch cmd {
-	case "seek", "play", "pause", "next", "previous", "set_volume":
+	case "seek", "play", "pause", "next", "previous", "set_volume", "queue:set":
 		r.publishPlayerState(ctx, uid)
 	}
 	if r.m != nil {
@@ -1248,6 +1298,25 @@ func truncate(s string, n int) string {
 	return s[:n]
 }
 
+// isValidTrackId is a conservative gate used for queue payloads. Rejects
+// strings that are obviously not UUIDs / numeric ids to catch injection / XSS
+// attempts early. The player still does its own fetch — this just keeps the certificate
+// bandwidth in Redis smaller and reduces the size of exploit payload.
+//
+// Allowed forms:
+//   - numeric database id: "12345"
+//   - UUID v1..v5: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" (36 chars)
+//   - opaque alphanum+underscore/hyphen (catalog identities), up to 64 chars.
+var trackIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+
+func isValidTrackId(s string) bool {
+	s = strings.TrimSpace(s)
+	if s == "" || len(s) > 64 {
+		return false
+	}
+	return trackIDPattern.MatchString(s)
+}
+
 func clamp64(v, lo, hi int64) int64 {
 	if v < lo {
 		return lo
@@ -1297,6 +1366,19 @@ func normalizeCommandPayload(cmd string, payload map[string]interface{}) (map[st
 		out["volume"] = volume
 	case "play", "pause", "next", "previous":
 		// These commands are pure controller intents; server metadata is added below.
+	case "queue:set":
+		// Server-owned queue intent. Payload survives normalization — the queue
+		// validator reads trackIds / queueRevision / etc. from it below in
+		// applyQueueSetIntent. We intentionally do NOT normalize (strip) it
+		// here because unknown nested fields are part of the intent's business
+		// data, not noise.
+		if payload == nil {
+			return nil, ErrQueueEmpty
+		}
+		// Return the original payload unchanged so the receiver's business data
+		// (trackIds, queueRevision, queueSource, etc.) reach applyQueueSetIntent
+		// unmodified.
+		return payload, nil
 	default:
 		return nil, ErrUnknownCommand
 	}
@@ -1449,4 +1531,419 @@ func sortByLastSeenAsc(devs []*Device) {
 			devs[j-1], devs[j] = devs[j], devs[j-1]
 		}
 	}
+}
+
+// =============================================================================
+// Server-owned queue (TrackSync 2026-08-10)
+// =============================================================================
+
+const (
+	defaultQueueLimit = 500
+	advanceNext      = 1
+	advancePrevious  = -1
+)
+
+var (
+	queueAllowedRepeat = map[string]struct{}{
+		"off": {}, "all": {}, "one": {},
+	}
+)
+
+// Errors for queue intent application (returned via SendCommand to caller).
+var (
+	ErrQueueTooLarge = errors.New("queue too large")
+	ErrQueueBadIndex = errors.New("queue index out of range")
+	ErrQueueStaleRev = errors.New("queue revision stale")
+	ErrQueueEmpty    = errors.New("queue empty")
+)
+
+// applyQueueSetIntent validates and replaces the authoritative queue
+// atomically under a CAS against the queue key.
+//
+// Rules:
+//   - Max 500 trackIds (cost bound on cache entry + transport).
+//   - Every trackId must pass isValidTrackId (cheap defense; the upstream
+//     catalog rejects invalid ids later anyway).
+//   - Index must be in range [0, len(trackIds)); sanitized with clamping.
+//   - repeat is "off" | "all" | "one"; shuffle boolean; shuffleOrder generated
+//     only for shuffle=true (otherwise ignored).
+//   - Revision check optional: if payload.queueRevision > 0 and it differs
+//     from the current queue revision → caller has a stale view; reject with
+//     QUEUE_CONFLICT so the client can re-fetch and try again (Caller always
+//     wins on later valid data — queue mutations from distinct controllers
+//     are *intended* to be last-write-wins, not merged).
+func (r *Registry) applyQueueSetIntent(ctx context.Context, uid, activeID, fromDeviceID string, payload map[string]interface{}) error {
+	if payload == nil {
+		return ErrQueueEmpty
+	}
+
+	rawTrackIDs, ok := payload["trackIds"]
+	if !ok {
+		return ErrQueueEmpty
+	}
+	trackIDsAny, ok := rawTrackIDs.([]interface{})
+	if !ok {
+		return ErrQueueEmpty
+	}
+	if len(trackIDsAny) == 0 {
+		return ErrQueueEmpty
+	}
+	if len(trackIDsAny) > defaultQueueLimit {
+		return ErrQueueTooLarge
+	}
+
+	trackIDs := make([]string, 0, len(trackIDsAny))
+	for _, v := range trackIDsAny {
+		s, _ := v.(string)
+		s = strings.TrimSpace(s)
+		if !isValidTrackId(s) {
+			return ErrQueueEmpty
+		}
+		trackIDs = append(trackIDs, s)
+	}
+
+	idx := 0
+	if v, ok := payload["index"].(float64); ok {
+		idx = int(v)
+	} else if v, ok := payload["index"].(int); ok {
+		idx = v
+	}
+	if idx < 0 {
+		idx = 0
+	}
+	if idx >= len(trackIDs) {
+		return ErrQueueBadIndex
+	}
+
+	repeat := "off"
+	if s, ok := payload["repeat"].(string); ok {
+		s = strings.ToLower(strings.TrimSpace(s))
+		if _, allowed := queueAllowedRepeat[s]; allowed {
+			repeat = s
+		}
+	}
+
+	shuffle := false
+	if v, ok := payload["shuffle"].(bool); ok {
+		shuffle = v
+	}
+
+	queueSource := strings.TrimSpace(fromString(payload, "queueSource"))
+	queueName := strings.TrimSpace(fromString(payload, "queueName"))
+	// Revision fencing: callers MAY pass queueRevision > 0 as "I know the queue
+	// is at rev N, apply only if still true". We accept queueRevision as
+	// number (json.Unmarshal's default float64) or int64 (dev).
+	expectRev := int64(0)
+	switch v := payload["queueRevision"].(type) {
+	case float64:
+		if v > 0 {
+			expectRev = int64(v)
+		}
+	case int64:
+		if v > 0 {
+			expectRev = v
+		}
+	case int:
+		if v > 0 {
+			expectRev = int64(v)
+		}
+	}
+	r.log.Debug("queue:set revision guard",
+		slog.String("userId", uid),
+		slog.Int64("expectRev", expectRev),
+		slog.Bool("emptyQueue", len(trackIDs) == 0)) // trackIDs may be empty after sanitize)
+
+	nowMs := time.Now().UnixMilli()
+	next := &PlaybackQueue{
+		TrackIDs:       trackIDs,
+		Index:          idx,
+		Repeat:         repeat,
+		Shuffle:        shuffle,
+		QueueSource:    truncate(queueSource, 32),
+		QueueName:      truncate(queueName, 120),
+		UpdatedAtMs:    nowMs,
+		UpdatedByDevice: fromDeviceID,
+	}
+	if shuffle {
+		next.ShuffleOrder = buildShuffleOrder(len(trackIDs))
+	}
+
+	// Revision fencing: read the current revision *before* starting the
+	// transaction so we can fail fast without needing to rely on the tx-level
+	// error propagation (Redis tx wrapping can mask non-tx errors).
+	r.log.Debug("queue:set-guard",
+		slog.String("userId", uid),
+		slog.String("key", r.keyQueue(uid)),
+		slog.Int64("expectRev", expectRev))
+	rawCur, readErr := r.rdb.Get(ctx, r.keyQueue(uid)).Result()
+	if readErr != nil && !errors.Is(readErr, redis.Nil) {
+		return readErr
+	}
+	curRev := int64(0)
+	if readErr == nil && rawCur != "" {
+		var prev PlaybackQueue
+		if jerr := json.Unmarshal([]byte(rawCur), &prev); jerr == nil {
+			curRev = prev.Revision
+		}
+	}
+	if expectRev > 0 {
+		r.log.Debug("queue:set-fence-eval",
+			slog.String("userId", uid),
+			slog.Int64("expectRev", expectRev),
+			slog.Int64("curRev", curRev),
+		)
+		if expectRev != curRev {
+			return ErrQueueStaleRev
+		}
+	}
+
+	// Transactional write under WATCH so that concurrent writes (two phones)
+	// fail with QUEUE_CONFLICT instead of resulting in split brain.
+	for attempt := 0; attempt < 3; attempt++ {
+		err := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			// We already validated the revision above; just need to ensure no
+			// one else flipped it between our fast-path check and this commit.
+			raw, err := tx.Get(ctx, r.keyQueue(uid)).Result()
+			if err != nil && !errors.Is(err, redis.Nil) {
+				return err
+			}
+			currentRev := int64(0)
+			if err == nil && raw != "" {
+				var prev PlaybackQueue
+				if jerr := json.Unmarshal([]byte(raw), &prev); jerr == nil {
+					currentRev = prev.Revision
+				}
+			}
+			if expectRev > 0 && currentRev > 0 && expectRev != currentRev {
+				return ErrQueueStaleRev
+			}
+			next.Revision = currentRev + 1
+			if next.Revision <= 0 {
+				next.Revision = 1
+			}
+			enc, jerr := json.Marshal(next)
+			if jerr != nil {
+				return jerr
+			}
+			pipe := tx.TxPipeline()
+			pipe.Set(ctx, r.keyQueue(uid), enc, r.cfg.Device.NowPlayingTTL)
+			_, err = pipe.Exec(ctx)
+			return err
+		}, r.keyQueue(uid))
+		if err == nil {
+			r.log.Debug("queue:set applied",
+				slog.String("userId", uid),
+				slog.Int("trackCount", len(trackIDs)),
+				slog.Int("index", idx),
+				slog.Int64("revision", next.Revision),
+			)
+			// Piggyback queue update into nowPlaying so subscribers see the
+			// indexed change on the next player_state tick (zero extra fetches).
+			r.syncNowPlayingQueueContext(ctx, uid, activeID, next)
+			r.publish(ctx, uid, Event{Type: "queue:update", At: nowMs})
+			return nil
+		}
+		if errors.Is(err, redis.TxFailedErr) {
+			continue
+		}
+		return err
+	}
+	return errors.New("cas retry budget exhausted")
+}
+
+// applyQueueAdvanceIntent shifts the current index by delta (+1/-1) respecting
+// repeat/shuffle rules, and synchronously writes the new trackId into
+// nowPlaying so all devices see the new core-play state immediately (without
+// waiting for the active device's player-graded np:update).
+//
+// This is what removes: «повторяю next через 2s delay». Backend acts
+// immediately, UI sees change on the SAME RTT.
+func (r *Registry) applyQueueAdvanceIntent(ctx context.Context, uid, activeID string, next bool) error {
+	// Multi-key CAS: queue + nowPlaying must be updated together.
+	queueKey := r.keyQueue(uid)
+	npKey := r.keyNowPlaying(uid)
+
+	for attempt := 0; attempt < 3; attempt++ {
+		err := r.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			rawQueue, err := tx.Get(ctx, queueKey).Result()
+			if err != nil {
+				return ErrQueueEmpty
+			}
+			var queue PlaybackQueue
+			if err := json.Unmarshal([]byte(rawQueue), &queue); err != nil {
+				return ErrQueueEmpty
+			}
+			if len(queue.TrackIDs) == 0 {
+				return ErrQueueEmpty
+			}
+
+			// Compute next index (repeat logic).
+			currentIdx := queue.Index
+			if currentIdx < 0 || currentIdx >= len(queue.TrackIDs) {
+				currentIdx = 0
+			}
+			var newIdx int
+			if queue.Repeat == "one" {
+				newIdx = currentIdx
+			} else if next {
+				newIdx = currentIdx + 1
+				if newIdx >= len(queue.TrackIDs) {
+					if queue.Repeat == "all" {
+						newIdx = 0
+					} else {
+						newIdx = len(queue.TrackIDs) - 1
+					}
+				}
+			} else {
+				newIdx = currentIdx - 1
+				if newIdx < 0 {
+					if queue.Repeat == "all" {
+						newIdx = len(queue.TrackIDs) - 1
+					} else {
+						newIdx = 0
+					}
+				}
+			}
+			if queue.Shuffle && len(queue.ShuffleOrder) == len(queue.TrackIDs) {
+				if pos := indexOfInt(queue.ShuffleOrder, currentIdx); pos >= 0 {
+					var np int
+					if next {
+						np = (pos + 1) % len(queue.ShuffleOrder)
+					} else {
+						np = (pos - 1 + len(queue.ShuffleOrder)) % len(queue.ShuffleOrder)
+					}
+					newIdx = queue.ShuffleOrder[np]
+				}
+			}
+			newTrackID := queue.TrackIDs[newIdx]
+
+			// Read + mutate nowPlaying atomically (we're inside WATCH).
+			rawNP, err := tx.Get(ctx, npKey).Result()
+			if err != nil {
+				return ErrQueueEmpty
+			}
+			var np NowPlaying
+			if err := json.Unmarshal([]byte(rawNP), &np); err != nil {
+				return ErrQueueEmpty
+			}
+			if np.DeviceID != activeID {
+				return ErrNotActiveDevice
+			}
+
+			nowMs := time.Now().UnixMilli()
+			np.TrackID = newTrackID
+			np.StateRevision++
+			if np.StateRevision <= 0 {
+				np.StateRevision = 1
+			}
+			np.QueueIndex = newIdx
+			np.QueueRevision = queue.Revision + 1
+			np.QueueSource = queue.QueueSource
+			np.QueueName = queue.QueueName
+			np.UpdatedAtMs = nowMs
+			np.ClientEventAtMs = nowMs
+			// Position starts at 0 on track change (Spotify semantics).
+			np.PositionSec = 0
+
+			enc, jerr := json.Marshal(np)
+			if jerr != nil {
+				return jerr
+			}
+
+			// Bump queue revision too so each mutation is distinct (replay
+			// attacks via stale expectedRev).
+			queue.Revision++
+			queue.Index = newIdx
+			queue.UpdatedAtMs = nowMs
+			encQueue, jerr := json.Marshal(queue)
+			if jerr != nil {
+				return jerr
+			}
+
+			pipe := tx.TxPipeline()
+			pipe.Set(ctx, npKey, enc, r.cfg.Device.NowPlayingTTL)
+			pipe.Set(ctx, queueKey, encQueue, r.cfg.Device.NowPlayingTTL)
+			_, err = pipe.Exec(ctx)
+			return err
+		}, queueKey, npKey)
+		if err == nil {
+			r.publish(ctx, uid, Event{Type: "np:update", At: time.Now().UnixMilli()})
+			return nil
+		}
+		if errors.Is(err, redis.TxFailedErr) {
+			continue
+		}
+		return err
+	}
+	return errors.New("cas retry budget exhausted")
+}
+
+// syncNowPlayingQueueContext updates nowPlaying.Queue* fields from the queue
+// without touching position or isPlaying. Used after queue:set.
+func (r *Registry) syncNowPlayingQueueContext(ctx context.Context, uid, activeID string, queue *PlaybackQueue) {
+	if queue == nil {
+		return
+	}
+	raw, err := r.rdb.Get(ctx, r.keyNowPlaying(uid)).Result()
+	if err != nil {
+		return
+	}
+	var np NowPlaying
+	if err := json.Unmarshal([]byte(raw), &np); err != nil {
+		return
+	}
+	np.QueueRevision = queue.Revision
+	np.QueueIndex = queue.Index
+	np.QueueSource = queue.QueueSource
+	np.QueueName = queue.QueueName
+	np.UpdatedAtMs = time.Now().UnixMilli()
+	np.StateRevision++
+	if np.StateRevision <= 0 {
+		np.StateRevision = 1
+	}
+	// If queue index points at a different track AND queue is empty-vs-initial,
+	// do NOT switch trackId automatically — client will send a new city from |next.
+	enc, err := json.Marshal(&np)
+	if err != nil {
+		return
+	}
+	_ = r.rdb.Set(ctx, r.keyNowPlaying(uid), enc, r.cfg.Device.NowPlayingTTL).Err()
+}
+
+// buildShuffleOrder generates a random permutation of [0, n). Not
+// cryptographically strong — only used for playback UX, not auth.
+func buildShuffleOrder(n int) []int {
+	if n <= 0 {
+		return nil
+	}
+	out := make([]int, n)
+	for i := range out {
+		out[i] = i
+	}
+	for i := n - 1; i > 0; i-- {
+		j := int(time.Now().UnixNano() % int64(i+1))
+		out[i], out[j] = out[j], out[i]
+	}
+	return out
+}
+
+func indexOfInt(arr []int, needle int) int {
+	for i, v := range arr {
+		if v == needle {
+			return i
+		}
+	}
+	return -1
+}
+
+func fromString(m map[string]interface{}, key string) string {
+	if m == nil {
+		return ""
+	}
+	v, ok := m[key]
+	if !ok {
+		return ""
+	}
+	s, _ := v.(string)
+	return s
 }

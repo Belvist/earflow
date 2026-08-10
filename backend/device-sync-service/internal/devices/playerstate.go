@@ -28,6 +28,7 @@ type PlayerState struct {
 	Lease          *OutputLease       `json:"lease,omitempty"`
 	Transfer       *TransferRecord    `json:"transfer,omitempty"`
 	VolumeByDevice map[string]float64 `json:"volumeByDevice,omitempty"`
+	Queue          *PlaybackQueue     `json:"queue,omitempty"`
 }
 
 // Legacy frame types that must be mirrored into a `player_state` publish so
@@ -38,6 +39,7 @@ var playerStateTriggerFrames = map[string]struct{}{
 	"devices:update":  {},
 	"devices:active":  {},
 	"lease:update":    {},
+	"queue:update":    {},
 }
 
 // transfer:update is mirrored explicitly after saved phases in transfer_fsm.go
@@ -98,6 +100,7 @@ func (r *Registry) playerStateForNormalizedUser(ctx context.Context, uid string)
 	}
 	transfer := r.activeTransferForNormalizedUser(ctx, uid)
 	volumes := r.volumesForNormalizedUser(ctx, uid)
+	queue := r.queueForNormalizedUser(ctx, uid)
 	return &PlayerState{
 		At:             time.Now().UnixMilli(),
 		ActiveDeviceID: activeID,
@@ -108,6 +111,7 @@ func (r *Registry) playerStateForNormalizedUser(ctx context.Context, uid string)
 		Lease:          lease,
 		Transfer:       transfer,
 		VolumeByDevice: volumes,
+		Queue:          queue,
 	}, nil
 }
 
@@ -133,6 +137,18 @@ func (r *Registry) activeTransferForNormalizedUser(ctx context.Context, uid stri
 		return nil
 	}
 	return transfer
+}
+
+func (r *Registry) queueForNormalizedUser(ctx context.Context, uid string) *PlaybackQueue {
+	raw, err := r.rdb.Get(ctx, r.keyQueue(uid)).Result()
+	if err != nil || raw == "" {
+		return nil
+	}
+	var q PlaybackQueue
+	if jerr := json.Unmarshal([]byte(raw), &q); jerr != nil {
+		return nil
+	}
+	return &q
 }
 
 func (r *Registry) volumesForNormalizedUser(ctx context.Context, uid string) map[string]float64 {

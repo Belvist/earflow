@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { DEVICE_SYNC_ENABLED } from '../api/runtimeConfig';
 import useSongs from '../hooks/useSongs';
 import { useRecommendations } from '../hooks/useRecommendations';
 import apiClient from '../api/client';
@@ -717,10 +718,31 @@ export const PlayerProvider = ({
     fsmState: storeSnapshot?.fsmState,
     isBuffering: storeSnapshot?.isBuffering,
   });
+
+  // DECISIONS 2026-08-10 TrackSync/#4: expose the raw queue for server-owned
+  // synchronization (queue:set / next / previous). Read-only — no caller
+  // should write through this select; playbackQueue identity owned by
+  // device-sync-service. type: { trackIds: string[], currentIndex: number }
+  // DECISIONS 2026-08-10 TrackSync/#4: server-owned queue snapshot. Defined
+  // before use in runtimeState. queueTrackIdsSelector extracted for test
+  // isolation.
+  const queueTrackIdsSelector = (tracks) => Array.isArray(tracks)
+    ? tracks.map(t => String(t?.id || t?.trackId || '')).filter(Boolean).slice(0, 500)
+    : [];
+
+  const serverQueueSnapshot = useMemo(() => {
+    const tracks = Array.isArray(queueManager?.effectiveTracks) ? queueManager.effectiveTracks : [];
+    const trackIds = queueTrackIdsSelector(tracks);
+    return {
+      trackIds,
+      currentIndex: Math.max(0, Number(state.currentTrackIndex || 0)),
+    };
+  }, [queueManager?.effectiveTracks, state.currentTrackIndex]);
+
   const runtimeState = useMemo(() => ({
     ...state,
     currentTrack,
-    activeTrackId,
+    activeTrackId: activeTrackId,
     isAuthenticated,
   }), [state, currentTrack, activeTrackId, isAuthenticated]);
 
@@ -1833,6 +1855,9 @@ export const PlayerProvider = ({
     queueSource: storeSnapshot.queueSource,
     queueName: storeSnapshot.queueName,
     shuffleEnabled: storeSnapshot.shuffleEnabled,
+    // DECISIONS 2026-08-10 TrackSync/#4: server-owned queue snapshot for
+    // DeviceSyncProvider.
+    serverQueue: serverQueueSnapshot,
     userSettings: state.userSettings,
     partyMode: partyManager.partyMode,
     partyInfo: partyManager.partyInfo,
@@ -1854,6 +1879,7 @@ export const PlayerProvider = ({
     state.userSettings,
     state.userWantsPlaybackRef,
     localOutputState,
+    serverQueueSnapshot,
     partyManager.partyMode,
     partyManager.partyInfo,
     activePartyId,
@@ -1871,6 +1897,14 @@ export const PlayerProvider = ({
       currentTimeRef: state.currentTimeRef,
     };
   }, [state.duration, state.currentTimeRef, currentTrack]);
+
+  // DECISIONS 2026-08-10 TrackSync/#4: merge serverQueue into the global
+  // state exposed to consumers so DeviceSyncProvider can read it without any
+  // additional hook calls (keeps render cost low).
+  const mergedState = useMemo(() => ({
+    ...state,
+    serverQueue: serverQueueSnapshot,
+  }), [state, serverQueueSnapshot]);
 
   const playerDispatchValue = useMemo(() => ({
     setUserSettings: state.setUserSettings,
@@ -1926,6 +1960,8 @@ export const PlayerProvider = ({
     onProgressClick: handleProgressClickCore,
 
     beginSeek,
+    // DECISIONS 2026-08-10 TrackSync/#4: expose queue snapshot (read-only)
+    serverQueue: serverQueueSnapshot,
     updateSeek: updateSeekCore,
     commitSeek: seekToPercentCore,
     seekToSeconds: seekToSecondsCore,

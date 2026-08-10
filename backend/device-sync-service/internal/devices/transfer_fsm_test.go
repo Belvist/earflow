@@ -3,6 +3,7 @@ package devices
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"testing"
@@ -599,5 +600,201 @@ func TestSendCommandPauseProjectsIsPlayingFalseIntoState(t *testing.T) {
 	}
 	if np.DeviceID != deviceA {
 		t.Fatalf("deviceId remains A, got %q", np.DeviceID)
+	}
+}
+
+// =============================================================================
+// Server-owned queue tests (TrackSync 2026-08-10)
+// =============================================================================
+
+func TestSendCommandQueueSetWritesQueueAndPublishes(t *testing.T) {
+	reg, cleanup := newTestRegistry(t)
+	defer cleanup()
+	ctx := context.Background()
+	const userID = "user-queue-set"
+	deviceA := registerTestDevice(t, reg, userID, "A")
+	deviceB := registerTestDevice(t, reg, userID, "B")
+
+	resume := true
+	if _, _, _, err := reg.StartTransfer(ctx, userID, deviceA, &resume, "boot"); err != nil {
+		t.Fatalf("seed active: %v", err)
+	}
+
+	sub := reg.rdb.Subscribe(ctx, reg.UserChannel(userID))
+	defer sub.Close()
+	ch := sub.Channel()
+
+	if err := reg.SendCommand(ctx, userID, deviceB, "", "queue:set", map[string]interface{}{
+		"trackIds":   []interface{}{"track-1", "track-2", "track-3"},
+		"index":      float64(1),
+		"repeat":     "off",
+		"shuffle":    false,
+		"queueSource": "library",
+		"queueName":  "Favorites",
+	}, 0); err != nil {
+		t.Fatalf("queue:set: %v", err)
+	}
+
+	q, err := reg.rdb.Get(ctx, reg.keyQueue(userID)).Result()
+	if err != nil {
+		t.Fatalf("read queue: %v", err)
+	}
+	var pq PlaybackQueue
+	if err := json.Unmarshal([]byte(q), &pq); err != nil {
+		t.Fatalf("decode queue: %v", err)
+	}
+	if pq.Revision != 1 {
+		t.Fatalf("expected revision=1, got %d", pq.Revision)
+	}
+	if pq.Index != 1 {
+		t.Fatalf("expected index=1, got %d", pq.Index)
+	}
+	if pq.QueueSource != "library" || pq.QueueName != "Favorites" {
+		t.Fatalf("queueName/source mismatch")
+	}
+
+	// Expect queue:update event on pub/sub (via queue:set apply).
+	timeout := time.After(2 * time.Second)
+	saw := ""
+	for saw == "" {
+		select {
+		case <-timeout:
+			t.Fatal("no pub frame within 2s")
+		case msg := <-ch:
+			var ev Event
+			if err := json.Unmarshal([]byte(msg.Payload), &ev); err != nil {
+				continue
+			}
+			if ev.Type == "queue:update" {
+				saw = "ok"
+			}
+		}
+	}
+}
+
+func TestSendCommandQueueSetRejectsInvalidTrackIDs(t *testing.T) {
+	reg, cleanup := newTestRegistry(t)
+	defer cleanup()
+	ctx := context.Background()
+	const userID = "user-queue-bad"
+	deviceA := registerTestDevice(t, reg, userID, "A")
+	resume := true
+	if _, _, _, err := reg.StartTransfer(ctx, userID, deviceA, &resume, "boot"); err != nil {
+		t.Fatalf("seed active: %v", err)
+	}
+	err := reg.SendCommand(ctx, userID, deviceA, "", "queue:set", map[string]interface{}{
+		"trackIds": []interface{}{"ok-track", "\"><script>alert(1)</script>", "track-3"},
+	}, 0)
+	if err == nil {
+		t.Fatal("expected rejection on invalid trackId")
+	}
+	if !errors.Is(err, ErrQueueEmpty) {
+		t.Fatalf("expected ErrQueueEmpty, got %v", err)
+	}
+}
+
+func TestSendCommandQueueSetRespectsRevisionFencing(t *testing.T) {
+	reg, cleanup := newTestRegistry(t)
+	defer cleanup()
+	ctx := context.Background()
+	const userID = "user-queue-rev"
+	deviceA := registerTestDevice(t, reg, userID, "A")
+	resume := true
+	if _, _, _, err := reg.StartTransfer(ctx, userID, deviceA, &resume, "boot"); err != nil {
+		t.Fatalf("seed active: %v", err)
+	}
+
+	// First write creates rev=1.
+	if err := reg.SendCommand(ctx, userID, deviceA, "", "queue:set", map[string]interface{}{
+		"trackIds": []interface{}{"t-1"},
+		"index":    0.0,
+	}, 0); err != nil {
+		t.Fatalf("first set: %v", err)
+	}
+
+	// After this write the queue is at revision=1. A caller who says
+	// "expect queueRevision=1; only apply if rev matches" must be allowed;
+	// a STALE caller who says 1 but the queue has already moved on must
+	// be rejected. First write (2) succeeds, moving rev to 2. Third write
+	// (stale rev=1) must reject.
+	if err := reg.SendCommand(ctx, userID, deviceA, "", "queue:set", map[string]interface{}{
+		"trackIds":      []interface{}{"t-2"},
+		"index":         0.0,
+		"queueRevision": 1.0, // matches current rev -> OK
+	}, 0); err != nil {
+		t.Fatalf("matching revision write: %v", err)
+	}
+
+	err := reg.SendCommand(ctx, userID, deviceA, "", "queue:set", map[string]interface{}{
+		"trackIds":      []interface{}{"t-4"},
+		"index":         0.0,
+		"queueRevision": 1.0, // now stale (queue is at rev 2)
+	}, 0)
+	if !errors.Is(err, ErrQueueStaleRev) {
+		t.Fatalf("expected ErrQueueStaleRev, got %v", err)
+	}
+
+	raw, _ := reg.rdb.Get(ctx, reg.keyQueue(userID)).Result()
+	var stored PlaybackQueue
+	json.Unmarshal([]byte(raw), &stored)
+	if stored.Revision != 2 {
+		t.Fatalf("expected final revision=2, got %d", stored.Revision)
+	}
+}
+
+func TestSendCommandNextAdvancesQueueAndPublishesNowPlayingBolt(t *testing.T) {
+	reg, cleanup := newTestRegistry(t)
+	defer cleanup()
+	ctx := context.Background()
+	const userID = "user-next-adv"
+	deviceA := registerTestDevice(t, reg, userID, "A")
+
+	resume := true
+	if _, _, _, err := reg.StartTransfer(ctx, userID, deviceA, &resume, "boot"); err != nil {
+		t.Fatalf("seed active: %v", err)
+	}
+	// Queue exists via explicit Set.
+	if err := reg.applyQueueSetIntent(ctx, userID, deviceA, deviceA, map[string]interface{}{
+		"trackIds": []interface{}{"alpha", "beta", "gamma"},
+		"index":    0.0,
+		"repeat":   "off",
+	}); err != nil {
+		t.Fatalf("seed queue: %v", err)
+	}
+
+	// NowPlaying pinned to alpha.
+	if _, err := reg.PutNowPlaying(ctx, userID, &NowPlaying{
+		TrackID:         "alpha",
+		DurationSec:     180,
+		IsPlaying:       true,
+		PositionSec:     10,
+		DeviceID:        deviceA,
+		ClientSeq:       1,
+		ClientEventAtMs: time.Now().UnixMilli(),
+	}); err != nil {
+		t.Fatalf("put np: %v", err)
+	}
+
+	sub := reg.rdb.Subscribe(ctx, reg.UserChannel(userID))
+	defer sub.Close()
+	_ = sub.Channel() // subscribe enough for pub signal; assertion via GetNowPlaying
+
+	if err := reg.SendCommand(ctx, userID, deviceA, "", "next", nil, 0); err != nil {
+		t.Fatalf("next: %v", err)
+	}
+
+	// nowPlaying must be beta atomically (not via round-trip np:update from device).
+	np, err := reg.GetNowPlaying(ctx, userID)
+	if err != nil || np == nil {
+		t.Fatalf("read np: %v", err)
+	}
+	if np.TrackID != "beta" {
+		t.Fatalf("expected track beta, got %q", np.TrackID)
+	}
+	if np.QueueIndex != 1 {
+		t.Fatalf("expected queueIndex=1, got %d", np.QueueIndex)
+	}
+	if np.PositionSec != 0 {
+		t.Fatalf("expected position reset to 0 on advance, got %d", np.PositionSec)
 	}
 }

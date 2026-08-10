@@ -64,6 +64,23 @@ function buildPublishSnapshot(player, deviceId) {
     const cover = (() => {
         try { return apiClient.getCoverUrl(t) || ''; } catch { return ''; }
     })();
+    // DECISIONS 2026-08-10 TrackSync/#4: queue payload for server-owned sync.
+    // player.serverQueue is populated by PlayerContext from the local queue
+    // manager. If empty (no queue), the backend gate returns QUEUE_EMPTY and
+    // this snapshot is dropped silently — caller never sees the failure.
+    //
+    // We send titles/artists/covers inline because other devices must render
+    // the nowPlaying frame without a second catalog fetch per track. The
+    // backend strips / rewrites sensitive fields — it is the single source of
+    // truth for fields schema.
+    //
+    // Cap: 500 trackIds so the queue:set payload fits in the WS / REST body
+    // limit (MaxCommandPayloadBytes=2048 default). This is the same reason
+    // we don't dispatch entire albums as one giant pg payload.
+    const queue = player?.serverQueue || null;
+    const trackIds = Array.isArray(queue?.trackIds) && queue.trackIds.length > 0
+        ? queue.trackIds.slice(0, 500)
+        : undefined;
     return {
         trackId: String(t.id),
         title: typeof t.title === 'string' ? t.title : '',
@@ -75,6 +92,8 @@ function buildPublishSnapshot(player, deviceId) {
         deviceId: deviceId || '',
         queueSource: typeof player.queueSource === 'string' ? player.queueSource : '',
         queueName: typeof player.queueName === 'string' ? player.queueName : '',
+        trackIds,
+        queueIndex: Number.isFinite(queue?.currentIndex) ? queue.currentIndex : undefined,
     };
 }
 
@@ -125,13 +144,43 @@ export default function DeviceSyncProvider({ children }) {
                 }
                 if (!p.isPlaying && p.currentTrack && typeof p.resumePlayback === 'function') await p.resumePlayback();
                 return;
-            case 'next':
+            case 'next': {
+                // DECISIONS 2026-08-10 TrackSync/#3+#4: backend has already advanced
+                // the queue slot and piggybacked the NEW nowPlaying snapshot onto
+                // the cmd frame (payload.nowPlaying). Apply it directly — do NOT
+                // call p.playNextTrack() which would derive next from the LOCAL
+                // queueManager and race with what backend just wrote into SoT.
+                const piggy = payload.nowPlaying;
+                if (piggy && typeof piggy === 'object' && typeof p.applyRemotePlayback === 'function') {
+                    const ok = await p.applyRemotePlayback({ ...piggy, isPlaying: true }, { silent: false });
+                    if (!ok) throw new Error('REMOTE_APPLY_FAILED');
+                    return;
+                }
+                // Fallback: old servers did not piggyback — perform local next.
                 if (typeof p.playNextTrack === 'function') await p.playNextTrack();
                 return;
-            case 'previous':
+            }
+            case 'previous': {
+                const piggy = payload.nowPlaying;
+                if (piggy && typeof piggy === 'object' && typeof p.applyRemotePlayback === 'function') {
+                    const ok = await p.applyRemotePlayback({ ...piggy, isPlaying: true }, { silent: false });
+                    if (!ok) throw new Error('REMOTE_APPLY_FAILED');
+                    return;
+                }
                 if (typeof p.playPreviousTrack === 'function') await p.playPreviousTrack();
                 return;
+            }
             case 'seek': {
+                // DECISIONS 2026-08-10 TrackSync/#3: backend projects seek into
+                // nowPlaying SoT Directly (=positionSec intent already written).
+                // Prefer applying the snapshot if present (keeps trackId/
+                // queueIndex coherent with the new position without waiting for
+                // the active device's np:update). Otherwise direct seek.
+                const piggy = payload.nowPlaying;
+                if (piggy && typeof piggy === 'object' && typeof p.applyRemotePlayback === 'function') {
+                    const ok = await p.applyRemotePlayback({ ...piggy }, { silent: true });
+                    if (ok) return;
+                }
                 const pos = Number(payload.positionSec);
                 if (Number.isFinite(pos) && pos >= 0 && typeof p.seekToPosition === 'function') {
                     await p.seekToPosition(Math.floor(pos * 1000));

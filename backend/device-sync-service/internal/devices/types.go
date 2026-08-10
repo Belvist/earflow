@@ -28,10 +28,16 @@ type DeviceCapabilities struct {
 const NowPlayingRejectReasonStale = "STALE_WRITE"
 const NowPlayingRejectReasonStaleRevision = "STALE_REVISION"
 
+const NowPlayingRejectReasonNoQueue = "NO_QUEUE"
+const NowPlayingRejectReasonQueueConflict = "QUEUE_CONFLICT"
+
 const (
 	CommandPause       = "pause"
 	CommandTransfer    = "transfer"
 	CommandRevokeAudio = "revoke_audio"
+
+	// Server-owned-queue intents.
+	CommandQueueSet = "queue:set"
 )
 
 // NowPlaying is the single playback truth for a user.
@@ -49,8 +55,29 @@ type NowPlaying struct {
 	ActiveRevision  int64  `json:"activeRevision,omitempty"`
 	QueueSource     string `json:"queueSource,omitempty"`
 	QueueName       string `json:"queueName,omitempty"`
+	QueueIndex      int    `json:"queueIndex,omitempty"`
+	QueueRevision   int64  `json:"queueRevision,omitempty"`
 	ClientSeq       int64  `json:"clientSeq,omitempty"`
 	ClientEventAtMs int64  `json:"clientEventAtMs,omitempty"`
+}
+
+// PlaybackQueue is the authoritative per-user track queue. Server owns it —
+// clients send intents (next/prev/set), server computes the next state under
+// a CAS (Redis WATCH+MULTI) and publishes the new nowPlaying atomically.
+//
+// Reference: Spotify Connect PlayerState tracks_queue. OWned by the user
+// (not the device): survives transfers, browser reloads, device offline.
+type PlaybackQueue struct {
+	TrackIDs      []string `json:"trackIds"`
+	Index         int      `json:"index"`
+	Repeat        string   `json:"repeat"` // off|all|one
+	Shuffle       bool     `json:"shuffle"`
+	ShuffleOrder  []int    `json:"shuffleOrder,omitempty"`
+	QueueSource   string   `json:"queueSource,omitempty"`
+	QueueName     string   `json:"queueName,omitempty"`
+	Revision      int64    `json:"revision"`
+	UpdatedAtMs   int64    `json:"updatedAtMs"`
+	UpdatedByDevice string `json:"updatedByDeviceId,omitempty"`
 }
 
 // NowPlayingWriteResult is the authoritative result of a now-playing write.
