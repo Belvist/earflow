@@ -50,7 +50,7 @@ function loadMusicSeoUrls(baseUrl) {
     }
 }
 
-function createSitemapService({ artistRegistryDb, albumsDb, publicBaseUrl, cacheTtlMs }) {
+function createSitemapService({ artistRegistryDb, albumsDb, songsDb, publicBaseUrl, cacheTtlMs }) {
     const baseUrl = String(publicBaseUrl || 'https://earflow.ru').trim().replace(/\/$/, '');
     const ttlMs = Number.isFinite(Number(cacheTtlMs)) ? Number(cacheTtlMs) : 15 * 60 * 1000;
     const musicSeoUrls = loadMusicSeoUrls(baseUrl);
@@ -62,9 +62,12 @@ function createSitemapService({ artistRegistryDb, albumsDb, publicBaseUrl, cache
     };
 
     async function buildUrls() {
-        const [artists, albums] = await Promise.all([
+        const [artists, albums, songs] = await Promise.all([
             artistRegistryDb.listArtistsForSitemap({ limit: 50000, offset: 0 }),
             albumsDb.listAlbumsForSitemap({ limit: 50000, offset: 0 }),
+            songsDb && typeof songsDb.listSongsForSitemap === 'function'
+                ? songsDb.listSongsForSitemap({ limit: 50000, offset: 0 }).catch(() => [])
+                : Promise.resolve([]),
         ]);
 
         const urls = [];
@@ -95,6 +98,15 @@ function createSitemapService({ artistRegistryDb, albumsDb, publicBaseUrl, cache
             urls.push({ loc: `${baseUrl}${path}`, lastmod });
         }
 
+        for (const s of Array.isArray(songs) ? songs : []) {
+            const id = s && s.id ? Number(s.id) : 0;
+            if (!id) continue;
+            const slug = s && s.slug ? String(s.slug) : '';
+            const lastmod = normalizeIsoDateOrNull(s.updatedAt);
+            const path = slug ? `/track/${id}-${encodeURIComponent(slug)}` : `/track/${id}`;
+            urls.push({ loc: `${baseUrl}${path}`, lastmod });
+        }
+
         return urls;
     }
 
@@ -117,11 +129,12 @@ function createSitemapService({ artistRegistryDb, albumsDb, publicBaseUrl, cache
     };
 }
 
-function registerSitemap(app, { artistRegistryDb, albumsDb, isProduction, publicBaseUrl }) {
+function registerSitemap(app, { artistRegistryDb, albumsDb, songsDb, isProduction, publicBaseUrl }) {
     const limiter = createSitemapLimiter({ isProduction: !!isProduction });
     const service = createSitemapService({
         artistRegistryDb,
         albumsDb,
+        songsDb,
         publicBaseUrl,
         cacheTtlMs: 15 * 60 * 1000,
     });

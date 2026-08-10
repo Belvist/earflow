@@ -61,6 +61,7 @@ const ArtistPage = lazyWithRetry(() => import('./components/ArtistPage'), 'Artis
 const ArtistTracksPage = lazyWithRetry(() => import('./components/ArtistTracksPage'), 'ArtistTracksPage');
 const AlbumPage = lazyWithRetry(() => import('./components/AlbumPage'), 'AlbumPage');
 const AboutPage = lazyWithRetry(() => import('./components/AboutPage'), 'AboutPage');
+const TrackPage = lazyWithRetry(() => import('./pages/TrackPage'), 'TrackPage');
 const PopularArtistsPage = lazyWithRetry(() => import('./components/PopularArtistsPage'), 'PopularArtistsPage');
 const SearchPage = lazyWithRetry(() => import('./components/SearchPage'), 'SearchPage');
 const MusicSeoPage = lazyWithRetry(() => import('./components/MusicSeoPage'), 'MusicSeoPage');
@@ -523,6 +524,11 @@ function computePageMeta(pathname, isAuthHost) {
       // не показываем его в title. PlaylistRoute перезапишет title после загрузки.
       return { title: 'Плейлист — Earflow', description: 'Плейлист в Earflow', robots: 'index,follow' };
     },
+    track: (p) => {
+      // route param: "numericId[-slug]". Не показываем id в title —
+      // TrackPage перезапишет title реальным названием трека после загрузки.
+      return { title: 'Трек — Earflow', description: 'Слушать трек онлайн на Earflow', robots: 'index,follow' };
+    },
     artist: (p) => {
       // route param: "publicId[-slug]" или имя. В SEO title никогда не показываем
       // 32-hex publicId — ждём загрузки meta (ArtistPage перезапишет title).
@@ -792,6 +798,7 @@ function AppLayout() {
                 <Route path="/mix/:token" element={<PublicSharePage />} />
                 <Route path="/playlist/:idOrToken" element={<PlaylistRoute />} />
                 <Route path="/about" element={<AboutPage />} />
+                <Route path="/track/:trackId" element={<TrackPage />} />
                 <Route path="/privacy" element={<LegalPage slug="privacy" />} />
                 <Route path="/cookies" element={<LegalPage slug="cookies" />} />
                 <Route path="/security" element={<LegalPage slug="security" />} />

@@ -14,6 +14,7 @@ const createAuthenticateUser = require('./middleware/authenticateUser');
 const artistsDb = require('./lib/db/artists');
 const artistRegistryDb = require('./lib/db/artistRegistry');
 const albumsDb = require('./lib/db/albums');
+const songsSitemapDb = require('./lib/db/songs');
 const artistAnalyticsDb = require('./lib/db/artistAnalytics');
 const {
     buildArtistClaimAutoReviewConfig,
@@ -430,6 +431,7 @@ app.use(express.json({ limit: '64kb' }));
 registerSitemap(app, {
     artistRegistryDb,
     albumsDb,
+    songsDb: songsSitemapDb,
     isProduction,
     publicBaseUrl: process.env.PUBLIC_WEB_BASE_URL || 'https://earflow.ru',
 });
