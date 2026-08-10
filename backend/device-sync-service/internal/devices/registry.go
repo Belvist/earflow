@@ -1381,9 +1381,6 @@ func normalizeCommandPayload(cmd string, payload map[string]interface{}) (map[st
 		if payload == nil {
 			return nil, ErrQueueEmpty
 		}
-		// Return the original payload unchanged so the receiver's business data
-		// (trackIds, queueRevision, queueSource, etc.) reach applyQueueSetIntent
-		// unmodified.
 		return payload, nil
 	default:
 		return nil, ErrUnknownCommand
