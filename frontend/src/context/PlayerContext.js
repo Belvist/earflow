@@ -1059,6 +1059,16 @@ export const PlayerProvider = ({
       .catch(() => false);
   }, [currentTrack, recordManualSkip]);
 
+  const playerRefCurrentTrackId = () => {
+    try {
+      const t = playerCoreRef.current?.currentTrack;
+      const id = t?.id != null ? String(t.id) : '';
+      return id || '';
+    } catch {
+      return '';
+    }
+  };
+
   const applyRemotePlaybackCore = useCallback(async (snapshot = {}, options = {}) => {
     const trackId = snapshot?.trackId != null ? String(snapshot.trackId).trim() : '';
     if (!trackId) return false;
@@ -1066,6 +1076,13 @@ export const PlayerProvider = ({
     const posRaw = Number(snapshot.positionSec);
     const hasPos = Number.isFinite(posRaw) && posRaw >= 0;
     const pos = hasPos ? posRaw : 0;
+    // snapshot.durationSec — authoritative track length from the publisher.
+    // Older devices may still have state.duration from a PREVIOUS track; we
+    // always prefer snapshot's duration when available.
+    const snapshotDuration = Number(snapshot.durationSec);
+    const durationSec = Number.isFinite(snapshotDuration) && snapshotDuration > 0
+      ? snapshotDuration
+      : Number(state.duration);
     const shouldPlay = snapshot.isPlaying !== false;
     const silent = options && options.silent === true;
     const queueSource = typeof snapshot.queueSource === 'string' ? snapshot.queueSource : '';
@@ -1080,20 +1097,44 @@ export const PlayerProvider = ({
       }
     } catch { }
 
+    // DECISIONS 2026-08-10 TrackSync/#2: if the SAME track is already loaded
+    // only adjust position (and never kill isPlaying state unless told to
+    // pause). This is what fixes "track resets to 0 on transfer" briefly
+    // appearing before the active device's np:update arrives.
+    const currentTrackId = playerRefCurrentTrackId();
+    if (currentTrackId && currentTrackId === trackId) {
+      if (hasPos && Number.isFinite(durationSec) && durationSec > 0) {
+        const clamped = Math.max(0, Math.min(pos, durationSec - 0.001));
+        try {
+          await playerCoreRef.current?.seek(clamped);
+        } catch { /* seek may be deferred — UI already reflects new pos */ }
+        if (state.currentTimeRef) state.currentTimeRef.current = clamped;
+        resumeHintRef.current = { trackId, positionSeconds: clamped };
+      }
+      if (!shouldPlay && playerCoreRef.current?.isPlaying === true) {
+        try { await playerCoreRef.current?.pause(); } catch { /* noop */ }
+      } else if (shouldPlay && !silent && playerCoreRef.current?.isPlaying !== true) {
+        try { await playerCoreRef.current?.play(); } catch { /* noop */ }
+      }
+      return true;
+    }
+
     const ok = await playerCoreRef.current
       .playTrackById(trackId, false)
       .catch(() => false);
     if (!ok) return false;
 
     if (hasPos) {
-      if (state.currentTimeRef) state.currentTimeRef.current = pos;
-      resumeHintRef.current = { trackId, positionSeconds: pos };
-      const dur = Number(state.duration);
-      if (Number.isFinite(dur) && dur > 0) {
-        playerTimeTrackerRef.current?.writeExternalProgress(pos, dur);
+      const clamped = Number.isFinite(durationSec) && durationSec > 0
+        ? Math.max(0, Math.min(pos, durationSec - 0.001))
+        : pos;
+      if (state.currentTimeRef) state.currentTimeRef.current = clamped;
+      resumeHintRef.current = { trackId, positionSeconds: clamped };
+      if (Number.isFinite(durationSec) && durationSec > 0) {
+        playerTimeTrackerRef.current?.writeExternalProgress(clamped, durationSec);
       }
       if (!silent) {
-        await playerCoreRef.current?.seek(pos).catch(() => undefined);
+        await playerCoreRef.current?.seek(clamped).catch(() => undefined);
       }
     }
 

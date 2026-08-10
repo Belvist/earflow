@@ -7,7 +7,6 @@ import useAuth from '../../hooks/useAuth';
 import { usePlayer } from '../../context/PlayerContext';
 import useDeviceSync from '../../hooks/useDeviceSync';
 import {
-    SILENT_SHADOW_ALIGN_SEC,
     SILENT_SHADOW_TICK_MS,
     buildSilentShadowSnapshot,
     getNowPlayingRevision,
@@ -105,10 +104,13 @@ export default function DeviceSyncProvider({ children }) {
                 } else if (p.isPlaying && typeof p.pausePlayback === 'function') {
                     await p.pausePlayback();
                 }
-                const remoteSnapshot = buildSilentShadowSnapshot(payload.nowPlaying);
-                if (remoteSnapshot && typeof p.applyRemotePlayback === 'function') {
-                    await p.applyRemotePlayback(remoteSnapshot, { silent: true });
-                }
+                // DECISIONS 2026-08-10 TrackSync/#2: snapshot.nowPlaying уже в payload
+                // (backend piggyback). НЕ применяем silent load здесь — это
+                // перезапишет локальный player до того как activate-приёмник
+                // успеет корректно resume'ить, давая race «reset to 0». Вместо
+                // этого просто держим локальный текст unchanged (player still
+                // на паузе от suspendLocalOutput), а snapshot вступит в силу
+                // через обычный flow player_state frame.
                 return;
             }
             case 'pause':
@@ -146,17 +148,19 @@ export default function DeviceSyncProvider({ children }) {
                     : deviceRef.current?.nowPlaying;
                 const remoteSnapshot = buildSilentShadowSnapshot(sourceNowPlaying);
                 const remoteTrackId = normalizeTrackId(remoteSnapshot?.trackId);
-                const localTrackId = readPlayerTrackId(p);
-                const remotePositionSec = Number(remoteSnapshot?.positionSec) || 0;
-                const localPositionSec = readPlayerPositionSec(p);
-                const needsRemoteApply = !!remoteSnapshot && (
-                    !localTrackId
-                    || localTrackId !== remoteTrackId
-                    || Math.abs(localPositionSec - remotePositionSec) >= SILENT_SHADOW_ALIGN_SEC
-                );
+                // localTrackId/localPositionSec доступны по месту через p.*.
 
-                if (needsRemoteApply && typeof p.applyRemotePlayback === 'function') {
-                    const ok = await p.applyRemotePlayback({ ...remoteSnapshot, isPlaying: shouldResume });
+                // DECISIONS 2026-08-10 TrackSync/#2: piggyback'd snapshot всегда
+                // authoritative. Если у нас ЕСТЬ snapshot — применяем его
+                // полностью (trackId+pos+isPlaying), не «silent». Это ключевая
+                // разница от прежнего поведения: сервер уже знает куда мы
+                // переходим.
+                if (remoteSnapshot && remoteTrackId && typeof p.applyRemotePlayback === 'function') {
+                    const applyPayload = {
+                        ...remoteSnapshot,
+                        isPlaying: shouldResume,
+                    };
+                    const ok = await p.applyRemotePlayback(applyPayload, { silent: false });
                     if (!ok) throw new Error('REMOTE_APPLY_FAILED');
                     return;
                 }
