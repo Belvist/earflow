@@ -23,6 +23,7 @@ const ALLOWED_HOSTS = new Set(
 );
 const NAV_TIMEOUT_MS = Number(process.env.PRERENDER_NAV_TIMEOUT_MS || 8000);
 const SETTLE_MS = Number(process.env.PRERENDER_SETTLE_MS || 2000);
+const CONTENT_TITLE_TIMEOUT_MS = Number(process.env.PRERENDER_CONTENT_TITLE_TIMEOUT_MS || 6000);
 const PAGE_CACHE_TTL_MS = Number(process.env.PRERENDER_PAGE_CACHE_TTL_MS || 60 * 60 * 1000);
 const MAX_CONCURRENT = Number(process.env.PRERENDER_MAX_CONCURRENT || 4);
 
@@ -119,10 +120,10 @@ async function render(url) {
                         const t = document.title.toLowerCase();
                         return t && !t.includes('earflow — музыкальная платформа') && t !== 'earflow' && t !== '';
                     },
-                    { timeout: SETTLE_MS }
+                    { timeout: CONTENT_TITLE_TIMEOUT_MS }
                 );
             } catch {
-                // title не обновился — отдаём что есть (не 504, для бота всё равно SPA fallback)
+                // title не обновился — отдаём что есть (не 504)
             }
         }
         await page.evaluate((ms) => new Promise((r) => setTimeout(r, ms)), SETTLE_MS);
