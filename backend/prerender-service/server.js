@@ -21,6 +21,7 @@ const ALLOWED_HOSTS = new Set(
         .map((h) => h.trim().toLowerCase())
         .filter(Boolean)
 );
+const FRONTEND_ORIGIN = String(process.env.PRERENDER_FRONTEND_ORIGIN || 'http://frontend:3004');
 const NAV_TIMEOUT_MS = Number(process.env.PRERENDER_NAV_TIMEOUT_MS || 8000);
 const SETTLE_MS = Number(process.env.PRERENDER_SETTLE_MS || 2000);
 const CONTENT_TITLE_TIMEOUT_MS = Number(process.env.PRERENDER_CONTENT_TITLE_TIMEOUT_MS || 6000);
@@ -109,18 +110,24 @@ async function render(url) {
     let page;
     try {
         page = await context.newPage();
-        // Блокируем тяжёлые ресурсы — ботам нужен только текст, не картинки/шрифты
+        // API-запросы SPA идут на публичный api.earflow.ru — из контейнера это loopback.
+        // Переписываем на внутренний frontend:3004 (там api gateway на том же docker network).
         await page.setRequestInterception(true);
         page.on('request', (req) => {
             const rt = req.resourceType();
-            if (rt === 'image' || rt === 'media' || rt === 'font') req.abort();
-            else req.continue();
+            if (rt === 'image' || rt === 'media' || rt === 'font') { req.abort(); return; }
+            const u = req.url();
+            if (u.startsWith('https://api.earflow.ru')) {
+                req.continue({ url: u.replace('https://api.earflow.ru', FRONTEND_ORIGIN) });
+                return;
+            }
+            req.continue();
         });
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT_MS });
 
         // Адаптивное ожидание: title меняется на осмысленный (не дефолт SPA)
         const urlPath = new URL(url).pathname;
-        const isContentPage = urlPath.startsWith('/music/') || urlPath.startsWith('/artist/') || urlPath.startsWith('/album/');
+        const isContentPage = urlPath.startsWith('/music/') || urlPath.startsWith('/artist/') || urlPath.startsWith('/album/') || urlPath.startsWith('/track/');
         if (isContentPage) {
             try {
                 await page.waitForFunction(
