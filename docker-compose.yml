@@ -2248,6 +2248,41 @@ services:
       - /var/log/nginx:size=32M,uid=1001,gid=1001
       - /tmp:size=16M,uid=1001,gid=1001
 
+  # Prerender Server (SEO bot rendering). Read-only, no cookies.
+  prerender:
+    build:
+      context: ./backend/prerender-service
+      dockerfile: Dockerfile
+      target: production
+    container_name: music-prerender
+    expose:
+      - "3100"
+    environment:
+      NODE_ENV: production
+      PORT: 3100
+      PRERENDER_ALLOWED_HOSTS: "frontend:3004"
+      PRERENDER_NAV_TIMEOUT_MS: ${PRERENDER_NAV_TIMEOUT_MS:-8000}
+      PRERENDER_SETTLE_MS: ${PRERENDER_SETTLE_MS:-1200}
+      PRERENDER_PAGE_CACHE_TTL_MS: ${PRERENDER_PAGE_CACHE_TTL_MS:-60000}
+    networks:
+      - music-network
+    restart: unless-stopped
+    depends_on:
+      frontend:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "node -e \"require('http').get('http://localhost:3100/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))\"" ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64M,uid=1001,gid=1001
+      - /var/cache:size=32M,uid=1001,gid=1001
+
   # Artist Frontend - Production Build with Nginx
   artist-frontend:
     build:
