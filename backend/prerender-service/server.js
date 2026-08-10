@@ -24,8 +24,10 @@ const ALLOWED_HOSTS = new Set(
 const NAV_TIMEOUT_MS = Number(process.env.PRERENDER_NAV_TIMEOUT_MS || 5000);
 const SETTLE_MS = Number(process.env.PRERENDER_SETTLE_MS || 2500);
 const PAGE_CACHE_TTL_MS = Number(process.env.PRERENDER_PAGE_CACHE_TTL_MS || 60 * 1000);
+const MAX_CONCURRENT = Number(process.env.PRERENDER_MAX_CONCURRENT || 2);
 
 let browserPromise = null;
+let inFlight = 0;
 
 async function getBrowser() {
     if (browserPromise) return browserPromise;
@@ -152,6 +154,13 @@ async function handleRequest(req, res) {
         return req.method === 'HEAD' ? res.end() : res.end(cached.html);
     }
 
+    if (inFlight >= MAX_CONCURRENT) {
+        // Защита от конкурентного OOM на VPS с малым RAM
+        res.writeHead(503, { 'Content-Type': 'text/plain; charset=utf-8', 'Retry-After': '2' });
+        return res.end('Prerender busy — retry');
+    }
+
+    inFlight++;
     try {
         const { html, status } = await render(target.toString());
         const safe = sanitizeHtml(html);
@@ -161,6 +170,8 @@ async function handleRequest(req, res) {
         const msg = err && err.message ? err.message : 'Prerender failed';
         res.writeHead(503, { 'Content-Type': 'text/plain; charset=utf-8' });
         return res.end(`Prerender error: ${msg}`);
+    } finally {
+        inFlight--;
     }
 }
 
