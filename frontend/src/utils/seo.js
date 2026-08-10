@@ -3,7 +3,7 @@ const PAGE_JSON_LD_ID = 'earflow-page-jsonld';
 export function setPageMeta(options = {}) {
     if (typeof document === 'undefined') return;
 
-    const { title, description, canonicalUrl, robots, jsonLd } = options;
+    const { title, description, canonicalUrl, robots, jsonLd, image } = options;
 
     if (typeof title === 'string' && title.trim()) {
         document.title = title.trim();
@@ -25,6 +25,11 @@ export function setPageMeta(options = {}) {
 
     if (typeof robots === 'string' && robots.trim()) {
         setMetaByName('robots', robots.trim());
+    }
+
+    if (typeof image === 'string' && image.trim()) {
+        setMetaByProperty('og:image', image.trim());
+        setMetaByName('twitter:image', image.trim());
     }
 
     if (Object.prototype.hasOwnProperty.call(options, 'jsonLd')) {

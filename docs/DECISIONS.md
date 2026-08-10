@@ -4,6 +4,30 @@
 
 ---
 
+## 2026-08-10 — SEO baseline: sitemap из каталога + PNG og:image
+
+**Status:** accepted
+**Area:** frontend | artist-service | seo
+**Context:** Аудит SEO показал четыре провала: (1) статический `frontend/public/sitemap.xml` (~181 URL `/music/*`) был мёртв — nginx `location = /sitemap.xml` проксирует в artist-service, который отдавал только `/`, `/about`, артистов и альбомы (186 URL, все SEO-страницы жанров отсутствовали); (2) `og:image`/`twitter:image` указывали на `logo512.svg` — VK/Telegram/Facebook не рендерят SVG-превью; (3) manifest `short_name: "Music"` вместо бренда; (4) `setPageMeta` не умел обновлять `og:image`/`twitter:image` на клиенте.
+
+**Decision:**
+1. **Sitemap включает все music-страницы.** Source of truth — `frontend/src/seo/musicSeoCatalog.json`; `frontend` `prebuild` копирует его в `backend/artist-service/lib/sitemap/musicSeoCatalog.json` (виден Docker build context). `lib/sitemap/index.js` читает копию (env override `MUSIC_SEO_CATALOG_PATH`) и добавляет все topic/intent комбинации (515 URL). Статический `public/sitemap.xml` не трогаем — недостижим через nginx.
+2. **`og:image` → PNG** — `favicon-512.png` (существующий 512×512 ассет) вместо SVG.
+3. **`manifest.short_name` = "Earflow"** — имя бренда для PWA/избранного.
+4. **`setPageMeta` принимает `options.image`** — обновляет `og:image`/`twitter:image` на клиенте.
+
+**Alternatives considered:** (1) Регенерировать `public/sitemap.xml` на билде — отвергнуто (второй control path, недостижим через nginx). (2) `react-helmet-async` — не нужно, свой `setPageMeta` покрывает кейс. (3) Прендер/SSR для ботов — отдельная большая задача (PEND-SEO-001).
+
+**Consequences:** После деплоя artist-service sitemap отдаёт ~700 URL (проверка: `curl https://earflow.ru/sitemap.xml | grep -c '<url>'`); сниппеты в мессенджерах показывают логотип. Деплой: `docker compose build artist-service frontend && docker compose up -d --force-recreate artist-service frontend`. При отсутствии файла каталога — graceful fallback (sitemap работает как раньше).
+
+**Files touched:** `frontend/public/index.html`, `frontend/public/manifest.json`, `frontend/package.json` (prebuild sync), `frontend/src/utils/seo.js`, `backend/artist-service/lib/sitemap/index.js` + `musicSeoCatalog.json` (synced copy), `backend/artist-service/Dockerfile` (comment)
+
+**Чтобы не повторилось:** red flag — править `frontend/public/sitemap.xml` руками; добавлять SEO-страницу в каталог без проверки, что она попала в prod sitemap (`curl https://earflow.ru/sitemap.xml | grep music/<slug>`).
+
+**Follow-up (тот же день, hash-in-title fix):** пользователь сообщил `b5c8b6cba3763e8fa8c70160c9cbd23fВсе треки` в выдаче/UI — route param (32-hex publicId) показывался как имя артиста до загрузки меты. Исправлено: `App.js computePageMeta` для `artist`/`album` извлекает slug вместо publicId (fallback — нейтральный title, без хэша); `ArtistTracksPage` добавлен `resolvedArtistName` state (set из `getArtistMeta`) + `displayArtistName` memo (никогда не возвращает чистый 32-hex) + `setPageMeta` для title; `ArtistPage` `setPageMeta` теперь передаёт `image` (avatar/hero обложка); `AlbumPage` `displayAlbumName`/`displayArtistName` фильтруют 32-hex из route params. **Инвариант:** ни один route-param, матчинг `/^[a-f0-9]{32}$/`, не должен попадать в `<title>`/H1/og:title — только slug-часть или загруженное имя.
+
+---
+
 ## 2026-08-10 — Seek intent → SoT projection (cmd:seek пишет в nowPlaying)
 
 **Status:** accepted

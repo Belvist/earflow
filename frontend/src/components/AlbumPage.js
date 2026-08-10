@@ -508,7 +508,7 @@ export default function AlbumPage() {
 
   const displayAlbumName = useMemo(() => {
     const fromParam = (albumName || '').toString().trim();
-    if (fromParam) return fromParam;
+    if (fromParam && !/^[a-f0-9]{32}$/i.test(fromParam)) return fromParam;
     const fromMeta = albumMeta && typeof albumMeta === 'object' ? (albumMeta.title ?? albumMeta.album ?? albumMeta.name ?? '') : '';
     const metaTitle = (fromMeta || '').toString().trim();
     if (metaTitle) return metaTitle;
@@ -519,7 +519,7 @@ export default function AlbumPage() {
 
   const displayArtistName = useMemo(() => {
     const fromParam = (artist || '').toString().trim();
-    if (fromParam) return fromParam;
+    if (fromParam && !/^[a-f0-9]{32}$/i.test(fromParam)) return fromParam;
     const fromMeta = albumMeta && typeof albumMeta === 'object' ? (albumMeta.artist ?? albumMeta.artistName ?? '') : '';
     const metaArtist = (fromMeta || '').toString().trim();
     if (metaArtist) return metaArtist;

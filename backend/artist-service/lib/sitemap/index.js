@@ -1,6 +1,8 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const fs = require('node:fs');
+const path = require('node:path');
 const rateLimit = require('express-rate-limit');
 
 const { slugifyForRoute } = require('./slugify');
@@ -20,9 +22,38 @@ function createEtag(xml) {
     return `W/"${hash}"`;
 }
 
+function loadMusicSeoUrls(baseUrl) {
+    try {
+        const catalogPath = process.env.MUSIC_SEO_CATALOG_PATH
+            || path.join(__dirname, 'musicSeoCatalog.json');
+        const raw = fs.readFileSync(catalogPath, 'utf8');
+        const catalog = JSON.parse(raw);
+
+        const topics = [];
+        for (const group of Array.isArray(catalog.groups) ? catalog.groups : []) {
+            for (const topic of Array.isArray(group.topics) ? group.topics : []) {
+                if (topic && typeof topic.slug === 'string' && topic.slug) topics.push(topic.slug);
+            }
+        }
+        const intents = (Array.isArray(catalog.intents) ? catalog.intents : [])
+            .map((i) => (i && typeof i.slug === 'string' ? i.slug : ''))
+            .filter(Boolean);
+
+        const urls = [`${baseUrl}/music`];
+        for (const t of topics) {
+            urls.push(`${baseUrl}/music/${t}`);
+            for (const i of intents) urls.push(`${baseUrl}/music/${t}/${i}`);
+        }
+        return urls;
+    } catch {
+        return [];
+    }
+}
+
 function createSitemapService({ artistRegistryDb, albumsDb, publicBaseUrl, cacheTtlMs }) {
     const baseUrl = String(publicBaseUrl || 'https://earflow.ru').trim().replace(/\/$/, '');
     const ttlMs = Number.isFinite(Number(cacheTtlMs)) ? Number(cacheTtlMs) : 15 * 60 * 1000;
+    const musicSeoUrls = loadMusicSeoUrls(baseUrl);
 
     const cache = {
         xml: null,
@@ -39,6 +70,10 @@ function createSitemapService({ artistRegistryDb, albumsDb, publicBaseUrl, cache
         const urls = [];
         urls.push({ loc: `${baseUrl}/`, lastmod: null });
         urls.push({ loc: `${baseUrl}/about`, lastmod: null });
+
+        for (const loc of musicSeoUrls) {
+            urls.push({ loc, lastmod: null });
+        }
 
         for (const a of Array.isArray(artists) ? artists : []) {
             const pid = a && a.publicId ? String(a.publicId).trim().toLowerCase() : '';

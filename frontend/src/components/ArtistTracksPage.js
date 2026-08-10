@@ -8,6 +8,7 @@ import { normalizeArtistParamForApi } from '../utils/artistRoute';
 import { resolveArtistPath } from '../utils/artistRoute';
 import { extractArtistPublicIdFromRouteParam } from '../utils/artistRoute';
 import { slugifyForRoute } from '../utils/routeSlug';
+import { setPageMeta } from '../utils/seo';
 
 const Page = styled.div`
   min-height: 0;
@@ -71,10 +72,12 @@ export default function ArtistTracksPage() {
     const [tracks, setTracks] = useState([]);
     const [sort, setSort] = useState('popular');
     const [year, setYear] = useState(null);
+    const [resolvedArtistName, setResolvedArtistName] = useState('');
 
     useEffect(() => {
         setSort('popular');
         setYear(null);
+        setResolvedArtistName('');
     }, [artist]);
 
     useEffect(() => {
@@ -99,6 +102,8 @@ export default function ArtistTracksPage() {
                 }
 
                 const pid = canonicalMeta && canonicalMeta.artistPublicId ? String(canonicalMeta.artistPublicId).trim().toLowerCase() : '';
+                const metaName = canonicalMeta && typeof canonicalMeta.artist === 'string' ? canonicalMeta.artist.trim() : '';
+                if (metaName) setResolvedArtistName(metaName);
                 if (pid && typeof params.artist === 'string') {
                     const currentRaw = params.artist.toString().normalize('NFC').trim();
                     const currentLower = currentRaw.toLowerCase();
@@ -151,10 +156,34 @@ export default function ArtistTracksPage() {
         return sorted;
     }, [allTracks, sort, year]);
 
+    // displayArtistName: реальное имя артиста (из меты), иначе slug из URL,
+    // иначе (publicId без slug и без меты) — нейтральный fallback. Хэш 32-hex
+    // никогда не показываем (SEO + UI).
+    const displayArtistName = useMemo(() => {
+        const fromMeta = safeText(resolvedArtistName);
+        if (fromMeta) return fromMeta;
+        const raw = typeof params.artist === 'string' ? params.artist.normalize('NFC').trim() : '';
+        if (/^[a-f0-9]{32}$/i.test(raw)) return 'Артист';
+        const extracted = extractArtistPublicIdFromRouteParam(raw);
+        if (extracted && extracted.publicId) {
+            return safeText(extracted.slug) || 'Артист';
+        }
+        return safeText(raw) || 'Артист';
+    }, [resolvedArtistName, params.artist]);
+
+    useEffect(() => {
+        const name = safeText(resolvedArtistName);
+        if (!name) return;
+        setPageMeta({
+            title: `Все треки — ${name} | Earflow`,
+            description: `Все треки артиста ${name} на Earflow`,
+        });
+    }, [resolvedArtistName]);
+
     const onPlayTrack = useCallback((trackId) => {
         if (!viewTracks.length) return;
-        player.playFromList(viewTracks, trackId, artist || 'Артист');
-    }, [player, viewTracks, artist]);
+        player.playFromList(viewTracks, trackId, displayArtistName);
+    }, [player, viewTracks, displayArtistName]);
 
     const onBack = useCallback(() => {
         if (typeof window !== 'undefined' && window.history.length > 1) {
@@ -179,7 +208,7 @@ export default function ArtistTracksPage() {
             ) : (
                 <ArtistTracksSection
                     tracks={viewTracks}
-                    artistName={artist}
+                    artistName={displayArtistName}
                     sort={sort}
                     year={year}
                     years={years}

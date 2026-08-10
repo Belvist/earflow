@@ -518,19 +518,33 @@ function computePageMeta(pathname, isAuthHost) {
   }
 
   const handlers = {
-    playlist: (p) => {
-      const idOrToken = p[1] ? decodeURIComponent(p[1]) : '';
-      return { title: idOrToken ? `Плейлист ${idOrToken} — Earflow` : 'Плейлист — Earflow', description: 'Плейлист в Earflow', robots: 'index,follow' };
+    playlist: () => {
+      // idOrToken (числовой id или share-token) — технический идентификатор,
+      // не показываем его в title. PlaylistRoute перезапишет title после загрузки.
+      return { title: 'Плейлист — Earflow', description: 'Плейлист в Earflow', robots: 'index,follow' };
     },
     artist: (p) => {
-      const artist = p[1] ? decodeURIComponent(p[1]) : '';
-      return { title: artist ? `${artist} — Earflow` : 'Артист — Earflow', description: artist ? `Треки и релизы: ${artist}` : 'Страница артиста в Earflow', robots: 'index,follow' };
+      // route param: "publicId[-slug]" или имя. В SEO title никогда не показываем
+      // 32-hex publicId — ждём загрузки meta (ArtistPage перезапишет title).
+      const raw = p[1] ? decodeURIComponent(p[1]) : '';
+      const m = /^[a-f0-9]{32}(?:-(.*))?$/i.exec(raw);
+      const slug = m && m[1] ? m[1].replace(/-/g, ' ').trim() : '';
+      const name = m ? slug : raw;
+      return {
+        title: name ? `${name} — Earflow` : 'Артист — Earflow',
+        description: name ? `Треки и релизы: ${name}` : 'Страница артиста в Earflow',
+        robots: 'index,follow',
+      };
     },
     album: (p) => {
-      const artist = p[1] ? decodeURIComponent(p[1]) : '';
-      const albumName = p[2] ? decodeURIComponent(p[2]) : '';
-      const left = [artist, albumName].filter(Boolean).join(' — ');
-      return { title: left ? `${left} — Earflow` : 'Альбом — Earflow', description: albumName ? `Альбом: ${albumName}` : 'Страница альбома в Earflow', robots: 'index,follow' };
+      // /album/:albumPublicId[-slug] — publicId в title не показываем.
+      const rawId = p[1] ? decodeURIComponent(p[1]) : '';
+      const mId = /^[a-f0-9]{32}(?:-(.*))?$/i.exec(rawId);
+      const slugId = mId && mId[1] ? mId[1].replace(/-/g, ' ').trim() : '';
+      const artist = mId ? '' : rawId; // форма /album/:artist/:albumName
+      const albumName = p[2] && !mId ? decodeURIComponent(p[2]) : '';
+      const left = [artist, albumName].filter(Boolean).join(' — ') || slugId;
+      return { title: left ? `${left} — Earflow` : 'Альбом — Earflow', description: albumName ? `Альбом: ${albumName}` : (slugId ? `Альбом: ${slugId}` : 'Страница альбома в Earflow'), robots: 'index,follow' };
     },
   };
 

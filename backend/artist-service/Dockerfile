@@ -34,6 +34,8 @@ COPY --from=builder --chown=nodejs:nodejs /app/lib ./lib
 COPY --from=builder --chown=nodejs:nodejs /app/middleware ./middleware
 COPY --from=builder --chown=nodejs:nodejs /app/package.json ./
 
+# Sitemap слушает musicSeoCatalog.json из lib/sitemap (копируется с lib выше).
+
 USER nodejs
 
 ENV NODE_ENV=production

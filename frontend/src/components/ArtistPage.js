@@ -103,10 +103,13 @@ export default function ArtistPage() {
     if (!pid) return;
     const titleName = safeText(meta.artist || displayArtistName) || 'Артист';
     const description = titleName ? `Треки и релизы: ${titleName}` : 'Страница артиста в Earflow';
+    const coverPath = safeText(meta.avatarCoverPath || meta.heroCoverPath || meta.bannerCoverPath);
+    const image = coverPath ? apiClient.getCoverUrl({ cover_path: coverPath }) : undefined;
     setPageMeta({
       title: `${titleName} — Earflow`,
       description,
       canonicalUrl,
+      image,
     });
   }, [meta, displayArtistName, canonicalUrl]);
 

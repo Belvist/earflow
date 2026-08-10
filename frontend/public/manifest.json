@@ -1,6 +1,6 @@
 {
   "id": "/",
-  "short_name": "Music",
+  "short_name": "Earflow",
   "name": "Earflow",
   "description": "Персональная музыкальная платформа с ML-рекомендациями",
   "icons": [
