@@ -1086,28 +1086,26 @@ func (r *Registry) SendCommand(ctx context.Context, userID, fromDeviceID, to, cm
 	if targetID == "" {
 		targetID = activeID
 	}
-	targetID, err = r.normalizeDeviceID(targetID)
-	if err != nil {
-		r.recordCommandRejected("invalid_target")
-		return ErrInvalidDeviceID
+
+	// Server-owned intents (queue:set / next / previous) operate on the USER,
+	// not on the active device. We know the active device is required later in
+	// the intent application, but SendCommand itself must not reject based on
+	// fromDeviceID == activeID. That's what kept NON-ACTIVE controllers from
+	// pushing queues and advancing tracks.
+	if cmd != "queue:set" && cmd != "next" && cmd != "previous" {
+		// Device-targeted paths (seek / play / pause / set_volume) still must
+		// hit the CURRENT active device. This guards against stale UI.
+		if targetID != activeID {
+			r.recordCommandRejected("target_not_active")
+			return ErrNotActiveDevice
+		}
 	}
-	// queue:set is broadcast to the sync scope (user), not device-targeted.
-	// Any owned device may write the queue.
 	if cmd == "queue:set" {
+		// Liveness guard for queue:set sender — we want only real devices
+		// to write the queue, not stale IDs. fromDeviceID existence check.
 		if _, err := r.loadDevice(ctx, fromDeviceID); err != nil {
 			return err
 		}
-	} else if targetID != activeID {
-		r.recordCommandRejected("target_not_active")
-		return ErrNotActiveDevice
-	}
-	d, err := r.loadDevice(ctx, targetID)
-	if err != nil {
-		return err
-	}
-	if d == nil || d.UserID != uid {
-		r.recordCommandRejected("target_not_found")
-		return ErrDeviceNotFound
 	}
 
 	payload, err = normalizeCommandPayload(cmd, payload)
