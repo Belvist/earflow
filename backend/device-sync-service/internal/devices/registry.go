@@ -1065,7 +1065,7 @@ func (r *Registry) SendCommand(ctx context.Context, userID, fromDeviceID, to, cm
 		return nil
 	}
 
-	if activeID == "" {
+	if activeID == "" && cmd != "queue:set" {
 		r.recordCommandRejected("no_active_output")
 		return ErrNotActiveDevice
 	}
