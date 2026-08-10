@@ -24,7 +24,7 @@ const ALLOWED_HOSTS = new Set(
 const NAV_TIMEOUT_MS = Number(process.env.PRERENDER_NAV_TIMEOUT_MS || 5000);
 const SETTLE_MS = Number(process.env.PRERENDER_SETTLE_MS || 2500);
 const PAGE_CACHE_TTL_MS = Number(process.env.PRERENDER_PAGE_CACHE_TTL_MS || 60 * 1000);
-const MAX_CONCURRENT = Number(process.env.PRERENDER_MAX_CONCURRENT || 2);
+const MAX_CONCURRENT = Number(process.env.PRERENDER_MAX_CONCURRENT || 4);
 
 let browserPromise = null;
 let inFlight = 0;
