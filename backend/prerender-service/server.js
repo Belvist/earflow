@@ -25,7 +25,7 @@ const NAV_TIMEOUT_MS = Number(process.env.PRERENDER_NAV_TIMEOUT_MS || 8000);
 const SETTLE_MS = Number(process.env.PRERENDER_SETTLE_MS || 2000);
 const CONTENT_TITLE_TIMEOUT_MS = Number(process.env.PRERENDER_CONTENT_TITLE_TIMEOUT_MS || 6000);
 const PAGE_CACHE_TTL_MS = Number(process.env.PRERENDER_PAGE_CACHE_TTL_MS || 60 * 60 * 1000);
-const MAX_CONCURRENT = Number(process.env.PRERENDER_MAX_CONCURRENT || 4);
+const MAX_CONCURRENT = Number(process.env.PRERENDER_MAX_CONCURRENT || 2);
 
 let browserPromise = null;
 let inFlight = 0;
@@ -57,6 +57,8 @@ async function getBrowser() {
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
             '--disable-gpu',
+            '--single-process',           // меньше потоков для VPS с 8GB
+            '--js-flags=--max-old-space-size=512',
             '--disable-software-rasterizer',
             '--disable-background-networking',
             '--disable-default-apps',
@@ -108,6 +110,13 @@ async function render(url) {
     let page;
     try {
         page = await context.newPage();
+        // Блокируем тяжёлые ресурсы — ботам нужен только текст, не картинки/шрифты
+        await page.setRequestInterception(true);
+        page.on('request', (req) => {
+            const rt = req.resourceType();
+            if (rt === 'image' || rt === 'media' || rt === 'font') req.abort();
+            else req.continue();
+        });
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT_MS });
 
         // Адаптивное ожидание: title меняется на осмысленный (не дефолт SPA)
