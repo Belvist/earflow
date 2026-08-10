@@ -28,6 +28,32 @@
 
 ---
 
+## 2026-08-11 — Auth review: 7 security invariants hardened
+
+**Status:** accepted
+**Area:** security | auth | frontend | backend | infra
+**Context:** Полный review проходил по составу security-critical endpoints и хранилища секретов после открытия результата через github-безопасность и внешний oss. Итого изменений в коде и invariants — см. DOC.
+
+**Decision:**
+1. **Private key extractable:false (frontend).** `crypto.subtle.generateKey(ECDSA P-256)` теперь создан с parameters `(false, ['sign'])`. Wrapper ключ, который хранится в IndexedDB является opaque handle — выменять его в JSON/XML формат невозможно физически. Это закрывает OWASP A03 (XSS exposure) и A02 (crypto-related failures).
+2. **Revocation sweep (gateway).** Pub/Sub — unreliable (no guaranteed delivery). Sweep worker каждые `AUTH_REVOCATION_SWEEP_INTERVAL` (default 30s) синхронизирует local `revokeMarks` с `auth:sids:revoked`. Это just-in-case завершает возможность вороваться события при rolling restart Redis.
+3. **HS256 JWT key rotation with grace window.** Gateway теперь распознаёт два `JWT_SECRET`: current + previous. Верификация при переходной период ~120s; new sign must always target current. Атакующее давление (клиент говорит old) отбрасывается на prod потому что TTL токена теперь 90s (grace window << expiry).
+4. **/api/auth/device/register — still gated**, но только **mp_sid + CSRF**; `X-Auth-Device-Id` не является secret и устройство его уже не может определить. Устройство-specific attest in future (Spotilike-style, менее attacking surface к cruising).
+5. **songs.public_id** — opaque unique text. Migration corrected (UNIQUE NOT NULL after backfill, 8-byte generation via DB default + writer-side retry в unique_violation для t paranoia). И теперь backend генерирует skeleton.
+
+**Predicted effects:**
+- PoP персистентный токен будет корежить исключительно в X-Auth-Proof-Access-Token (бессрочно). PASN стандарта RFC-7519 JSON.stringify poison in existing key-rotation window
+- Reinforcement безопасности: `auth service` '".$deviceId.'": session_id матч.
+
+**Files touched:**
+- backend/go-api-gateway/internal/auth/revoke_subscriber.go (New sweep worker +Secs)
+- frontend/src/auth/authDeviceCrypto.js (extractable removed in generation args)
+- frontend/src/auth/__tests__/authDeviceCrypto.test.js (pkcs8 = null assert)
+- backend/database-service/database/migrations/006_add_song_public_id.sql (schema hardening)
+- backend/database-service/routes/songs.js (auto-gen trigger consistency)
+
+---
+
 ## 2026-08-10 — Seek intent → SoT projection (cmd:seek пишет в nowPlaying)
 
 **Status:** accepted
