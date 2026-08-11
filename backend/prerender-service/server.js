@@ -60,7 +60,6 @@ async function getBrowser() {
             '--disable-dev-shm-usage',
             '--disable-gpu',
             '--js-flags=--max-old-space-size=256',
-            '--single-process',
             '--disable-software-rasterizer',
             '--disable-background-networking',
             '--disable-default-apps',
