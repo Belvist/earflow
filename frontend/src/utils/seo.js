@@ -3,7 +3,7 @@ const PAGE_JSON_LD_ID = 'earflow-page-jsonld';
 export function setPageMeta(options = {}) {
     if (typeof document === 'undefined') return;
 
-    const { title, description, canonicalUrl, robots, jsonLd, image } = options;
+    const { title, description, canonicalUrl, canonicalPath, robots, jsonLd, image } = options;
 
     if (typeof title === 'string' && title.trim()) {
         document.title = title.trim();
@@ -18,7 +18,17 @@ export function setPageMeta(options = {}) {
         setMetaByProperty('twitter:description', description.trim());
     }
 
-    if (typeof canonicalUrl === 'string' && canonicalUrl.trim()) {
+    // canonicalPath (internal path) is resolved against origin to a full URL.
+    // The seo-page emits the canonical form directly. Use of one form throttles
+    // external consumers (crawls together). Back-compat: canonicalUrl still wins.
+    if (typeof canonicalPath === 'string' && canonicalPath.trim()) {
+        const path = canonicalPath.trim().startsWith('/') ? canonicalPath.trim() : `/${canonicalPath.trim()}`;
+        const origin = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
+        if (origin) {
+            setCanonicalLink(`${origin}${path}`);
+            setMetaByProperty('og:url', `${origin}${path}`);
+        }
+    } else if (typeof canonicalUrl === 'string' && canonicalUrl.trim()) {
         setCanonicalLink(canonicalUrl.trim());
         setMetaByProperty('og:url', canonicalUrl.trim());
     }
