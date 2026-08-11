@@ -184,6 +184,26 @@ When `PROOF_ACCESS_TOKEN_ENABLED`, hot authenticated GET/light API may use `X-Au
 - **redirect_uri** строго по allowlist (`NATIVE_AUTH_REDIRECT_URIS`) — нет open-redirect; code одноразовый (GETDEL) + TTL ≤ 60s; exchange бесполезен без `code_verifier`.
 - **Красный флаг:** WKWebView/in-app webview, который читает пароль/куки логина; cookie-transplant как способ внести сессию; приём сессии по code без проверки PKCE или без one-time consume; finalize, отдающий данные пользователя вместо редиректа с code; добавление второго native-login пути рядом с этим (`INV-ARCH-001`).
 
+### INV-SEC-019 (предложение, 2026-08-11) — WebCrypto PoP ключи только неизвлекаемые
+
+**Область:** `frontend/src/auth/authDeviceCrypto.js` И `artist-frontend/src/auth/authDeviceCrypto.js` — **ОБЕ** копии обязаны использовать единый путь. Сейчас две параллельные копии — это уже tech debt (INV-ARCH-001: dual implementations одного протокола).
+
+Client-side ECDSA для Device Proof MUST создаваться с `extractable: false` и `usages: ['sign']`. IndexedDB хранит opaque CryptoKey handle, не raw key material. Экспортация `pkcs8` запрещена в production code paths (jest-тест проверяет `pkcs8 === null`).
+
+- **Red flag (любой из двух):** `true` в generateKey / exportKey ('pkcs8'|'jwk') под PoP context; ключи в localStorage/sessionStorage.
+- **Red flag:** добавление `invalidateAuthDeviceBinding` /гоre-export в одной из двух копий без второй.
+
+Client-side ECDSA для Device Proof MUST создаваться с `extractable: false` и `usages: ['sign']`. IndexedDB хранит opaque CryptoKey handle, не raw key material. Экспортация `pkcs8` запрещена в production code paths (jest-тест проверяет `pkcs8 === null`).
+
+- **Red flag:** `true` в generateKey / exportKey ('pkcs8'|'jwk') под PoP context; ключи в localStorage/sessionStorage.
+
+### INV-SEC-020 (предложение, 2026-08-11) — Revoke propagation также имеет sweep safety-net
+
+Redis Pub/Sub revoke events are **best-effort**. Every consumer (gateway, device-sync, streaming service) обязан иметь periodic re-read источника правды (Redis `auth:sids:revoked` / shared epoch floor) с TTL-синхронизацией локального кэша. Иначе miss-событие = revocation задержка до pod restart (worst-case многие часы).
+
+- **Реализация:** go-api-gateway `SessionManager.startRevocationSweep` + device-sync-service. Sweep interval — `AUTH_REVOCATION_SWEEP_INTERVAL`, default 30s.
+- **Red flag:** новый consumer pub/sub `earflow:auth:session:revoke:v1` без аналогичного sweep; revocation логика которая только подписывается.
+
 ---
 
 ## Frontend
