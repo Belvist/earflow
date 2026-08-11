@@ -110,6 +110,11 @@ async function render(url) {
     let page;
     try {
         page = await context.newPage();
+        // CSRF/PoP headers могут ломать prerender — удаляем ВСЕ заголовки из оригинального запроса (бот анонимный)
+        await page.setExtraHTTPHeaders({
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8',
+        });
         // API-запросы SPA идут на публичный api.earflow.ru — из контейнера это loopback.
         // Переписываем на внутренний frontend:3004 (там api gateway на том же docker network).
         await page.setRequestInterception(true);
@@ -118,8 +123,16 @@ async function render(url) {
             if (rt === 'image' || rt === 'media' || rt === 'font') { req.abort(); return; }
             const u = req.url();
             if (u.startsWith('https://api.earflow.ru')) {
-                // Пишем на frontend:3004 (frontend nginx теперь проксирует /api → api-gateway)
-                req.continue({ url: u.replace('https://api.earflow.ru', FRONTEND_ORIGIN) });
+                // frontend:3004 проксирует /api на api-gateway:3000 (internal docker network)
+                const headers = Object.assign({}, req.headers(), {
+                    'Origin': 'http://frontend:3004',
+                    'Referer': 'http://frontend:3004/',
+                    'Host': 'frontend:3004',
+                });
+                // Удаляем все auth/csrf заголовки (бот анонимный)
+                for (const k of ['authorization', 'cookie', 'x-csrf-token', 'x-auth-device-id', 'x-auth-device-proof', 'x-auth-proof-access-token'])
+                    delete headers[k];
+                req.continue({ url: u.replace('https://api.earflow.ru', FRONTEND_ORIGIN), headers });
                 return;
             }
             req.continue();
