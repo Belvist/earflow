@@ -23,11 +23,12 @@ const ALLOWED_HOSTS = new Set(
 );
 const FRONTEND_ORIGIN = String(process.env.PRERENDER_FRONTEND_ORIGIN || 'http://frontend:3004');
 const API_ORIGIN = String(process.env.PRERENDER_API_ORIGIN || 'http://api-gateway:3000');
-const NAV_TIMEOUT_MS = Number(process.env.PRERENDER_NAV_TIMEOUT_MS || 8000);
-const SETTLE_MS = Number(process.env.PRERENDER_SETTLE_MS || 2000);
-const CONTENT_TITLE_TIMEOUT_MS = Number(process.env.PRERENDER_CONTENT_TITLE_TIMEOUT_MS || 6000);
+const NAV_TIMEOUT_MS = Number(process.env.PRERENDER_NAV_TIMEOUT_MS || 15000);
+const SETTLE_MS = Number(process.env.PRERENDER_SETTLE_MS || 3000);
+const CONTENT_TITLE_TIMEOUT_MS = Number(process.env.PRERENDER_CONTENT_TITLE_TIMEOUT_MS || 10000);
 const PAGE_CACHE_TTL_MS = Number(process.env.PRERENDER_PAGE_CACHE_TTL_MS || 60 * 60 * 1000);
-const MAX_CONCURRENT = Number(process.env.PRERENDER_MAX_CONCURRENT || 2);
+// ОДИН context за раз — стабильность на 8GB VPS. Кэш сглаживает latency.
+const MAX_CONCURRENT = Number(process.env.PRERENDER_MAX_CONCURRENT || 1);
 
 let browserPromise = null;
 let inFlight = 0;
