@@ -123,16 +123,14 @@ async function render(url) {
             if (rt === 'image' || rt === 'media' || rt === 'font') { req.abort(); return; }
             const u = req.url();
             if (u.startsWith('https://api.earflow.ru')) {
-                // frontend:3004 проксирует /api на api-gateway:3000 (internal docker network)
+                // Frontend раздаёт SPA. Внутренние API идут прямо на gateway (auth headers убраны).
                 const headers = Object.assign({}, req.headers(), {
                     'Origin': 'http://frontend:3004',
                     'Referer': 'http://frontend:3004/',
-                    'Host': 'frontend:3004',
                 });
-                // Удаляем все auth/csrf заголовки (бот анонимный)
                 for (const k of ['authorization', 'cookie', 'x-csrf-token', 'x-auth-device-id', 'x-auth-device-proof', 'x-auth-proof-access-token'])
                     delete headers[k];
-                req.continue({ url: u.replace('https://api.earflow.ru', FRONTEND_ORIGIN), headers });
+                req.continue({ url: u.replace('https://api.earflow.ru', 'http://api-gateway:3000'), headers });
                 return;
             }
             req.continue();
