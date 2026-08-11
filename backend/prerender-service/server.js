@@ -126,20 +126,24 @@ async function render(url) {
         });
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT_MS });
 
-        // Адаптивное ожидание: title меняется на осмысленный (не дефолт SPA)
+        // Для SPA нужно дождаться загрузки данных до рендера. Prerender ботам — только текст.
+        // Ждём появления в body важного контента (не спиннера).
         const urlPath = new URL(url).pathname;
         const isContentPage = urlPath.startsWith('/music/') || urlPath.startsWith('/artist/') || urlPath.startsWith('/album/') || urlPath.startsWith('/track/');
         if (isContentPage) {
             try {
                 await page.waitForFunction(
                     () => {
-                        const t = document.title.toLowerCase();
-                        return t && !t.includes('earflow — музыкальная платформа') && t !== 'earflow' && t !== '';
+                        const root = document.getElementById('root');
+                        if (!root) return false;
+                        const h1 = root.querySelector('h1, h2, [role="heading"]');
+                        const skeleton = root.querySelector('[class*="skeleton"]');
+                        return !!h1 && !skeleton && (h1.textContent || '').trim().length > 0;
                     },
                     { timeout: CONTENT_TITLE_TIMEOUT_MS }
                 );
             } catch {
-                // title не обновился — отдаём что есть (не 504)
+                // Таймаут — отдаём что есть (не 504)
             }
         }
         await page.evaluate((ms) => new Promise((r) => setTimeout(r, ms)), SETTLE_MS);
