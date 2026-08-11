@@ -55,7 +55,7 @@ COMMENT ON EXTENSION vector IS 'vector data type and ivfflat and hnsw access met
 -- Name: cleanup_expired_reco_sessions(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.cleanup_expired_reco_sessions() RETURNS integer
+CREATE OR REPLACE FUNCTION public.cleanup_expired_reco_sessions() RETURNS integer
     LANGUAGE plpgsql
     AS $$
 DECLARE
@@ -76,7 +76,7 @@ $$;
 -- Name: reco_apply_feedback_to_taste_clusters(integer, public.vector, real, integer, integer, real); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.reco_apply_feedback_to_taste_clusters(p_user_id integer, p_track_embedding public.vector, p_alpha real, p_direction integer, p_max_clusters integer DEFAULT 5, p_new_cluster_dist_threshold real DEFAULT 0.25) RETURNS smallint
+CREATE OR REPLACE FUNCTION public.reco_apply_feedback_to_taste_clusters(p_user_id integer, p_track_embedding public.vector, p_alpha real, p_direction integer, p_max_clusters integer DEFAULT 5, p_new_cluster_dist_threshold real DEFAULT 0.25) RETURNS smallint
     LANGUAGE plpgsql
     AS $$
 DECLARE
@@ -170,7 +170,7 @@ $$;
 -- Name: reco_blend_user_embedding(public.vector, public.vector, real); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.reco_blend_user_embedding(old_embedding public.vector, track_embedding public.vector, alpha real) RETURNS public.vector
+CREATE OR REPLACE FUNCTION public.reco_blend_user_embedding(old_embedding public.vector, track_embedding public.vector, alpha real) RETURNS public.vector
     LANGUAGE sql IMMUTABLE PARALLEL SAFE
     AS $$
   SELECT CASE
@@ -189,7 +189,7 @@ $$;
 -- Name: reco_clamp01(double precision); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.reco_clamp01(v double precision) RETURNS double precision
+CREATE OR REPLACE FUNCTION public.reco_clamp01(v double precision) RETURNS double precision
     LANGUAGE plpgsql IMMUTABLE
     AS $$
 BEGIN
@@ -211,7 +211,7 @@ $$;
 -- Name: reco_refresh_user_taste_links(integer, integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.reco_refresh_user_taste_links(p_user_id integer, p_limit integer DEFAULT 50) RETURNS integer
+CREATE OR REPLACE FUNCTION public.reco_refresh_user_taste_links(p_user_id integer, p_limit integer DEFAULT 50) RETURNS integer
     LANGUAGE plpgsql
     AS $$
 DECLARE
@@ -260,7 +260,7 @@ $$;
 -- Name: reco_repel_user_embedding(public.vector, public.vector, real); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.reco_repel_user_embedding(old_embedding public.vector, track_embedding public.vector, alpha real) RETURNS public.vector
+CREATE OR REPLACE FUNCTION public.reco_repel_user_embedding(old_embedding public.vector, track_embedding public.vector, alpha real) RETURNS public.vector
     LANGUAGE sql IMMUTABLE PARALLEL SAFE
     AS $$
   SELECT CASE
@@ -278,7 +278,7 @@ $$;
 -- Name: reco_scale_vector(public.vector, real); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.reco_scale_vector(v public.vector, s real) RETURNS public.vector
+CREATE OR REPLACE FUNCTION public.reco_scale_vector(v public.vector, s real) RETURNS public.vector
     LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
     AS $$
   SELECT array_to_vector(
@@ -297,7 +297,7 @@ $$;
 -- Name: reco_song_embedding(double precision, double precision, double precision, double precision, double precision, double precision, double precision, double precision); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.reco_song_embedding(tempo double precision, energy double precision, valence double precision, danceability double precision, acousticness double precision, instrumentalness double precision, liveness double precision, speechiness double precision) RETURNS public.vector
+CREATE OR REPLACE FUNCTION public.reco_song_embedding(tempo double precision, energy double precision, valence double precision, danceability double precision, acousticness double precision, instrumentalness double precision, liveness double precision, speechiness double precision) RETURNS public.vector
     LANGUAGE plpgsql IMMUTABLE
     AS $$
 DECLARE
@@ -324,7 +324,7 @@ $$;
 -- Name: reco_song_features_sync_embedding(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.reco_song_features_sync_embedding() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.reco_song_features_sync_embedding() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 BEGIN
@@ -350,7 +350,7 @@ $$;
 -- Name: reco_tempo_norm(double precision); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.reco_tempo_norm(tempo double precision) RETURNS double precision
+CREATE OR REPLACE FUNCTION public.reco_tempo_norm(tempo double precision) RETURNS double precision
     LANGUAGE plpgsql IMMUTABLE
     AS $$
 DECLARE
@@ -369,7 +369,7 @@ $$;
 -- Name: reco_user_embedding_from_clusters(integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.reco_user_embedding_from_clusters(p_user_id integer) RETURNS public.vector
+CREATE OR REPLACE FUNCTION public.reco_user_embedding_from_clusters(p_user_id integer) RETURNS public.vector
     LANGUAGE sql STABLE PARALLEL SAFE
     AS $$
   WITH c AS (
@@ -399,7 +399,7 @@ $$;
 -- Name: refresh_song_mood_scores(integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.refresh_song_mood_scores(p_song_id integer DEFAULT NULL::integer) RETURNS integer
+CREATE OR REPLACE FUNCTION public.refresh_song_mood_scores(p_song_id integer DEFAULT NULL::integer) RETURNS integer
     LANGUAGE plpgsql
     AS $$
 DECLARE
@@ -454,7 +454,7 @@ $$;
 -- Name: refresh_statistics_cache(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.refresh_statistics_cache() RETURNS integer
+CREATE OR REPLACE FUNCTION public.refresh_statistics_cache() RETURNS integer
     LANGUAGE plpgsql
     AS $$
 DECLARE
@@ -514,7 +514,7 @@ $$;
 -- Name: search_enqueue(text, bigint, text, jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.search_enqueue(_entity_type text, _entity_id bigint, _op text, _hints jsonb) RETURNS void
+CREATE OR REPLACE FUNCTION public.search_enqueue(_entity_type text, _entity_id bigint, _op text, _hints jsonb) RETURNS void
     LANGUAGE plpgsql
     AS $$
 BEGIN
@@ -534,7 +534,7 @@ $$;
 -- Name: search_outbox_album_trigger(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.search_outbox_album_trigger() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.search_outbox_album_trigger() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 BEGIN
@@ -548,7 +548,7 @@ $$;
 -- Name: search_outbox_artist_trigger(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.search_outbox_artist_trigger() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.search_outbox_artist_trigger() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 BEGIN
@@ -562,7 +562,7 @@ $$;
 -- Name: search_outbox_song_trigger(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.search_outbox_song_trigger() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.search_outbox_song_trigger() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 DECLARE
@@ -590,7 +590,7 @@ $$;
 -- Name: songs_set_norm_cols(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.songs_set_norm_cols() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.songs_set_norm_cols() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 BEGIN
@@ -615,7 +615,7 @@ $$;
 -- Name: trg_refresh_song_mood_scores(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.trg_refresh_song_mood_scores() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.trg_refresh_song_mood_scores() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 BEGIN
@@ -629,7 +629,7 @@ $$;
 -- Name: update_updated_at_column(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.update_updated_at_column() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.update_updated_at_column() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 BEGIN
@@ -647,7 +647,7 @@ SET default_table_access_method = heap;
 -- Name: albums; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.albums (
+CREATE TABLE IF NOT EXISTS public.albums (
     id integer NOT NULL,
     public_id text DEFAULT encode(public.gen_random_bytes(16), 'hex'::text) NOT NULL,
     artist_id integer NOT NULL,
@@ -662,7 +662,7 @@ CREATE TABLE public.albums (
 -- Name: albums_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.albums_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.albums_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -675,14 +675,14 @@ CREATE SEQUENCE public.albums_id_seq
 -- Name: albums_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.albums_id_seq OWNED BY public.albums.id;
+ALTER SEQUENCE IF EXISTS public.albums_id_seq OWNED BY public.albums.id;
 
 
 --
 -- Name: analytics_events_raw; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.analytics_events_raw (
+CREATE TABLE IF NOT EXISTS public.analytics_events_raw (
     event_id text NOT NULL,
     schema_version integer DEFAULT 1 NOT NULL,
     event_time timestamp with time zone NOT NULL,
@@ -703,7 +703,7 @@ CREATE TABLE public.analytics_events_raw (
 -- Name: artist_account_members; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.artist_account_members (
+CREATE TABLE IF NOT EXISTS public.artist_account_members (
     id integer NOT NULL,
     account_id integer NOT NULL,
     user_id integer NOT NULL,
@@ -718,7 +718,7 @@ CREATE TABLE public.artist_account_members (
 -- Name: artist_account_members_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.artist_account_members_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.artist_account_members_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -731,14 +731,14 @@ CREATE SEQUENCE public.artist_account_members_id_seq
 -- Name: artist_account_members_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.artist_account_members_id_seq OWNED BY public.artist_account_members.id;
+ALTER SEQUENCE IF EXISTS public.artist_account_members_id_seq OWNED BY public.artist_account_members.id;
 
 
 --
 -- Name: artist_accounts; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.artist_accounts (
+CREATE TABLE IF NOT EXISTS public.artist_accounts (
     id integer NOT NULL,
     artist_id integer NOT NULL,
     status character varying(20) DEFAULT 'active'::character varying NOT NULL,
@@ -751,7 +751,7 @@ CREATE TABLE public.artist_accounts (
 -- Name: artist_accounts_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.artist_accounts_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.artist_accounts_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -764,14 +764,14 @@ CREATE SEQUENCE public.artist_accounts_id_seq
 -- Name: artist_accounts_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.artist_accounts_id_seq OWNED BY public.artist_accounts.id;
+ALTER SEQUENCE IF EXISTS public.artist_accounts_id_seq OWNED BY public.artist_accounts.id;
 
 
 --
 -- Name: artist_claim_requests; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.artist_claim_requests (
+CREATE TABLE IF NOT EXISTS public.artist_claim_requests (
     id integer NOT NULL,
     artist_id integer NOT NULL,
     user_id integer NOT NULL,
@@ -789,7 +789,7 @@ CREATE TABLE public.artist_claim_requests (
 -- Name: artist_claim_requests_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.artist_claim_requests_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.artist_claim_requests_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -802,14 +802,14 @@ CREATE SEQUENCE public.artist_claim_requests_id_seq
 -- Name: artist_claim_requests_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.artist_claim_requests_id_seq OWNED BY public.artist_claim_requests.id;
+ALTER SEQUENCE IF EXISTS public.artist_claim_requests_id_seq OWNED BY public.artist_claim_requests.id;
 
 
 --
 -- Name: artist_ownerships; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.artist_ownerships (
+CREATE TABLE IF NOT EXISTS public.artist_ownerships (
     id integer NOT NULL,
     artist_id integer NOT NULL,
     user_id integer NOT NULL,
@@ -824,7 +824,7 @@ CREATE TABLE public.artist_ownerships (
 -- Name: artist_ownerships_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.artist_ownerships_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.artist_ownerships_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -837,14 +837,14 @@ CREATE SEQUENCE public.artist_ownerships_id_seq
 -- Name: artist_ownerships_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.artist_ownerships_id_seq OWNED BY public.artist_ownerships.id;
+ALTER SEQUENCE IF EXISTS public.artist_ownerships_id_seq OWNED BY public.artist_ownerships.id;
 
 
 --
 -- Name: artist_trends; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.artist_trends (
+CREATE TABLE IF NOT EXISTS public.artist_trends (
     id integer NOT NULL,
     artist_name character varying(255) NOT NULL,
     play_count integer DEFAULT 0,
@@ -857,7 +857,7 @@ CREATE TABLE public.artist_trends (
 -- Name: artist_trends_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.artist_trends_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.artist_trends_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -870,14 +870,14 @@ CREATE SEQUENCE public.artist_trends_id_seq
 -- Name: artist_trends_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.artist_trends_id_seq OWNED BY public.artist_trends.id;
+ALTER SEQUENCE IF EXISTS public.artist_trends_id_seq OWNED BY public.artist_trends.id;
 
 
 --
 -- Name: artist_uploaders; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.artist_uploaders (
+CREATE TABLE IF NOT EXISTS public.artist_uploaders (
     user_id integer NOT NULL,
     artist_name character varying(255) NOT NULL,
     is_active boolean DEFAULT true NOT NULL,
@@ -890,7 +890,7 @@ CREATE TABLE public.artist_uploaders (
 -- Name: artists; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.artists (
+CREATE TABLE IF NOT EXISTS public.artists (
     id integer NOT NULL,
     public_id text DEFAULT encode(public.gen_random_bytes(16), 'hex'::text) NOT NULL,
     name character varying(255) NOT NULL,
@@ -913,7 +913,7 @@ CREATE TABLE public.artists (
 -- Name: artists_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.artists_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.artists_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -926,14 +926,14 @@ CREATE SEQUENCE public.artists_id_seq
 -- Name: artists_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.artists_id_seq OWNED BY public.artists.id;
+ALTER SEQUENCE IF EXISTS public.artists_id_seq OWNED BY public.artists.id;
 
 
 --
 -- Name: auth_devices; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.auth_devices (
+CREATE TABLE IF NOT EXISTS public.auth_devices (
     auth_device_id text NOT NULL,
     sid text NOT NULL,
     user_id bigint NOT NULL,
@@ -959,7 +959,7 @@ COMMENT ON TABLE public.auth_devices IS 'SoT PoP device keys bound to sid.';
 -- Name: auth_sessions; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.auth_sessions (
+CREATE TABLE IF NOT EXISTS public.auth_sessions (
     sid text NOT NULL,
     user_id bigint NOT NULL,
     refresh_jti text,
@@ -985,7 +985,7 @@ COMMENT ON TABLE public.auth_sessions IS 'SoT browser session (sid). Redis mp:se
 -- Name: user_interactions; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.user_interactions (
+CREATE TABLE IF NOT EXISTS public.user_interactions (
     id integer NOT NULL,
     user_id integer,
     song_id integer,
@@ -1006,7 +1006,7 @@ CREATE TABLE public.user_interactions (
 -- Name: dislikes; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.dislikes (
+CREATE TABLE IF NOT EXISTS public.dislikes (
     id integer NOT NULL,
     user_id integer NOT NULL,
     song_id integer NOT NULL,
@@ -1018,7 +1018,7 @@ CREATE TABLE public.dislikes (
 -- Name: dislikes_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.dislikes_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.dislikes_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -1031,14 +1031,14 @@ CREATE SEQUENCE public.dislikes_id_seq
 -- Name: dislikes_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.dislikes_id_seq OWNED BY public.dislikes.id;
+ALTER SEQUENCE IF EXISTS public.dislikes_id_seq OWNED BY public.dislikes.id;
 
 
 --
 -- Name: genre_popularity; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.genre_popularity (
+CREATE TABLE IF NOT EXISTS public.genre_popularity (
     id integer NOT NULL,
     genre_name character varying(100) NOT NULL,
     popularity_score double precision DEFAULT 0,
@@ -1051,7 +1051,7 @@ CREATE TABLE public.genre_popularity (
 -- Name: genre_popularity_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.genre_popularity_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.genre_popularity_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -1064,14 +1064,14 @@ CREATE SEQUENCE public.genre_popularity_id_seq
 -- Name: genre_popularity_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.genre_popularity_id_seq OWNED BY public.genre_popularity.id;
+ALTER SEQUENCE IF EXISTS public.genre_popularity_id_seq OWNED BY public.genre_popularity.id;
 
 
 --
 -- Name: genres; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.genres (
+CREATE TABLE IF NOT EXISTS public.genres (
     id integer NOT NULL,
     name character varying(100) NOT NULL,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
@@ -1082,7 +1082,7 @@ CREATE TABLE public.genres (
 -- Name: genres_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.genres_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.genres_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -1095,14 +1095,14 @@ CREATE SEQUENCE public.genres_id_seq
 -- Name: genres_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.genres_id_seq OWNED BY public.genres.id;
+ALTER SEQUENCE IF EXISTS public.genres_id_seq OWNED BY public.genres.id;
 
 
 --
 -- Name: likes; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.likes (
+CREATE TABLE IF NOT EXISTS public.likes (
     id integer NOT NULL,
     user_id integer NOT NULL,
     song_id integer NOT NULL,
@@ -1114,7 +1114,7 @@ CREATE TABLE public.likes (
 -- Name: likes_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.likes_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.likes_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -1127,14 +1127,14 @@ CREATE SEQUENCE public.likes_id_seq
 -- Name: likes_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.likes_id_seq OWNED BY public.likes.id;
+ALTER SEQUENCE IF EXISTS public.likes_id_seq OWNED BY public.likes.id;
 
 
 --
 -- Name: listens; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.listens (
+CREATE TABLE IF NOT EXISTS public.listens (
     id integer NOT NULL,
     user_id integer NOT NULL,
     song_id integer NOT NULL,
@@ -1146,7 +1146,7 @@ CREATE TABLE public.listens (
 -- Name: listens_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.listens_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.listens_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -1159,14 +1159,14 @@ CREATE SEQUENCE public.listens_id_seq
 -- Name: listens_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.listens_id_seq OWNED BY public.listens.id;
+ALTER SEQUENCE IF EXISTS public.listens_id_seq OWNED BY public.listens.id;
 
 
 --
 -- Name: lyrics; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.lyrics (
+CREATE TABLE IF NOT EXISTS public.lyrics (
     id integer NOT NULL,
     song_id integer NOT NULL,
     language character varying(5) DEFAULT 'ru'::character varying,
@@ -1187,7 +1187,7 @@ CREATE TABLE public.lyrics (
 -- Name: lyrics_external_cache; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.lyrics_external_cache (
+CREATE TABLE IF NOT EXISTS public.lyrics_external_cache (
     song_id integer NOT NULL,
     provider character varying(32) NOT NULL,
     status character varying(16) NOT NULL,
@@ -1203,7 +1203,7 @@ CREATE TABLE public.lyrics_external_cache (
 -- Name: lyrics_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.lyrics_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.lyrics_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -1216,14 +1216,14 @@ CREATE SEQUENCE public.lyrics_id_seq
 -- Name: lyrics_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.lyrics_id_seq OWNED BY public.lyrics.id;
+ALTER SEQUENCE IF EXISTS public.lyrics_id_seq OWNED BY public.lyrics.id;
 
 
 --
 -- Name: lyrics_reports; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.lyrics_reports (
+CREATE TABLE IF NOT EXISTS public.lyrics_reports (
     id integer NOT NULL,
     song_id integer NOT NULL,
     user_id integer NOT NULL,
@@ -1238,7 +1238,7 @@ CREATE TABLE public.lyrics_reports (
 -- Name: lyrics_reports_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.lyrics_reports_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.lyrics_reports_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -1251,14 +1251,14 @@ CREATE SEQUENCE public.lyrics_reports_id_seq
 -- Name: lyrics_reports_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.lyrics_reports_id_seq OWNED BY public.lyrics_reports.id;
+ALTER SEQUENCE IF EXISTS public.lyrics_reports_id_seq OWNED BY public.lyrics_reports.id;
 
 
 --
 -- Name: playlist_tracks; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.playlist_tracks (
+CREATE TABLE IF NOT EXISTS public.playlist_tracks (
     id integer NOT NULL,
     playlist_id integer NOT NULL,
     song_id integer NOT NULL,
@@ -1272,7 +1272,7 @@ CREATE TABLE public.playlist_tracks (
 -- Name: playlist_tracks_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.playlist_tracks_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.playlist_tracks_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -1285,14 +1285,14 @@ CREATE SEQUENCE public.playlist_tracks_id_seq
 -- Name: playlist_tracks_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.playlist_tracks_id_seq OWNED BY public.playlist_tracks.id;
+ALTER SEQUENCE IF EXISTS public.playlist_tracks_id_seq OWNED BY public.playlist_tracks.id;
 
 
 --
 -- Name: playlists; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.playlists (
+CREATE TABLE IF NOT EXISTS public.playlists (
     id integer NOT NULL,
     name character varying(255) NOT NULL,
     description text,
@@ -1315,7 +1315,7 @@ CREATE TABLE public.playlists (
 -- Name: playlists_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.playlists_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.playlists_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -1328,14 +1328,14 @@ CREATE SEQUENCE public.playlists_id_seq
 -- Name: playlists_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.playlists_id_seq OWNED BY public.playlists.id;
+ALTER SEQUENCE IF EXISTS public.playlists_id_seq OWNED BY public.playlists.id;
 
 
 --
 -- Name: queue_state; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.queue_state (
+CREATE TABLE IF NOT EXISTS public.queue_state (
     user_id integer NOT NULL,
     current_index integer DEFAULT 0,
     shuffle_enabled boolean DEFAULT false,
@@ -1351,7 +1351,7 @@ CREATE TABLE public.queue_state (
 -- Name: reco_migrations; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.reco_migrations (
+CREATE TABLE IF NOT EXISTS public.reco_migrations (
     id integer NOT NULL,
     name character varying(255) NOT NULL,
     applied_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
@@ -1362,7 +1362,7 @@ CREATE TABLE public.reco_migrations (
 -- Name: reco_migrations_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.reco_migrations_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.reco_migrations_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -1375,14 +1375,14 @@ CREATE SEQUENCE public.reco_migrations_id_seq
 -- Name: reco_migrations_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.reco_migrations_id_seq OWNED BY public.reco_migrations.id;
+ALTER SEQUENCE IF EXISTS public.reco_migrations_id_seq OWNED BY public.reco_migrations.id;
 
 
 --
 -- Name: recommendation_sessions; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.recommendation_sessions (
+CREATE TABLE IF NOT EXISTS public.recommendation_sessions (
     id text NOT NULL,
     session_id character varying(255) NOT NULL,
     user_id integer,
@@ -1399,7 +1399,7 @@ CREATE TABLE public.recommendation_sessions (
 -- Name: recommendation_sessions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.recommendation_sessions_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.recommendation_sessions_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -1412,14 +1412,14 @@ CREATE SEQUENCE public.recommendation_sessions_id_seq
 -- Name: recommendation_sessions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.recommendation_sessions_id_seq OWNED BY public.recommendation_sessions.id;
+ALTER SEQUENCE IF EXISTS public.recommendation_sessions_id_seq OWNED BY public.recommendation_sessions.id;
 
 
 --
 -- Name: refresh_tokens; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.refresh_tokens (
+CREATE TABLE IF NOT EXISTS public.refresh_tokens (
     jti text NOT NULL,
     sid text NOT NULL,
     user_id bigint NOT NULL,
@@ -1442,7 +1442,7 @@ COMMENT ON TABLE public.refresh_tokens IS 'SoT refresh rotation by jti.';
 -- Name: search_outbox_queue; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.search_outbox_queue (
+CREATE TABLE IF NOT EXISTS public.search_outbox_queue (
     entity_type text NOT NULL,
     entity_id bigint NOT NULL,
     op text NOT NULL,
@@ -1460,7 +1460,7 @@ CREATE TABLE public.search_outbox_queue (
 -- Name: security_events; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.security_events (
+CREATE TABLE IF NOT EXISTS public.security_events (
     id bigint NOT NULL,
     user_id bigint,
     sid text,
@@ -1482,7 +1482,7 @@ COMMENT ON TABLE public.security_events IS 'Append-only audit trail (login, revo
 -- Name: security_events_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.security_events_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.security_events_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -1494,14 +1494,14 @@ CREATE SEQUENCE public.security_events_id_seq
 -- Name: security_events_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.security_events_id_seq OWNED BY public.security_events.id;
+ALTER SEQUENCE IF EXISTS public.security_events_id_seq OWNED BY public.security_events.id;
 
 
 --
 -- Name: service_sessions; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.service_sessions (
+CREATE TABLE IF NOT EXISTS public.service_sessions (
     id integer NOT NULL,
     service_name character varying(100) NOT NULL,
     token_hash character varying(255) NOT NULL,
@@ -1515,7 +1515,7 @@ CREATE TABLE public.service_sessions (
 -- Name: service_sessions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.service_sessions_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.service_sessions_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -1528,14 +1528,14 @@ CREATE SEQUENCE public.service_sessions_id_seq
 -- Name: service_sessions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.service_sessions_id_seq OWNED BY public.service_sessions.id;
+ALTER SEQUENCE IF EXISTS public.service_sessions_id_seq OWNED BY public.service_sessions.id;
 
 
 --
 -- Name: social_post_likes; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.social_post_likes (
+CREATE TABLE IF NOT EXISTS public.social_post_likes (
     post_id bigint NOT NULL,
     user_id integer NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP
@@ -1546,7 +1546,7 @@ CREATE TABLE public.social_post_likes (
 -- Name: social_posts; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.social_posts (
+CREATE TABLE IF NOT EXISTS public.social_posts (
     id bigint NOT NULL,
     user_id integer NOT NULL,
     title text,
@@ -1572,7 +1572,7 @@ CREATE TABLE public.social_posts (
 -- Name: social_posts_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.social_posts_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.social_posts_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -1584,14 +1584,14 @@ CREATE SEQUENCE public.social_posts_id_seq
 -- Name: social_posts_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.social_posts_id_seq OWNED BY public.social_posts.id;
+ALTER SEQUENCE IF EXISTS public.social_posts_id_seq OWNED BY public.social_posts.id;
 
 
 --
 -- Name: song_features; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.song_features (
+CREATE TABLE IF NOT EXISTS public.song_features (
     id integer NOT NULL,
     song_id integer,
     tempo double precision,
@@ -1610,7 +1610,7 @@ CREATE TABLE public.song_features (
 -- Name: song_features_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.song_features_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.song_features_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -1623,14 +1623,14 @@ CREATE SEQUENCE public.song_features_id_seq
 -- Name: song_features_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.song_features_id_seq OWNED BY public.song_features.id;
+ALTER SEQUENCE IF EXISTS public.song_features_id_seq OWNED BY public.song_features.id;
 
 
 --
 -- Name: song_genres; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.song_genres (
+CREATE TABLE IF NOT EXISTS public.song_genres (
     id integer NOT NULL,
     song_id integer,
     genre_id integer
@@ -1641,7 +1641,7 @@ CREATE TABLE public.song_genres (
 -- Name: song_genres_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.song_genres_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.song_genres_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -1654,14 +1654,14 @@ CREATE SEQUENCE public.song_genres_id_seq
 -- Name: song_genres_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.song_genres_id_seq OWNED BY public.song_genres.id;
+ALTER SEQUENCE IF EXISTS public.song_genres_id_seq OWNED BY public.song_genres.id;
 
 
 --
 -- Name: song_mood_scores; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.song_mood_scores (
+CREATE TABLE IF NOT EXISTS public.song_mood_scores (
     song_id integer NOT NULL,
     score_workout double precision,
     score_focus double precision,
@@ -1678,7 +1678,7 @@ CREATE TABLE public.song_mood_scores (
 -- Name: song_moods; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.song_moods (
+CREATE TABLE IF NOT EXISTS public.song_moods (
     id integer NOT NULL,
     song_id integer NOT NULL,
     mood character varying(64) NOT NULL,
@@ -1693,7 +1693,7 @@ CREATE TABLE public.song_moods (
 -- Name: song_moods_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.song_moods_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.song_moods_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -1706,14 +1706,14 @@ CREATE SEQUENCE public.song_moods_id_seq
 -- Name: song_moods_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.song_moods_id_seq OWNED BY public.song_moods.id;
+ALTER SEQUENCE IF EXISTS public.song_moods_id_seq OWNED BY public.song_moods.id;
 
 
 --
 -- Name: songs; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.songs (
+CREATE TABLE IF NOT EXISTS public.songs (
     id integer NOT NULL,
     title character varying(255) NOT NULL,
     artist character varying(255) NOT NULL,
@@ -1776,7 +1776,7 @@ COMMENT ON COLUMN public.songs.public_id IS 'Opaque public identifier for Earflo
 -- Name: songs_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.songs_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.songs_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -1789,14 +1789,14 @@ CREATE SEQUENCE public.songs_id_seq
 -- Name: songs_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.songs_id_seq OWNED BY public.songs.id;
+ALTER SEQUENCE IF EXISTS public.songs_id_seq OWNED BY public.songs.id;
 
 
 --
 -- Name: statistics_cache; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.statistics_cache (
+CREATE TABLE IF NOT EXISTS public.statistics_cache (
     entity_type text NOT NULL,
     uploader_id integer NOT NULL,
     entity_value text NOT NULL,
@@ -1809,7 +1809,7 @@ CREATE TABLE public.statistics_cache (
 -- Name: subscription_plans; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.subscription_plans (
+CREATE TABLE IF NOT EXISTS public.subscription_plans (
     id integer NOT NULL,
     slug character varying(64) NOT NULL,
     name character varying(128) NOT NULL,
@@ -1827,7 +1827,7 @@ CREATE TABLE public.subscription_plans (
 -- Name: subscription_plans_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.subscription_plans_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.subscription_plans_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -1840,14 +1840,14 @@ CREATE SEQUENCE public.subscription_plans_id_seq
 -- Name: subscription_plans_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.subscription_plans_id_seq OWNED BY public.subscription_plans.id;
+ALTER SEQUENCE IF EXISTS public.subscription_plans_id_seq OWNED BY public.subscription_plans.id;
 
 
 --
 -- Name: subscriptions; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.subscriptions (
+CREATE TABLE IF NOT EXISTS public.subscriptions (
     id integer NOT NULL,
     user_id integer NOT NULL,
     plan_id integer NOT NULL,
@@ -1866,7 +1866,7 @@ CREATE TABLE public.subscriptions (
 -- Name: subscriptions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.subscriptions_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.subscriptions_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -1879,14 +1879,14 @@ CREATE SEQUENCE public.subscriptions_id_seq
 -- Name: subscriptions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.subscriptions_id_seq OWNED BY public.subscriptions.id;
+ALTER SEQUENCE IF EXISTS public.subscriptions_id_seq OWNED BY public.subscriptions.id;
 
 
 --
 -- Name: user_daily_recommendations; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.user_daily_recommendations (
+CREATE TABLE IF NOT EXISTS public.user_daily_recommendations (
     user_id integer NOT NULL,
     song_id integer NOT NULL,
     rank integer NOT NULL,
@@ -1898,7 +1898,7 @@ CREATE TABLE public.user_daily_recommendations (
 -- Name: user_eq_settings; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.user_eq_settings (
+CREATE TABLE IF NOT EXISTS public.user_eq_settings (
     id integer NOT NULL,
     user_id integer NOT NULL,
     enabled boolean DEFAULT false,
@@ -1911,7 +1911,7 @@ CREATE TABLE public.user_eq_settings (
 -- Name: user_eq_settings_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.user_eq_settings_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.user_eq_settings_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -1924,14 +1924,14 @@ CREATE SEQUENCE public.user_eq_settings_id_seq
 -- Name: user_eq_settings_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.user_eq_settings_id_seq OWNED BY public.user_eq_settings.id;
+ALTER SEQUENCE IF EXISTS public.user_eq_settings_id_seq OWNED BY public.user_eq_settings.id;
 
 
 --
 -- Name: user_genre_playback_prefs; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.user_genre_playback_prefs (
+CREATE TABLE IF NOT EXISTS public.user_genre_playback_prefs (
     user_id integer NOT NULL,
     genre text NOT NULL,
     playback_rate real NOT NULL,
@@ -1945,7 +1945,7 @@ CREATE TABLE public.user_genre_playback_prefs (
 -- Name: user_history; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.user_history (
+CREATE TABLE IF NOT EXISTS public.user_history (
     id integer NOT NULL,
     user_id integer,
     song_id integer,
@@ -1962,7 +1962,7 @@ CREATE TABLE public.user_history (
 -- Name: user_history_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.user_history_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.user_history_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -1975,14 +1975,14 @@ CREATE SEQUENCE public.user_history_id_seq
 -- Name: user_history_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.user_history_id_seq OWNED BY public.user_history.id;
+ALTER SEQUENCE IF EXISTS public.user_history_id_seq OWNED BY public.user_history.id;
 
 
 --
 -- Name: user_interactions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.user_interactions_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.user_interactions_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -1995,14 +1995,14 @@ CREATE SEQUENCE public.user_interactions_id_seq
 -- Name: user_interactions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.user_interactions_id_seq OWNED BY public.user_interactions.id;
+ALTER SEQUENCE IF EXISTS public.user_interactions_id_seq OWNED BY public.user_interactions.id;
 
 
 --
 -- Name: user_models; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.user_models (
+CREATE TABLE IF NOT EXISTS public.user_models (
     id integer NOT NULL,
     user_id integer,
     behavior_vector double precision[],
@@ -2016,7 +2016,7 @@ CREATE TABLE public.user_models (
 -- Name: user_models_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.user_models_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.user_models_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -2029,14 +2029,14 @@ CREATE SEQUENCE public.user_models_id_seq
 -- Name: user_models_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.user_models_id_seq OWNED BY public.user_models.id;
+ALTER SEQUENCE IF EXISTS public.user_models_id_seq OWNED BY public.user_models.id;
 
 
 --
 -- Name: user_mood_profile; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.user_mood_profile (
+CREATE TABLE IF NOT EXISTS public.user_mood_profile (
     id integer NOT NULL,
     user_id integer NOT NULL,
     mood_vector jsonb DEFAULT '{}'::jsonb NOT NULL,
@@ -2048,7 +2048,7 @@ CREATE TABLE public.user_mood_profile (
 -- Name: user_mood_profile_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.user_mood_profile_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.user_mood_profile_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -2061,14 +2061,14 @@ CREATE SEQUENCE public.user_mood_profile_id_seq
 -- Name: user_mood_profile_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.user_mood_profile_id_seq OWNED BY public.user_mood_profile.id;
+ALTER SEQUENCE IF EXISTS public.user_mood_profile_id_seq OWNED BY public.user_mood_profile.id;
 
 
 --
 -- Name: user_preferences; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.user_preferences (
+CREATE TABLE IF NOT EXISTS public.user_preferences (
     id integer NOT NULL,
     user_id integer,
     favorite_genres jsonb DEFAULT '{}'::jsonb,
@@ -2083,7 +2083,7 @@ CREATE TABLE public.user_preferences (
 -- Name: user_preferences_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.user_preferences_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.user_preferences_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -2096,14 +2096,14 @@ CREATE SEQUENCE public.user_preferences_id_seq
 -- Name: user_preferences_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.user_preferences_id_seq OWNED BY public.user_preferences.id;
+ALTER SEQUENCE IF EXISTS public.user_preferences_id_seq OWNED BY public.user_preferences.id;
 
 
 --
 -- Name: user_queue; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.user_queue (
+CREATE TABLE IF NOT EXISTS public.user_queue (
     id integer NOT NULL,
     user_id integer NOT NULL,
     song_id integer NOT NULL,
@@ -2118,7 +2118,7 @@ CREATE TABLE public.user_queue (
 -- Name: user_queue_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.user_queue_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.user_queue_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -2131,14 +2131,14 @@ CREATE SEQUENCE public.user_queue_id_seq
 -- Name: user_queue_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.user_queue_id_seq OWNED BY public.user_queue.id;
+ALTER SEQUENCE IF EXISTS public.user_queue_id_seq OWNED BY public.user_queue.id;
 
 
 --
 -- Name: user_settings; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.user_settings (
+CREATE TABLE IF NOT EXISTS public.user_settings (
     id integer NOT NULL,
     user_id integer NOT NULL,
     display_name character varying(255),
@@ -2171,7 +2171,7 @@ COMMENT ON COLUMN public.user_settings.listener_ui IS 'Earflow listener chrome p
 -- Name: user_settings_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.user_settings_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.user_settings_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -2184,14 +2184,14 @@ CREATE SEQUENCE public.user_settings_id_seq
 -- Name: user_settings_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.user_settings_id_seq OWNED BY public.user_settings.id;
+ALTER SEQUENCE IF EXISTS public.user_settings_id_seq OWNED BY public.user_settings.id;
 
 
 --
 -- Name: user_taste_clusters; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.user_taste_clusters (
+CREATE TABLE IF NOT EXISTS public.user_taste_clusters (
     user_id integer NOT NULL,
     cluster_id smallint NOT NULL,
     embedding public.vector(8) NOT NULL,
@@ -2206,7 +2206,7 @@ CREATE TABLE public.user_taste_clusters (
 -- Name: user_taste_links; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.user_taste_links (
+CREATE TABLE IF NOT EXISTS public.user_taste_links (
     user_id integer NOT NULL,
     neighbor_user_id integer NOT NULL,
     weight real DEFAULT 0 NOT NULL,
@@ -2218,7 +2218,7 @@ CREATE TABLE public.user_taste_links (
 -- Name: users; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.users (
+CREATE TABLE IF NOT EXISTS public.users (
     id integer NOT NULL,
     email character varying(255),
     email_hash text,
@@ -2248,7 +2248,7 @@ CREATE TABLE public.users (
 -- Name: users_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.users_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.users_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -2261,7 +2261,7 @@ CREATE SEQUENCE public.users_id_seq
 -- Name: users_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.users_id_seq OWNED BY public.users.id;
+ALTER SEQUENCE IF EXISTS public.users_id_seq OWNED BY public.users.id;
 
 
 --
@@ -2520,740 +2520,665 @@ ALTER TABLE ONLY public.users ALTER COLUMN id SET DEFAULT nextval('public.users_
 -- Name: albums albums_artist_id_name_key_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.albums
-    ADD CONSTRAINT albums_artist_id_name_key_key UNIQUE (artist_id, name_key);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='albums_artist_id_name_key_key') THEN ALTER TABLE ONLY public.albums ADD CONSTRAINT albums_artist_id_name_key_key UNIQUE (artist_id, name_key); END IF; END $dbmig$;
 
 
 --
 -- Name: albums albums_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.albums
-    ADD CONSTRAINT albums_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='albums_pkey') THEN ALTER TABLE ONLY public.albums ADD CONSTRAINT albums_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: analytics_events_raw analytics_events_raw_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.analytics_events_raw
-    ADD CONSTRAINT analytics_events_raw_pkey PRIMARY KEY (event_id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='analytics_events_raw_pkey') THEN ALTER TABLE ONLY public.analytics_events_raw ADD CONSTRAINT analytics_events_raw_pkey PRIMARY KEY (event_id); END IF; END $dbmig$;
 
 
 --
 -- Name: artist_account_members artist_account_members_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.artist_account_members
-    ADD CONSTRAINT artist_account_members_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='artist_account_members_pkey') THEN ALTER TABLE ONLY public.artist_account_members ADD CONSTRAINT artist_account_members_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: artist_accounts artist_accounts_artist_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.artist_accounts
-    ADD CONSTRAINT artist_accounts_artist_id_key UNIQUE (artist_id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='artist_accounts_artist_id_key') THEN ALTER TABLE ONLY public.artist_accounts ADD CONSTRAINT artist_accounts_artist_id_key UNIQUE (artist_id); END IF; END $dbmig$;
 
 
 --
 -- Name: artist_accounts artist_accounts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.artist_accounts
-    ADD CONSTRAINT artist_accounts_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='artist_accounts_pkey') THEN ALTER TABLE ONLY public.artist_accounts ADD CONSTRAINT artist_accounts_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: artist_claim_requests artist_claim_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.artist_claim_requests
-    ADD CONSTRAINT artist_claim_requests_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='artist_claim_requests_pkey') THEN ALTER TABLE ONLY public.artist_claim_requests ADD CONSTRAINT artist_claim_requests_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: artist_ownerships artist_ownerships_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.artist_ownerships
-    ADD CONSTRAINT artist_ownerships_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='artist_ownerships_pkey') THEN ALTER TABLE ONLY public.artist_ownerships ADD CONSTRAINT artist_ownerships_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: artist_trends artist_trends_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.artist_trends
-    ADD CONSTRAINT artist_trends_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='artist_trends_pkey') THEN ALTER TABLE ONLY public.artist_trends ADD CONSTRAINT artist_trends_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: artist_uploaders artist_uploaders_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.artist_uploaders
-    ADD CONSTRAINT artist_uploaders_pkey PRIMARY KEY (user_id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='artist_uploaders_pkey') THEN ALTER TABLE ONLY public.artist_uploaders ADD CONSTRAINT artist_uploaders_pkey PRIMARY KEY (user_id); END IF; END $dbmig$;
 
 
 --
 -- Name: artists artists_name_key_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.artists
-    ADD CONSTRAINT artists_name_key_key UNIQUE (name_key);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='artists_name_key_key') THEN ALTER TABLE ONLY public.artists ADD CONSTRAINT artists_name_key_key UNIQUE (name_key); END IF; END $dbmig$;
 
 
 --
 -- Name: artists artists_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.artists
-    ADD CONSTRAINT artists_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='artists_pkey') THEN ALTER TABLE ONLY public.artists ADD CONSTRAINT artists_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: auth_devices auth_devices_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.auth_devices
-    ADD CONSTRAINT auth_devices_pkey PRIMARY KEY (auth_device_id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='auth_devices_pkey') THEN ALTER TABLE ONLY public.auth_devices ADD CONSTRAINT auth_devices_pkey PRIMARY KEY (auth_device_id); END IF; END $dbmig$;
 
 
 --
 -- Name: auth_sessions auth_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.auth_sessions
-    ADD CONSTRAINT auth_sessions_pkey PRIMARY KEY (sid);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='auth_sessions_pkey') THEN ALTER TABLE ONLY public.auth_sessions ADD CONSTRAINT auth_sessions_pkey PRIMARY KEY (sid); END IF; END $dbmig$;
 
 
 --
 -- Name: dislikes dislikes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.dislikes
-    ADD CONSTRAINT dislikes_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='dislikes_pkey') THEN ALTER TABLE ONLY public.dislikes ADD CONSTRAINT dislikes_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: dislikes dislikes_user_id_song_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.dislikes
-    ADD CONSTRAINT dislikes_user_id_song_id_key UNIQUE (user_id, song_id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='dislikes_user_id_song_id_key') THEN ALTER TABLE ONLY public.dislikes ADD CONSTRAINT dislikes_user_id_song_id_key UNIQUE (user_id, song_id); END IF; END $dbmig$;
 
 
 --
 -- Name: genre_popularity genre_popularity_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.genre_popularity
-    ADD CONSTRAINT genre_popularity_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='genre_popularity_pkey') THEN ALTER TABLE ONLY public.genre_popularity ADD CONSTRAINT genre_popularity_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: genres genres_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.genres
-    ADD CONSTRAINT genres_name_key UNIQUE (name);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='genres_name_key') THEN ALTER TABLE ONLY public.genres ADD CONSTRAINT genres_name_key UNIQUE (name); END IF; END $dbmig$;
 
 
 --
 -- Name: genres genres_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.genres
-    ADD CONSTRAINT genres_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='genres_pkey') THEN ALTER TABLE ONLY public.genres ADD CONSTRAINT genres_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: likes likes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.likes
-    ADD CONSTRAINT likes_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='likes_pkey') THEN ALTER TABLE ONLY public.likes ADD CONSTRAINT likes_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: likes likes_user_id_song_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.likes
-    ADD CONSTRAINT likes_user_id_song_id_key UNIQUE (user_id, song_id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='likes_user_id_song_id_key') THEN ALTER TABLE ONLY public.likes ADD CONSTRAINT likes_user_id_song_id_key UNIQUE (user_id, song_id); END IF; END $dbmig$;
 
 
 --
 -- Name: listens listens_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.listens
-    ADD CONSTRAINT listens_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='listens_pkey') THEN ALTER TABLE ONLY public.listens ADD CONSTRAINT listens_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: lyrics_external_cache lyrics_external_cache_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.lyrics_external_cache
-    ADD CONSTRAINT lyrics_external_cache_pkey PRIMARY KEY (song_id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='lyrics_external_cache_pkey') THEN ALTER TABLE ONLY public.lyrics_external_cache ADD CONSTRAINT lyrics_external_cache_pkey PRIMARY KEY (song_id); END IF; END $dbmig$;
 
 
 --
 -- Name: lyrics lyrics_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.lyrics
-    ADD CONSTRAINT lyrics_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='lyrics_pkey') THEN ALTER TABLE ONLY public.lyrics ADD CONSTRAINT lyrics_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: lyrics_reports lyrics_reports_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.lyrics_reports
-    ADD CONSTRAINT lyrics_reports_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='lyrics_reports_pkey') THEN ALTER TABLE ONLY public.lyrics_reports ADD CONSTRAINT lyrics_reports_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: lyrics_reports lyrics_reports_song_id_user_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.lyrics_reports
-    ADD CONSTRAINT lyrics_reports_song_id_user_id_key UNIQUE (song_id, user_id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='lyrics_reports_song_id_user_id_key') THEN ALTER TABLE ONLY public.lyrics_reports ADD CONSTRAINT lyrics_reports_song_id_user_id_key UNIQUE (song_id, user_id); END IF; END $dbmig$;
 
 
 --
 -- Name: lyrics lyrics_song_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.lyrics
-    ADD CONSTRAINT lyrics_song_id_key UNIQUE (song_id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='lyrics_song_id_key') THEN ALTER TABLE ONLY public.lyrics ADD CONSTRAINT lyrics_song_id_key UNIQUE (song_id); END IF; END $dbmig$;
 
 
 --
 -- Name: playlist_tracks playlist_tracks_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.playlist_tracks
-    ADD CONSTRAINT playlist_tracks_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='playlist_tracks_pkey') THEN ALTER TABLE ONLY public.playlist_tracks ADD CONSTRAINT playlist_tracks_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: playlist_tracks playlist_tracks_playlist_id_song_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.playlist_tracks
-    ADD CONSTRAINT playlist_tracks_playlist_id_song_id_key UNIQUE (playlist_id, song_id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='playlist_tracks_playlist_id_song_id_key') THEN ALTER TABLE ONLY public.playlist_tracks ADD CONSTRAINT playlist_tracks_playlist_id_song_id_key UNIQUE (playlist_id, song_id); END IF; END $dbmig$;
 
 
 --
 -- Name: playlists playlists_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.playlists
-    ADD CONSTRAINT playlists_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='playlists_pkey') THEN ALTER TABLE ONLY public.playlists ADD CONSTRAINT playlists_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: playlists playlists_share_slug_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.playlists
-    ADD CONSTRAINT playlists_share_slug_key UNIQUE (share_slug);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='playlists_share_slug_key') THEN ALTER TABLE ONLY public.playlists ADD CONSTRAINT playlists_share_slug_key UNIQUE (share_slug); END IF; END $dbmig$;
 
 
 --
 -- Name: queue_state queue_state_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.queue_state
-    ADD CONSTRAINT queue_state_pkey PRIMARY KEY (user_id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='queue_state_pkey') THEN ALTER TABLE ONLY public.queue_state ADD CONSTRAINT queue_state_pkey PRIMARY KEY (user_id); END IF; END $dbmig$;
 
 
 --
 -- Name: reco_migrations reco_migrations_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.reco_migrations
-    ADD CONSTRAINT reco_migrations_name_key UNIQUE (name);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='reco_migrations_name_key') THEN ALTER TABLE ONLY public.reco_migrations ADD CONSTRAINT reco_migrations_name_key UNIQUE (name); END IF; END $dbmig$;
 
 
 --
 -- Name: reco_migrations reco_migrations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.reco_migrations
-    ADD CONSTRAINT reco_migrations_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='reco_migrations_pkey') THEN ALTER TABLE ONLY public.reco_migrations ADD CONSTRAINT reco_migrations_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: recommendation_sessions recommendation_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.recommendation_sessions
-    ADD CONSTRAINT recommendation_sessions_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='recommendation_sessions_pkey') THEN ALTER TABLE ONLY public.recommendation_sessions ADD CONSTRAINT recommendation_sessions_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: recommendation_sessions recommendation_sessions_session_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.recommendation_sessions
-    ADD CONSTRAINT recommendation_sessions_session_id_key UNIQUE (session_id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='recommendation_sessions_session_id_key') THEN ALTER TABLE ONLY public.recommendation_sessions ADD CONSTRAINT recommendation_sessions_session_id_key UNIQUE (session_id); END IF; END $dbmig$;
 
 
 --
 -- Name: refresh_tokens refresh_tokens_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.refresh_tokens
-    ADD CONSTRAINT refresh_tokens_pkey PRIMARY KEY (jti);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='refresh_tokens_pkey') THEN ALTER TABLE ONLY public.refresh_tokens ADD CONSTRAINT refresh_tokens_pkey PRIMARY KEY (jti); END IF; END $dbmig$;
 
 
 --
 -- Name: search_outbox_queue search_outbox_queue_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.search_outbox_queue
-    ADD CONSTRAINT search_outbox_queue_pkey PRIMARY KEY (entity_type, entity_id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='search_outbox_queue_pkey') THEN ALTER TABLE ONLY public.search_outbox_queue ADD CONSTRAINT search_outbox_queue_pkey PRIMARY KEY (entity_type, entity_id); END IF; END $dbmig$;
 
 
 --
 -- Name: security_events security_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.security_events
-    ADD CONSTRAINT security_events_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='security_events_pkey') THEN ALTER TABLE ONLY public.security_events ADD CONSTRAINT security_events_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: service_sessions service_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.service_sessions
-    ADD CONSTRAINT service_sessions_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='service_sessions_pkey') THEN ALTER TABLE ONLY public.service_sessions ADD CONSTRAINT service_sessions_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: social_post_likes social_post_likes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.social_post_likes
-    ADD CONSTRAINT social_post_likes_pkey PRIMARY KEY (post_id, user_id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='social_post_likes_pkey') THEN ALTER TABLE ONLY public.social_post_likes ADD CONSTRAINT social_post_likes_pkey PRIMARY KEY (post_id, user_id); END IF; END $dbmig$;
 
 
 --
 -- Name: social_posts social_posts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.social_posts
-    ADD CONSTRAINT social_posts_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='social_posts_pkey') THEN ALTER TABLE ONLY public.social_posts ADD CONSTRAINT social_posts_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: song_features song_features_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.song_features
-    ADD CONSTRAINT song_features_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='song_features_pkey') THEN ALTER TABLE ONLY public.song_features ADD CONSTRAINT song_features_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: song_features song_features_song_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.song_features
-    ADD CONSTRAINT song_features_song_id_key UNIQUE (song_id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='song_features_song_id_key') THEN ALTER TABLE ONLY public.song_features ADD CONSTRAINT song_features_song_id_key UNIQUE (song_id); END IF; END $dbmig$;
 
 
 --
 -- Name: song_genres song_genres_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.song_genres
-    ADD CONSTRAINT song_genres_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='song_genres_pkey') THEN ALTER TABLE ONLY public.song_genres ADD CONSTRAINT song_genres_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: song_genres song_genres_song_id_genre_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.song_genres
-    ADD CONSTRAINT song_genres_song_id_genre_id_key UNIQUE (song_id, genre_id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='song_genres_song_id_genre_id_key') THEN ALTER TABLE ONLY public.song_genres ADD CONSTRAINT song_genres_song_id_genre_id_key UNIQUE (song_id, genre_id); END IF; END $dbmig$;
 
 
 --
 -- Name: song_mood_scores song_mood_scores_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.song_mood_scores
-    ADD CONSTRAINT song_mood_scores_pkey PRIMARY KEY (song_id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='song_mood_scores_pkey') THEN ALTER TABLE ONLY public.song_mood_scores ADD CONSTRAINT song_mood_scores_pkey PRIMARY KEY (song_id); END IF; END $dbmig$;
 
 
 --
 -- Name: song_moods song_moods_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.song_moods
-    ADD CONSTRAINT song_moods_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='song_moods_pkey') THEN ALTER TABLE ONLY public.song_moods ADD CONSTRAINT song_moods_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: songs songs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.songs
-    ADD CONSTRAINT songs_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='songs_pkey') THEN ALTER TABLE ONLY public.songs ADD CONSTRAINT songs_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: songs songs_public_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.songs
-    ADD CONSTRAINT songs_public_id_key UNIQUE (public_id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='songs_public_id_key') THEN ALTER TABLE ONLY public.songs ADD CONSTRAINT songs_public_id_key UNIQUE (public_id); END IF; END $dbmig$;
 
 
 --
 -- Name: statistics_cache statistics_cache_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.statistics_cache
-    ADD CONSTRAINT statistics_cache_pkey PRIMARY KEY (entity_type, uploader_id, entity_value);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='statistics_cache_pkey') THEN ALTER TABLE ONLY public.statistics_cache ADD CONSTRAINT statistics_cache_pkey PRIMARY KEY (entity_type, uploader_id, entity_value); END IF; END $dbmig$;
 
 
 --
 -- Name: subscription_plans subscription_plans_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.subscription_plans
-    ADD CONSTRAINT subscription_plans_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='subscription_plans_pkey') THEN ALTER TABLE ONLY public.subscription_plans ADD CONSTRAINT subscription_plans_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: subscription_plans subscription_plans_slug_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.subscription_plans
-    ADD CONSTRAINT subscription_plans_slug_key UNIQUE (slug);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='subscription_plans_slug_key') THEN ALTER TABLE ONLY public.subscription_plans ADD CONSTRAINT subscription_plans_slug_key UNIQUE (slug); END IF; END $dbmig$;
 
 
 --
 -- Name: subscriptions subscriptions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.subscriptions
-    ADD CONSTRAINT subscriptions_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='subscriptions_pkey') THEN ALTER TABLE ONLY public.subscriptions ADD CONSTRAINT subscriptions_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: user_daily_recommendations user_daily_recommendations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.user_daily_recommendations
-    ADD CONSTRAINT user_daily_recommendations_pkey PRIMARY KEY (user_id, song_id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_daily_recommendations_pkey') THEN ALTER TABLE ONLY public.user_daily_recommendations ADD CONSTRAINT user_daily_recommendations_pkey PRIMARY KEY (user_id, song_id); END IF; END $dbmig$;
 
 
 --
 -- Name: user_eq_settings user_eq_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.user_eq_settings
-    ADD CONSTRAINT user_eq_settings_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_eq_settings_pkey') THEN ALTER TABLE ONLY public.user_eq_settings ADD CONSTRAINT user_eq_settings_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: user_eq_settings user_eq_settings_user_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.user_eq_settings
-    ADD CONSTRAINT user_eq_settings_user_id_key UNIQUE (user_id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_eq_settings_user_id_key') THEN ALTER TABLE ONLY public.user_eq_settings ADD CONSTRAINT user_eq_settings_user_id_key UNIQUE (user_id); END IF; END $dbmig$;
 
 
 --
 -- Name: user_genre_playback_prefs user_genre_playback_prefs_pk; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.user_genre_playback_prefs
-    ADD CONSTRAINT user_genre_playback_prefs_pk PRIMARY KEY (user_id, genre);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_genre_playback_prefs_pk') THEN ALTER TABLE ONLY public.user_genre_playback_prefs ADD CONSTRAINT user_genre_playback_prefs_pk PRIMARY KEY (user_id, genre); END IF; END $dbmig$;
 
 
 --
 -- Name: user_history user_history_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.user_history
-    ADD CONSTRAINT user_history_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_history_pkey') THEN ALTER TABLE ONLY public.user_history ADD CONSTRAINT user_history_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: user_history user_history_user_id_song_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.user_history
-    ADD CONSTRAINT user_history_user_id_song_id_key UNIQUE (user_id, song_id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_history_user_id_song_id_key') THEN ALTER TABLE ONLY public.user_history ADD CONSTRAINT user_history_user_id_song_id_key UNIQUE (user_id, song_id); END IF; END $dbmig$;
 
 
 --
 -- Name: user_interactions user_interactions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.user_interactions
-    ADD CONSTRAINT user_interactions_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_interactions_pkey') THEN ALTER TABLE ONLY public.user_interactions ADD CONSTRAINT user_interactions_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: user_models user_models_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.user_models
-    ADD CONSTRAINT user_models_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_models_pkey') THEN ALTER TABLE ONLY public.user_models ADD CONSTRAINT user_models_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: user_models user_models_user_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.user_models
-    ADD CONSTRAINT user_models_user_id_key UNIQUE (user_id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_models_user_id_key') THEN ALTER TABLE ONLY public.user_models ADD CONSTRAINT user_models_user_id_key UNIQUE (user_id); END IF; END $dbmig$;
 
 
 --
 -- Name: user_mood_profile user_mood_profile_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.user_mood_profile
-    ADD CONSTRAINT user_mood_profile_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_mood_profile_pkey') THEN ALTER TABLE ONLY public.user_mood_profile ADD CONSTRAINT user_mood_profile_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: user_mood_profile user_mood_profile_user_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.user_mood_profile
-    ADD CONSTRAINT user_mood_profile_user_id_key UNIQUE (user_id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_mood_profile_user_id_key') THEN ALTER TABLE ONLY public.user_mood_profile ADD CONSTRAINT user_mood_profile_user_id_key UNIQUE (user_id); END IF; END $dbmig$;
 
 
 --
 -- Name: user_preferences user_preferences_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.user_preferences
-    ADD CONSTRAINT user_preferences_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_preferences_pkey') THEN ALTER TABLE ONLY public.user_preferences ADD CONSTRAINT user_preferences_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: user_preferences user_preferences_user_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.user_preferences
-    ADD CONSTRAINT user_preferences_user_id_key UNIQUE (user_id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_preferences_user_id_key') THEN ALTER TABLE ONLY public.user_preferences ADD CONSTRAINT user_preferences_user_id_key UNIQUE (user_id); END IF; END $dbmig$;
 
 
 --
 -- Name: user_queue user_queue_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.user_queue
-    ADD CONSTRAINT user_queue_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_queue_pkey') THEN ALTER TABLE ONLY public.user_queue ADD CONSTRAINT user_queue_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: user_queue user_queue_user_id_position_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.user_queue
-    ADD CONSTRAINT user_queue_user_id_position_key UNIQUE (user_id, "position");
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_queue_user_id_position_key') THEN ALTER TABLE ONLY public.user_queue ADD CONSTRAINT user_queue_user_id_position_key UNIQUE (user_id, "position"); END IF; END $dbmig$;
 
 
 --
 -- Name: user_settings user_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.user_settings
-    ADD CONSTRAINT user_settings_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_settings_pkey') THEN ALTER TABLE ONLY public.user_settings ADD CONSTRAINT user_settings_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: user_settings user_settings_user_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.user_settings
-    ADD CONSTRAINT user_settings_user_id_key UNIQUE (user_id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_settings_user_id_key') THEN ALTER TABLE ONLY public.user_settings ADD CONSTRAINT user_settings_user_id_key UNIQUE (user_id); END IF; END $dbmig$;
 
 
 --
 -- Name: user_taste_clusters user_taste_clusters_pk; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.user_taste_clusters
-    ADD CONSTRAINT user_taste_clusters_pk PRIMARY KEY (user_id, cluster_id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_taste_clusters_pk') THEN ALTER TABLE ONLY public.user_taste_clusters ADD CONSTRAINT user_taste_clusters_pk PRIMARY KEY (user_id, cluster_id); END IF; END $dbmig$;
 
 
 --
 -- Name: user_taste_links user_taste_links_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.user_taste_links
-    ADD CONSTRAINT user_taste_links_pkey PRIMARY KEY (user_id, neighbor_user_id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_taste_links_pkey') THEN ALTER TABLE ONLY public.user_taste_links ADD CONSTRAINT user_taste_links_pkey PRIMARY KEY (user_id, neighbor_user_id); END IF; END $dbmig$;
 
 
 --
 -- Name: users users_email_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.users
-    ADD CONSTRAINT users_email_key UNIQUE (email);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='users_email_key') THEN ALTER TABLE ONLY public.users ADD CONSTRAINT users_email_key UNIQUE (email); END IF; END $dbmig$;
 
 
 --
 -- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.users
-    ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='users_pkey') THEN ALTER TABLE ONLY public.users ADD CONSTRAINT users_pkey PRIMARY KEY (id); END IF; END $dbmig$;
 
 
 --
 -- Name: idx_albums_artist_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_albums_artist_id ON public.albums USING btree (artist_id);
+CREATE INDEX IF NOT EXISTS idx_albums_artist_id ON public.albums USING btree (artist_id);
 
 
 --
 -- Name: idx_albums_artist_key; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_albums_artist_key ON public.albums USING btree (artist_id, name_key);
+CREATE INDEX IF NOT EXISTS idx_albums_artist_key ON public.albums USING btree (artist_id, name_key);
 
 
 --
 -- Name: idx_albums_public_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX idx_albums_public_id ON public.albums USING btree (public_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_albums_public_id ON public.albums USING btree (public_id);
 
 
 --
 -- Name: idx_analytics_events_raw_track_time; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_analytics_events_raw_track_time ON public.analytics_events_raw USING btree (track_id, event_time DESC);
+CREATE INDEX IF NOT EXISTS idx_analytics_events_raw_track_time ON public.analytics_events_raw USING btree (track_id, event_time DESC);
 
 
 --
 -- Name: idx_analytics_events_raw_user_time; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_analytics_events_raw_user_time ON public.analytics_events_raw USING btree (user_id, event_time DESC);
+CREATE INDEX IF NOT EXISTS idx_analytics_events_raw_user_time ON public.analytics_events_raw USING btree (user_id, event_time DESC);
 
 
 --
 -- Name: idx_artist_claim_status_created; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_artist_claim_status_created ON public.artist_claim_requests USING btree (status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_artist_claim_status_created ON public.artist_claim_requests USING btree (status, created_at DESC);
 
 
 --
 -- Name: idx_artist_ownerships_user_active; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_artist_ownerships_user_active ON public.artist_ownerships USING btree (user_id) WHERE (((status)::text = 'active'::text) AND (revoked_at IS NULL));
+CREATE INDEX IF NOT EXISTS idx_artist_ownerships_user_active ON public.artist_ownerships USING btree (user_id) WHERE (((status)::text = 'active'::text) AND (revoked_at IS NULL));
 
 
 --
 -- Name: idx_artists_mbid; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX idx_artists_mbid ON public.artists USING btree (mbid) WHERE (mbid IS NOT NULL);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_artists_mbid ON public.artists USING btree (mbid) WHERE (mbid IS NOT NULL);
 
 
 --
 -- Name: idx_artists_name_key; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_artists_name_key ON public.artists USING btree (name_key);
+CREATE INDEX IF NOT EXISTS idx_artists_name_key ON public.artists USING btree (name_key);
 
 
 --
 -- Name: idx_artists_popular_updated; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_artists_popular_updated ON public.artists USING btree (updated_at DESC, id DESC) WHERE (popular = true);
+CREATE INDEX IF NOT EXISTS idx_artists_popular_updated ON public.artists USING btree (updated_at DESC, id DESC) WHERE (popular = true);
 
 
 --
 -- Name: idx_artists_public_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX idx_artists_public_id ON public.artists USING btree (public_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_artists_public_id ON public.artists USING btree (public_id);
 
 
 --
 -- Name: idx_auth_devices_sid; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_auth_devices_sid ON public.auth_devices USING btree (sid);
+CREATE INDEX IF NOT EXISTS idx_auth_devices_sid ON public.auth_devices USING btree (sid);
 
 
 --
 -- Name: idx_auth_devices_user_active; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_auth_devices_user_active ON public.auth_devices USING btree (user_id) WHERE (revoked_at IS NULL);
+CREATE INDEX IF NOT EXISTS idx_auth_devices_user_active ON public.auth_devices USING btree (user_id) WHERE (revoked_at IS NULL);
 
 
 --
 -- Name: idx_auth_sessions_user_active; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_auth_sessions_user_active ON public.auth_sessions USING btree (user_id) WHERE (revoked_at IS NULL);
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_active ON public.auth_sessions USING btree (user_id) WHERE (revoked_at IS NULL);
 
 
 --
 -- Name: idx_dislikes_song; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_dislikes_song ON public.dislikes USING btree (song_id);
+CREATE INDEX IF NOT EXISTS idx_dislikes_song ON public.dislikes USING btree (song_id);
 
 
 --
 -- Name: idx_dislikes_user; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_dislikes_user ON public.dislikes USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_dislikes_user ON public.dislikes USING btree (user_id);
 
 
 --
 -- Name: idx_dislikes_user_song; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_dislikes_user_song ON public.dislikes USING btree (user_id, song_id);
+CREATE INDEX IF NOT EXISTS idx_dislikes_user_song ON public.dislikes USING btree (user_id, song_id);
 
 
 --
 -- Name: idx_dislikes_user_song_created; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_dislikes_user_song_created ON public.dislikes USING btree (user_id, song_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_dislikes_user_song_created ON public.dislikes USING btree (user_id, song_id, created_at DESC);
 
 
 --
 -- Name: idx_likes_song; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_likes_song ON public.likes USING btree (song_id);
+CREATE INDEX IF NOT EXISTS idx_likes_song ON public.likes USING btree (song_id);
 
 
 --
 -- Name: idx_likes_song_user; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_likes_song_user ON public.likes USING btree (song_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_likes_song_user ON public.likes USING btree (song_id, user_id);
 
 
 --
@@ -3267,455 +3192,455 @@ COMMENT ON INDEX public.idx_likes_song_user IS 'Оптимизация collabora
 -- Name: idx_likes_user; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_likes_user ON public.likes USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_likes_user ON public.likes USING btree (user_id);
 
 
 --
 -- Name: idx_likes_user_created; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_likes_user_created ON public.likes USING btree (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_likes_user_created ON public.likes USING btree (user_id, created_at DESC);
 
 
 --
 -- Name: idx_likes_user_song; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_likes_user_song ON public.likes USING btree (user_id, song_id);
+CREATE INDEX IF NOT EXISTS idx_likes_user_song ON public.likes USING btree (user_id, song_id);
 
 
 --
 -- Name: idx_listens_song; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_listens_song ON public.listens USING btree (song_id);
+CREATE INDEX IF NOT EXISTS idx_listens_song ON public.listens USING btree (song_id);
 
 
 --
 -- Name: idx_listens_song_time; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_listens_song_time ON public.listens USING btree (song_id, listened_at DESC);
+CREATE INDEX IF NOT EXISTS idx_listens_song_time ON public.listens USING btree (song_id, listened_at DESC);
 
 
 --
 -- Name: idx_listens_user_time; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_listens_user_time ON public.listens USING btree (user_id, listened_at DESC);
+CREATE INDEX IF NOT EXISTS idx_listens_user_time ON public.listens USING btree (user_id, listened_at DESC);
 
 
 --
 -- Name: idx_lyrics_plain_text; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_lyrics_plain_text ON public.lyrics USING gin (to_tsvector('russian'::regconfig, plain_text));
+CREATE INDEX IF NOT EXISTS idx_lyrics_plain_text ON public.lyrics USING gin (to_tsvector('russian'::regconfig, plain_text));
 
 
 --
 -- Name: idx_lyrics_song_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_lyrics_song_id ON public.lyrics USING btree (song_id);
+CREATE INDEX IF NOT EXISTS idx_lyrics_song_id ON public.lyrics USING btree (song_id);
 
 
 --
 -- Name: idx_playlist_tracks_playlist_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_playlist_tracks_playlist_id ON public.playlist_tracks USING btree (playlist_id);
+CREATE INDEX IF NOT EXISTS idx_playlist_tracks_playlist_id ON public.playlist_tracks USING btree (playlist_id);
 
 
 --
 -- Name: idx_playlist_tracks_playlist_position; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_playlist_tracks_playlist_position ON public.playlist_tracks USING btree (playlist_id, "position");
+CREATE INDEX IF NOT EXISTS idx_playlist_tracks_playlist_position ON public.playlist_tracks USING btree (playlist_id, "position");
 
 
 --
 -- Name: idx_playlist_tracks_song_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_playlist_tracks_song_id ON public.playlist_tracks USING btree (song_id);
+CREATE INDEX IF NOT EXISTS idx_playlist_tracks_song_id ON public.playlist_tracks USING btree (song_id);
 
 
 --
 -- Name: idx_playlists_share_slug; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_playlists_share_slug ON public.playlists USING btree (share_slug) WHERE (share_slug IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_playlists_share_slug ON public.playlists USING btree (share_slug) WHERE (share_slug IS NOT NULL);
 
 
 --
 -- Name: idx_playlists_user_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_playlists_user_id ON public.playlists USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_playlists_user_id ON public.playlists USING btree (user_id);
 
 
 --
 -- Name: idx_reco_sessions_expires; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_reco_sessions_expires ON public.recommendation_sessions USING btree (expires_at);
+CREATE INDEX IF NOT EXISTS idx_reco_sessions_expires ON public.recommendation_sessions USING btree (expires_at);
 
 
 --
 -- Name: idx_reco_sessions_session_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_reco_sessions_session_id ON public.recommendation_sessions USING btree (session_id);
+CREATE INDEX IF NOT EXISTS idx_reco_sessions_session_id ON public.recommendation_sessions USING btree (session_id);
 
 
 --
 -- Name: idx_reco_sessions_user; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_reco_sessions_user ON public.recommendation_sessions USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_reco_sessions_user ON public.recommendation_sessions USING btree (user_id);
 
 
 --
 -- Name: idx_reco_sessions_user_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_reco_sessions_user_id ON public.recommendation_sessions USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_reco_sessions_user_id ON public.recommendation_sessions USING btree (user_id);
 
 
 --
 -- Name: idx_refresh_tokens_sid; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_refresh_tokens_sid ON public.refresh_tokens USING btree (sid);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_sid ON public.refresh_tokens USING btree (sid);
 
 
 --
 -- Name: idx_refresh_tokens_user_active; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_refresh_tokens_user_active ON public.refresh_tokens USING btree (user_id) WHERE (revoked_at IS NULL);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_active ON public.refresh_tokens USING btree (user_id) WHERE (revoked_at IS NULL);
 
 
 --
 -- Name: idx_search_outbox_next_attempt; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_search_outbox_next_attempt ON public.search_outbox_queue USING btree (next_attempt_at, updated_at);
+CREATE INDEX IF NOT EXISTS idx_search_outbox_next_attempt ON public.search_outbox_queue USING btree (next_attempt_at, updated_at);
 
 
 --
 -- Name: idx_security_events_type_created; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_security_events_type_created ON public.security_events USING btree (event_type, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_security_events_type_created ON public.security_events USING btree (event_type, created_at DESC);
 
 
 --
 -- Name: idx_security_events_user_created; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_security_events_user_created ON public.security_events USING btree (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_security_events_user_created ON public.security_events USING btree (user_id, created_at DESC);
 
 
 --
 -- Name: idx_service_sessions_expires_at; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_service_sessions_expires_at ON public.service_sessions USING btree (expires_at);
+CREATE INDEX IF NOT EXISTS idx_service_sessions_expires_at ON public.service_sessions USING btree (expires_at);
 
 
 --
 -- Name: idx_service_sessions_service_name; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_service_sessions_service_name ON public.service_sessions USING btree (service_name);
+CREATE INDEX IF NOT EXISTS idx_service_sessions_service_name ON public.service_sessions USING btree (service_name);
 
 
 --
 -- Name: idx_social_post_likes_user; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_social_post_likes_user ON public.social_post_likes USING btree (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_social_post_likes_user ON public.social_post_likes USING btree (user_id, created_at DESC);
 
 
 --
 -- Name: idx_social_post_likes_user_post; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_social_post_likes_user_post ON public.social_post_likes USING btree (user_id, post_id);
+CREATE INDEX IF NOT EXISTS idx_social_post_likes_user_post ON public.social_post_likes USING btree (user_id, post_id);
 
 
 --
 -- Name: idx_social_posts_feed; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_social_posts_feed ON public.social_posts USING btree (created_at DESC, id DESC) WHERE (((status)::text = 'active'::text) AND ((visibility)::text = 'public'::text));
+CREATE INDEX IF NOT EXISTS idx_social_posts_feed ON public.social_posts USING btree (created_at DESC, id DESC) WHERE (((status)::text = 'active'::text) AND ((visibility)::text = 'public'::text));
 
 
 --
 -- Name: idx_social_posts_user; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_social_posts_user ON public.social_posts USING btree (user_id, created_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_social_posts_user ON public.social_posts USING btree (user_id, created_at DESC, id DESC);
 
 
 --
 -- Name: idx_song_features_danceability; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_song_features_danceability ON public.song_features USING btree (danceability);
+CREATE INDEX IF NOT EXISTS idx_song_features_danceability ON public.song_features USING btree (danceability);
 
 
 --
 -- Name: idx_song_features_danceability_energy; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_song_features_danceability_energy ON public.song_features USING btree (danceability, energy);
+CREATE INDEX IF NOT EXISTS idx_song_features_danceability_energy ON public.song_features USING btree (danceability, energy);
 
 
 --
 -- Name: idx_song_features_energy; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_song_features_energy ON public.song_features USING btree (energy);
+CREATE INDEX IF NOT EXISTS idx_song_features_energy ON public.song_features USING btree (energy);
 
 
 --
 -- Name: idx_song_features_energy_valence; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_song_features_energy_valence ON public.song_features USING btree (energy, valence);
+CREATE INDEX IF NOT EXISTS idx_song_features_energy_valence ON public.song_features USING btree (energy, valence);
 
 
 --
 -- Name: idx_song_features_tempo; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_song_features_tempo ON public.song_features USING btree (tempo);
+CREATE INDEX IF NOT EXISTS idx_song_features_tempo ON public.song_features USING btree (tempo);
 
 
 --
 -- Name: idx_song_features_valence; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_song_features_valence ON public.song_features USING btree (valence);
+CREATE INDEX IF NOT EXISTS idx_song_features_valence ON public.song_features USING btree (valence);
 
 
 --
 -- Name: idx_song_mood_scores_chill; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_song_mood_scores_chill ON public.song_mood_scores USING btree (score_chill DESC, song_id);
+CREATE INDEX IF NOT EXISTS idx_song_mood_scores_chill ON public.song_mood_scores USING btree (score_chill DESC, song_id);
 
 
 --
 -- Name: idx_song_mood_scores_focus; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_song_mood_scores_focus ON public.song_mood_scores USING btree (score_focus DESC, song_id);
+CREATE INDEX IF NOT EXISTS idx_song_mood_scores_focus ON public.song_mood_scores USING btree (score_focus DESC, song_id);
 
 
 --
 -- Name: idx_song_mood_scores_happy; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_song_mood_scores_happy ON public.song_mood_scores USING btree (score_happy DESC, song_id);
+CREATE INDEX IF NOT EXISTS idx_song_mood_scores_happy ON public.song_mood_scores USING btree (score_happy DESC, song_id);
 
 
 --
 -- Name: idx_song_mood_scores_party; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_song_mood_scores_party ON public.song_mood_scores USING btree (score_party DESC, song_id);
+CREATE INDEX IF NOT EXISTS idx_song_mood_scores_party ON public.song_mood_scores USING btree (score_party DESC, song_id);
 
 
 --
 -- Name: idx_song_mood_scores_sad; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_song_mood_scores_sad ON public.song_mood_scores USING btree (score_sad DESC, song_id);
+CREATE INDEX IF NOT EXISTS idx_song_mood_scores_sad ON public.song_mood_scores USING btree (score_sad DESC, song_id);
 
 
 --
 -- Name: idx_song_mood_scores_sleep; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_song_mood_scores_sleep ON public.song_mood_scores USING btree (score_sleep DESC, song_id);
+CREATE INDEX IF NOT EXISTS idx_song_mood_scores_sleep ON public.song_mood_scores USING btree (score_sleep DESC, song_id);
 
 
 --
 -- Name: idx_song_mood_scores_workout; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_song_mood_scores_workout ON public.song_mood_scores USING btree (score_workout DESC, song_id);
+CREATE INDEX IF NOT EXISTS idx_song_mood_scores_workout ON public.song_mood_scores USING btree (score_workout DESC, song_id);
 
 
 --
 -- Name: idx_song_moods_mood; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_song_moods_mood ON public.song_moods USING btree (mood);
+CREATE INDEX IF NOT EXISTS idx_song_moods_mood ON public.song_moods USING btree (mood);
 
 
 --
 -- Name: idx_song_moods_song_mood; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX idx_song_moods_song_mood ON public.song_moods USING btree (song_id, mood);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_song_moods_song_mood ON public.song_moods USING btree (song_id, mood);
 
 
 --
 -- Name: idx_songs_active; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_active ON public.songs USING btree (id) WHERE (play_count > 0);
+CREATE INDEX IF NOT EXISTS idx_songs_active ON public.songs USING btree (id) WHERE (play_count > 0);
 
 
 --
 -- Name: idx_songs_artist; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_artist ON public.songs USING btree (artist);
+CREATE INDEX IF NOT EXISTS idx_songs_artist ON public.songs USING btree (artist);
 
 
 --
 -- Name: idx_songs_artist_album; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_artist_album ON public.songs USING btree (artist, album);
+CREATE INDEX IF NOT EXISTS idx_songs_artist_album ON public.songs USING btree (artist, album);
 
 
 --
 -- Name: idx_songs_artist_genre; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_artist_genre ON public.songs USING btree (artist, genre) INCLUDE (id);
+CREATE INDEX IF NOT EXISTS idx_songs_artist_genre ON public.songs USING btree (artist, genre) INCLUDE (id);
 
 
 --
 -- Name: idx_songs_artist_norm; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_artist_norm ON public.songs USING btree (artist_norm);
+CREATE INDEX IF NOT EXISTS idx_songs_artist_norm ON public.songs USING btree (artist_norm);
 
 
 --
 -- Name: idx_songs_artist_popularity; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_artist_popularity ON public.songs USING btree (artist, popularity DESC NULLS LAST) WHERE (artist IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_songs_artist_popularity ON public.songs USING btree (artist, popularity DESC NULLS LAST) WHERE (artist IS NOT NULL);
 
 
 --
 -- Name: idx_songs_avail_pop_pc; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_avail_pop_pc ON public.songs USING btree (popularity DESC NULLS LAST, play_count DESC NULLS LAST) WHERE (is_available IS DISTINCT FROM false);
+CREATE INDEX IF NOT EXISTS idx_songs_avail_pop_pc ON public.songs USING btree (popularity DESC NULLS LAST, play_count DESC NULLS LAST) WHERE (is_available IS DISTINCT FROM false);
 
 
 --
 -- Name: idx_songs_ebap; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_ebap ON public.songs USING btree (id) WHERE (has_ebap = true);
+CREATE INDEX IF NOT EXISTS idx_songs_ebap ON public.songs USING btree (id) WHERE (has_ebap = true);
 
 
 --
 -- Name: idx_songs_ebap_status; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_ebap_status ON public.songs USING btree (ebap_status, id);
+CREATE INDEX IF NOT EXISTS idx_songs_ebap_status ON public.songs USING btree (ebap_status, id);
 
 
 --
 -- Name: idx_songs_embedding_hnsw; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_embedding_hnsw ON public.songs USING hnsw (embedding public.vector_cosine_ops) WITH (m='16', ef_construction='200');
+CREATE INDEX IF NOT EXISTS idx_songs_embedding_hnsw ON public.songs USING hnsw (embedding public.vector_cosine_ops) WITH (m='16', ef_construction='200');
 
 
 --
 -- Name: idx_songs_genre; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_genre ON public.songs USING btree (genre);
+CREATE INDEX IF NOT EXISTS idx_songs_genre ON public.songs USING btree (genre);
 
 
 --
 -- Name: idx_songs_genre_norm; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_genre_norm ON public.songs USING btree (genre_norm);
+CREATE INDEX IF NOT EXISTS idx_songs_genre_norm ON public.songs USING btree (genre_norm);
 
 
 --
 -- Name: idx_songs_genre_popularity; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_genre_popularity ON public.songs USING btree (genre, popularity DESC NULLS LAST) WHERE (genre IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_songs_genre_popularity ON public.songs USING btree (genre, popularity DESC NULLS LAST) WHERE (genre IS NOT NULL);
 
 
 --
 -- Name: idx_songs_hls; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_hls ON public.songs USING btree (id) WHERE (has_hls = true);
+CREATE INDEX IF NOT EXISTS idx_songs_hls ON public.songs USING btree (id) WHERE (has_hls = true);
 
 
 --
 -- Name: idx_songs_hls_status; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_hls_status ON public.songs USING btree (hls_status, id);
+CREATE INDEX IF NOT EXISTS idx_songs_hls_status ON public.songs USING btree (hls_status, id);
 
 
 --
 -- Name: idx_songs_id_covering; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_id_covering ON public.songs USING btree (id) INCLUDE (title, artist, album, genre, popularity, play_count);
+CREATE INDEX IF NOT EXISTS idx_songs_id_covering ON public.songs USING btree (id) INCLUDE (title, artist, album, genre, popularity, play_count);
 
 
 --
 -- Name: idx_songs_is_available; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_is_available ON public.songs USING btree (is_available) WHERE (is_available = false);
+CREATE INDEX IF NOT EXISTS idx_songs_is_available ON public.songs USING btree (is_available) WHERE (is_available = false);
 
 
 --
 -- Name: idx_songs_metadata_parse_status; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_metadata_parse_status ON public.songs USING btree (metadata_parse_status, id);
+CREATE INDEX IF NOT EXISTS idx_songs_metadata_parse_status ON public.songs USING btree (metadata_parse_status, id);
 
 
 --
 -- Name: idx_songs_parsed_metadata; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_parsed_metadata ON public.songs USING gin (parsed_metadata) WHERE (parsed_metadata IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_songs_parsed_metadata ON public.songs USING gin (parsed_metadata) WHERE (parsed_metadata IS NOT NULL);
 
 
 --
 -- Name: idx_songs_popular; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_popular ON public.songs USING btree (popularity DESC, play_count DESC) WHERE (popularity > 50);
+CREATE INDEX IF NOT EXISTS idx_songs_popular ON public.songs USING btree (popularity DESC, play_count DESC) WHERE (popularity > 50);
 
 
 --
 -- Name: idx_songs_popularity; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_popularity ON public.songs USING btree (popularity DESC);
+CREATE INDEX IF NOT EXISTS idx_songs_popularity ON public.songs USING btree (popularity DESC);
 
 
 --
 -- Name: idx_songs_popularity_play_count; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_popularity_play_count ON public.songs USING btree (popularity DESC NULLS LAST, play_count DESC NULLS LAST);
+CREATE INDEX IF NOT EXISTS idx_songs_popularity_play_count ON public.songs USING btree (popularity DESC NULLS LAST, play_count DESC NULLS LAST);
 
 
 --
@@ -3729,203 +3654,203 @@ COMMENT ON INDEX public.idx_songs_popularity_play_count IS 'Оптимизаци
 -- Name: idx_songs_popularity_playcount_created; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_popularity_playcount_created ON public.songs USING btree (popularity DESC, play_count DESC, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_songs_popularity_playcount_created ON public.songs USING btree (popularity DESC, play_count DESC, created_at DESC);
 
 
 --
 -- Name: idx_songs_public_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_public_id ON public.songs USING btree (public_id);
+CREATE INDEX IF NOT EXISTS idx_songs_public_id ON public.songs USING btree (public_id);
 
 
 --
 -- Name: idx_songs_quality_variants; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_quality_variants ON public.songs USING btree (id) WHERE (quality_variants IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_songs_quality_variants ON public.songs USING btree (id) WHERE (quality_variants IS NOT NULL);
 
 
 --
 -- Name: idx_songs_reco_covering; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_reco_covering ON public.songs USING btree (id, title, artist, album, genre, duration, popularity, play_count);
+CREATE INDEX IF NOT EXISTS idx_songs_reco_covering ON public.songs USING btree (id, title, artist, album, genre, duration, popularity, play_count);
 
 
 --
 -- Name: idx_songs_search_text; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_search_text ON public.songs USING gin (to_tsvector('russian'::regconfig, (((COALESCE(title, ''::character varying))::text || ' '::text) || (COALESCE(artist, ''::character varying))::text)));
+CREATE INDEX IF NOT EXISTS idx_songs_search_text ON public.songs USING gin (to_tsvector('russian'::regconfig, (((COALESCE(title, ''::character varying))::text || ' '::text) || (COALESCE(artist, ''::character varying))::text)));
 
 
 --
 -- Name: idx_songs_title_artist; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_title_artist ON public.songs USING btree (lower((title)::text), lower((artist)::text));
+CREATE INDEX IF NOT EXISTS idx_songs_title_artist ON public.songs USING btree (lower((title)::text), lower((artist)::text));
 
 
 --
 -- Name: idx_songs_transcode_status; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_transcode_status ON public.songs USING btree (transcode_status, id);
+CREATE INDEX IF NOT EXISTS idx_songs_transcode_status ON public.songs USING btree (transcode_status, id);
 
 
 --
 -- Name: idx_songs_uploader; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_uploader ON public.songs USING btree (uploader_id);
+CREATE INDEX IF NOT EXISTS idx_songs_uploader ON public.songs USING btree (uploader_id);
 
 
 --
 -- Name: idx_songs_uploader_artist_norm; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_uploader_artist_norm ON public.songs USING btree (uploader_id, artist_norm);
+CREATE INDEX IF NOT EXISTS idx_songs_uploader_artist_norm ON public.songs USING btree (uploader_id, artist_norm);
 
 
 --
 -- Name: idx_songs_uploader_created; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_uploader_created ON public.songs USING btree (uploader_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_songs_uploader_created ON public.songs USING btree (uploader_id, created_at DESC);
 
 
 --
 -- Name: idx_songs_uploader_genre_norm; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_uploader_genre_norm ON public.songs USING btree (uploader_id, genre_norm);
+CREATE INDEX IF NOT EXISTS idx_songs_uploader_genre_norm ON public.songs USING btree (uploader_id, genre_norm);
 
 
 --
 -- Name: idx_songs_waveform_status; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_waveform_status ON public.songs USING btree (waveform_status, id) WHERE ((waveform_status)::text = ANY ((ARRAY['pending'::character varying, 'processing'::character varying, 'failed'::character varying])::text[]));
+CREATE INDEX IF NOT EXISTS idx_songs_waveform_status ON public.songs USING btree (waveform_status, id) WHERE ((waveform_status)::text = ANY ((ARRAY['pending'::character varying, 'processing'::character varying, 'failed'::character varying])::text[]));
 
 
 --
 -- Name: idx_songs_with_covers; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_songs_with_covers ON public.songs USING btree (id) WHERE ((cover_path IS NOT NULL) OR (cover IS NOT NULL));
+CREATE INDEX IF NOT EXISTS idx_songs_with_covers ON public.songs USING btree (id) WHERE ((cover_path IS NOT NULL) OR (cover IS NOT NULL));
 
 
 --
 -- Name: idx_statistics_cache_type_uploader_count; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_statistics_cache_type_uploader_count ON public.statistics_cache USING btree (entity_type, uploader_id, track_count DESC, entity_value);
+CREATE INDEX IF NOT EXISTS idx_statistics_cache_type_uploader_count ON public.statistics_cache USING btree (entity_type, uploader_id, track_count DESC, entity_value);
 
 
 --
 -- Name: idx_subscriptions_active_user; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX idx_subscriptions_active_user ON public.subscriptions USING btree (user_id) WHERE ((status)::text = 'active'::text);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_subscriptions_active_user ON public.subscriptions USING btree (user_id) WHERE ((status)::text = 'active'::text);
 
 
 --
 -- Name: idx_subscriptions_provider_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_subscriptions_provider_id ON public.subscriptions USING btree (provider_id) WHERE (provider_id IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_provider_id ON public.subscriptions USING btree (provider_id) WHERE (provider_id IS NOT NULL);
 
 
 --
 -- Name: idx_subscriptions_user_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_subscriptions_user_id ON public.subscriptions USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON public.subscriptions USING btree (user_id);
 
 
 --
 -- Name: idx_user_daily_recommendations_user_rank; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_daily_recommendations_user_rank ON public.user_daily_recommendations USING btree (user_id, rank);
+CREATE INDEX IF NOT EXISTS idx_user_daily_recommendations_user_rank ON public.user_daily_recommendations USING btree (user_id, rank);
 
 
 --
 -- Name: idx_user_eq_settings_user; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_eq_settings_user ON public.user_eq_settings USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_user_eq_settings_user ON public.user_eq_settings USING btree (user_id);
 
 
 --
 -- Name: idx_user_history_composite; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_history_composite ON public.user_history USING btree (user_id, last_played DESC, play_count);
+CREATE INDEX IF NOT EXISTS idx_user_history_composite ON public.user_history USING btree (user_id, last_played DESC, play_count);
 
 
 --
 -- Name: idx_user_history_last_played; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_history_last_played ON public.user_history USING btree (last_played);
+CREATE INDEX IF NOT EXISTS idx_user_history_last_played ON public.user_history USING btree (last_played);
 
 
 --
 -- Name: idx_user_history_liked; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_history_liked ON public.user_history USING btree (user_id, song_id) WHERE (liked = true);
+CREATE INDEX IF NOT EXISTS idx_user_history_liked ON public.user_history USING btree (user_id, song_id) WHERE (liked = true);
 
 
 --
 -- Name: idx_user_history_recent; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_history_recent ON public.user_history USING btree (user_id, last_played DESC);
+CREATE INDEX IF NOT EXISTS idx_user_history_recent ON public.user_history USING btree (user_id, last_played DESC);
 
 
 --
 -- Name: idx_user_history_song_agg; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_history_song_agg ON public.user_history USING btree (song_id, play_count, liked, skip_count);
+CREATE INDEX IF NOT EXISTS idx_user_history_song_agg ON public.user_history USING btree (song_id, play_count, liked, skip_count);
 
 
 --
 -- Name: idx_user_history_song_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_history_song_id ON public.user_history USING btree (song_id);
+CREATE INDEX IF NOT EXISTS idx_user_history_song_id ON public.user_history USING btree (song_id);
 
 
 --
 -- Name: idx_user_history_song_plays; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_history_song_plays ON public.user_history USING btree (song_id, play_count DESC);
+CREATE INDEX IF NOT EXISTS idx_user_history_song_plays ON public.user_history USING btree (song_id, play_count DESC);
 
 
 --
 -- Name: idx_user_history_user_count; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_history_user_count ON public.user_history USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_user_history_user_count ON public.user_history USING btree (user_id);
 
 
 --
 -- Name: idx_user_history_user_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_history_user_id ON public.user_history USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_user_history_user_id ON public.user_history USING btree (user_id);
 
 
 --
 -- Name: idx_user_history_user_last_played; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_history_user_last_played ON public.user_history USING btree (user_id, last_played DESC);
+CREATE INDEX IF NOT EXISTS idx_user_history_user_last_played ON public.user_history USING btree (user_id, last_played DESC);
 
 
 --
@@ -3939,216 +3864,217 @@ COMMENT ON INDEX public.idx_user_history_user_last_played IS 'Оптимизац
 -- Name: idx_user_history_user_liked; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_history_user_liked ON public.user_history USING btree (user_id) WHERE (liked = true);
+CREATE INDEX IF NOT EXISTS idx_user_history_user_liked ON public.user_history USING btree (user_id) WHERE (liked = true);
 
 
 --
 -- Name: idx_user_history_user_song; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_history_user_song ON public.user_history USING btree (user_id, song_id);
+CREATE INDEX IF NOT EXISTS idx_user_history_user_song ON public.user_history USING btree (user_id, song_id);
 
 
 --
 -- Name: idx_user_interactions_composite; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_interactions_composite ON public.user_interactions USING btree (user_id, created_at DESC, interaction_type);
+CREATE INDEX IF NOT EXISTS idx_user_interactions_composite ON public.user_interactions USING btree (user_id, created_at DESC, interaction_type);
 
 
 --
 -- Name: idx_user_interactions_created; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_interactions_created ON public.user_interactions USING btree (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_interactions_created ON public.user_interactions USING btree (created_at DESC);
 
 
 --
 -- Name: idx_user_interactions_recent; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_interactions_recent ON public.user_interactions USING btree (song_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_interactions_recent ON public.user_interactions USING btree (song_id, created_at DESC);
 
 
 --
 -- Name: idx_user_interactions_song_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_interactions_song_id ON public.user_interactions USING btree (song_id);
+CREATE INDEX IF NOT EXISTS idx_user_interactions_song_id ON public.user_interactions USING btree (song_id);
 
 
 --
 -- Name: idx_user_interactions_song_time; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_interactions_song_time ON public.user_interactions USING btree (song_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_interactions_song_time ON public.user_interactions USING btree (song_id, created_at DESC);
 
 
 --
 -- Name: idx_user_interactions_timestamp; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_interactions_timestamp ON public.user_interactions USING btree (created_at);
+CREATE INDEX IF NOT EXISTS idx_user_interactions_timestamp ON public.user_interactions USING btree (created_at);
 
 
 --
 -- Name: idx_user_interactions_type; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_interactions_type ON public.user_interactions USING btree (interaction_type);
+CREATE INDEX IF NOT EXISTS idx_user_interactions_type ON public.user_interactions USING btree (interaction_type);
 
 
 --
 -- Name: idx_user_interactions_type_time; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_interactions_type_time ON public.user_interactions USING btree (interaction_type, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_interactions_type_time ON public.user_interactions USING btree (interaction_type, created_at DESC);
 
 
 --
 -- Name: idx_user_interactions_user_created; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_interactions_user_created ON public.user_interactions USING btree (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_interactions_user_created ON public.user_interactions USING btree (user_id, created_at DESC);
 
 
 --
 -- Name: idx_user_interactions_user_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_interactions_user_id ON public.user_interactions USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_user_interactions_user_id ON public.user_interactions USING btree (user_id);
 
 
 --
 -- Name: idx_user_interactions_user_song_type; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_interactions_user_song_type ON public.user_interactions USING btree (user_id, song_id, interaction_type);
+CREATE INDEX IF NOT EXISTS idx_user_interactions_user_song_type ON public.user_interactions USING btree (user_id, song_id, interaction_type);
 
 
 --
 -- Name: idx_user_interactions_user_time_type; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_interactions_user_time_type ON public.user_interactions USING btree (user_id, created_at DESC, interaction_type);
+CREATE INDEX IF NOT EXISTS idx_user_interactions_user_time_type ON public.user_interactions USING btree (user_id, created_at DESC, interaction_type);
 
 
 --
 -- Name: idx_user_interactions_user_type; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_interactions_user_type ON public.user_interactions USING btree (user_id, interaction_type);
+CREATE INDEX IF NOT EXISTS idx_user_interactions_user_type ON public.user_interactions USING btree (user_id, interaction_type);
 
 
 --
 -- Name: idx_user_models_last_updated; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_models_last_updated ON public.user_models USING btree (last_updated DESC);
+CREATE INDEX IF NOT EXISTS idx_user_models_last_updated ON public.user_models USING btree (last_updated DESC);
 
 
 --
 -- Name: idx_user_models_user; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_models_user ON public.user_models USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_user_models_user ON public.user_models USING btree (user_id);
 
 
 --
 -- Name: idx_user_mood_profile_user; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_mood_profile_user ON public.user_mood_profile USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_user_mood_profile_user ON public.user_mood_profile USING btree (user_id);
 
 
 --
 -- Name: idx_user_preferences_updated; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_preferences_updated ON public.user_preferences USING btree (updated_at);
+CREATE INDEX IF NOT EXISTS idx_user_preferences_updated ON public.user_preferences USING btree (updated_at);
 
 
 --
 -- Name: idx_user_preferences_user_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_preferences_user_id ON public.user_preferences USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_user_preferences_user_id ON public.user_preferences USING btree (user_id);
 
 
 --
 -- Name: idx_user_queue_user_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_queue_user_id ON public.user_queue USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_user_queue_user_id ON public.user_queue USING btree (user_id);
 
 
 --
 -- Name: idx_user_taste_links_user_weight; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_user_taste_links_user_weight ON public.user_taste_links USING btree (user_id, weight DESC, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_taste_links_user_weight ON public.user_taste_links USING btree (user_id, weight DESC, updated_at DESC);
 
 
 --
 -- Name: idx_users_email_hash; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX idx_users_email_hash ON public.users USING btree (email_hash) WHERE (email_hash IS NOT NULL);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_hash ON public.users USING btree (email_hash) WHERE (email_hash IS NOT NULL);
 
 
 --
 -- Name: idx_users_telegram_id; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX idx_users_telegram_id ON public.users USING btree (telegram_id) WHERE (telegram_id IS NOT NULL);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_telegram_id ON public.users USING btree (telegram_id) WHERE (telegram_id IS NOT NULL);
 
 
 --
 -- Name: uniq_artist_account_member_active; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX uniq_artist_account_member_active ON public.artist_account_members USING btree (account_id, user_id) WHERE (((status)::text = 'active'::text) AND (revoked_at IS NULL));
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_artist_account_member_active ON public.artist_account_members USING btree (account_id, user_id) WHERE (((status)::text = 'active'::text) AND (revoked_at IS NULL));
 
 
 --
 -- Name: uniq_artist_active_owner; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX uniq_artist_active_owner ON public.artist_ownerships USING btree (artist_id) WHERE (((status)::text = 'active'::text) AND (revoked_at IS NULL));
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_artist_active_owner ON public.artist_ownerships USING btree (artist_id) WHERE (((status)::text = 'active'::text) AND (revoked_at IS NULL));
 
 
 --
 -- Name: uniq_artist_claim_pending; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX uniq_artist_claim_pending ON public.artist_claim_requests USING btree (artist_id, user_id) WHERE ((status)::text = 'pending'::text);
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_artist_claim_pending ON public.artist_claim_requests USING btree (artist_id, user_id) WHERE ((status)::text = 'pending'::text);
 
 
 --
 -- Name: user_genre_playback_prefs_user_id_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX user_genre_playback_prefs_user_id_idx ON public.user_genre_playback_prefs USING btree (user_id);
+CREATE INDEX IF NOT EXISTS user_genre_playback_prefs_user_id_idx ON public.user_genre_playback_prefs USING btree (user_id);
 
 
 --
 -- Name: user_taste_clusters_embedding_hnsw; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX user_taste_clusters_embedding_hnsw ON public.user_taste_clusters USING hnsw (embedding public.vector_cosine_ops) WITH (m='16', ef_construction='200');
+CREATE INDEX IF NOT EXISTS user_taste_clusters_embedding_hnsw ON public.user_taste_clusters USING hnsw (embedding public.vector_cosine_ops) WITH (m='16', ef_construction='200');
 
 
 --
 -- Name: user_taste_clusters_user_id_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX user_taste_clusters_user_id_idx ON public.user_taste_clusters USING btree (user_id);
+CREATE INDEX IF NOT EXISTS user_taste_clusters_user_id_idx ON public.user_taste_clusters USING btree (user_id);
 
 
 --
 -- Name: albums trg_search_outbox_albums; Type: TRIGGER; Schema: public; Owner: -
 --
 
+DROP TRIGGER IF EXISTS trg_search_outbox_albums ON public.albums;
 CREATE TRIGGER trg_search_outbox_albums AFTER INSERT OR UPDATE ON public.albums FOR EACH ROW EXECUTE FUNCTION public.search_outbox_album_trigger();
 
 
@@ -4156,6 +4082,7 @@ CREATE TRIGGER trg_search_outbox_albums AFTER INSERT OR UPDATE ON public.albums 
 -- Name: artists trg_search_outbox_artists; Type: TRIGGER; Schema: public; Owner: -
 --
 
+DROP TRIGGER IF EXISTS trg_search_outbox_artists ON public.artists;
 CREATE TRIGGER trg_search_outbox_artists AFTER INSERT OR UPDATE ON public.artists FOR EACH ROW EXECUTE FUNCTION public.search_outbox_artist_trigger();
 
 
@@ -4163,6 +4090,7 @@ CREATE TRIGGER trg_search_outbox_artists AFTER INSERT OR UPDATE ON public.artist
 -- Name: songs trg_search_outbox_songs; Type: TRIGGER; Schema: public; Owner: -
 --
 
+DROP TRIGGER IF EXISTS trg_search_outbox_songs ON public.songs;
 CREATE TRIGGER trg_search_outbox_songs AFTER INSERT OR DELETE OR UPDATE ON public.songs FOR EACH ROW EXECUTE FUNCTION public.search_outbox_song_trigger();
 
 
@@ -4170,6 +4098,7 @@ CREATE TRIGGER trg_search_outbox_songs AFTER INSERT OR DELETE OR UPDATE ON publi
 -- Name: song_features trg_song_features_refresh_mood_scores; Type: TRIGGER; Schema: public; Owner: -
 --
 
+DROP TRIGGER IF EXISTS trg_song_features_refresh_mood_scores ON public.song_features;
 CREATE TRIGGER trg_song_features_refresh_mood_scores AFTER INSERT OR UPDATE OF tempo, energy, valence, danceability, speechiness ON public.song_features FOR EACH ROW EXECUTE FUNCTION public.trg_refresh_song_mood_scores();
 
 
@@ -4177,6 +4106,7 @@ CREATE TRIGGER trg_song_features_refresh_mood_scores AFTER INSERT OR UPDATE OF t
 -- Name: song_features trg_song_features_sync_embedding; Type: TRIGGER; Schema: public; Owner: -
 --
 
+DROP TRIGGER IF EXISTS trg_song_features_sync_embedding ON public.song_features;
 CREATE TRIGGER trg_song_features_sync_embedding AFTER INSERT OR UPDATE OF tempo, energy, valence, danceability, acousticness, instrumentalness, liveness, speechiness ON public.song_features FOR EACH ROW EXECUTE FUNCTION public.reco_song_features_sync_embedding();
 
 
@@ -4184,6 +4114,7 @@ CREATE TRIGGER trg_song_features_sync_embedding AFTER INSERT OR UPDATE OF tempo,
 -- Name: songs trg_songs_set_norm_cols; Type: TRIGGER; Schema: public; Owner: -
 --
 
+DROP TRIGGER IF EXISTS trg_songs_set_norm_cols ON public.songs;
 CREATE TRIGGER trg_songs_set_norm_cols BEFORE INSERT OR UPDATE OF genre, artist ON public.songs FOR EACH ROW EXECUTE FUNCTION public.songs_set_norm_cols();
 
 
@@ -4191,6 +4122,7 @@ CREATE TRIGGER trg_songs_set_norm_cols BEFORE INSERT OR UPDATE OF genre, artist 
 -- Name: user_preferences trigger_user_preferences_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
+DROP TRIGGER IF EXISTS trigger_user_preferences_updated_at ON public.user_preferences;
 CREATE TRIGGER trigger_user_preferences_updated_at BEFORE UPDATE ON public.user_preferences FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 
@@ -4198,6 +4130,7 @@ CREATE TRIGGER trigger_user_preferences_updated_at BEFORE UPDATE ON public.user_
 -- Name: playlists update_playlists_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
+DROP TRIGGER IF EXISTS update_playlists_updated_at ON public.playlists;
 CREATE TRIGGER update_playlists_updated_at BEFORE UPDATE ON public.playlists FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 
@@ -4205,6 +4138,7 @@ CREATE TRIGGER update_playlists_updated_at BEFORE UPDATE ON public.playlists FOR
 -- Name: songs update_songs_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
+DROP TRIGGER IF EXISTS update_songs_updated_at ON public.songs;
 CREATE TRIGGER update_songs_updated_at BEFORE UPDATE ON public.songs FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 
@@ -4212,400 +4146,350 @@ CREATE TRIGGER update_songs_updated_at BEFORE UPDATE ON public.songs FOR EACH RO
 -- Name: albums albums_artist_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.albums
-    ADD CONSTRAINT albums_artist_id_fkey FOREIGN KEY (artist_id) REFERENCES public.artists(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='albums_artist_id_fkey') THEN ALTER TABLE ONLY public.albums ADD CONSTRAINT albums_artist_id_fkey FOREIGN KEY (artist_id) REFERENCES public.artists(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: artist_account_members artist_account_members_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.artist_account_members
-    ADD CONSTRAINT artist_account_members_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.artist_accounts(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='artist_account_members_account_id_fkey') THEN ALTER TABLE ONLY public.artist_account_members ADD CONSTRAINT artist_account_members_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.artist_accounts(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: artist_account_members artist_account_members_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.artist_account_members
-    ADD CONSTRAINT artist_account_members_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='artist_account_members_user_id_fkey') THEN ALTER TABLE ONLY public.artist_account_members ADD CONSTRAINT artist_account_members_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: artist_accounts artist_accounts_artist_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.artist_accounts
-    ADD CONSTRAINT artist_accounts_artist_id_fkey FOREIGN KEY (artist_id) REFERENCES public.artists(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='artist_accounts_artist_id_fkey') THEN ALTER TABLE ONLY public.artist_accounts ADD CONSTRAINT artist_accounts_artist_id_fkey FOREIGN KEY (artist_id) REFERENCES public.artists(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: artist_claim_requests artist_claim_requests_artist_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.artist_claim_requests
-    ADD CONSTRAINT artist_claim_requests_artist_id_fkey FOREIGN KEY (artist_id) REFERENCES public.artists(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='artist_claim_requests_artist_id_fkey') THEN ALTER TABLE ONLY public.artist_claim_requests ADD CONSTRAINT artist_claim_requests_artist_id_fkey FOREIGN KEY (artist_id) REFERENCES public.artists(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: artist_claim_requests artist_claim_requests_reviewed_by_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.artist_claim_requests
-    ADD CONSTRAINT artist_claim_requests_reviewed_by_user_id_fkey FOREIGN KEY (reviewed_by_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='artist_claim_requests_reviewed_by_user_id_fkey') THEN ALTER TABLE ONLY public.artist_claim_requests ADD CONSTRAINT artist_claim_requests_reviewed_by_user_id_fkey FOREIGN KEY (reviewed_by_user_id) REFERENCES public.users(id) ON DELETE SET NULL; END IF; END $dbmig$;
 
 
 --
 -- Name: artist_claim_requests artist_claim_requests_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.artist_claim_requests
-    ADD CONSTRAINT artist_claim_requests_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='artist_claim_requests_user_id_fkey') THEN ALTER TABLE ONLY public.artist_claim_requests ADD CONSTRAINT artist_claim_requests_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: artist_ownerships artist_ownerships_artist_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.artist_ownerships
-    ADD CONSTRAINT artist_ownerships_artist_id_fkey FOREIGN KEY (artist_id) REFERENCES public.artists(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='artist_ownerships_artist_id_fkey') THEN ALTER TABLE ONLY public.artist_ownerships ADD CONSTRAINT artist_ownerships_artist_id_fkey FOREIGN KEY (artist_id) REFERENCES public.artists(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: artist_ownerships artist_ownerships_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.artist_ownerships
-    ADD CONSTRAINT artist_ownerships_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='artist_ownerships_user_id_fkey') THEN ALTER TABLE ONLY public.artist_ownerships ADD CONSTRAINT artist_ownerships_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: artist_uploaders artist_uploaders_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.artist_uploaders
-    ADD CONSTRAINT artist_uploaders_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='artist_uploaders_user_id_fkey') THEN ALTER TABLE ONLY public.artist_uploaders ADD CONSTRAINT artist_uploaders_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: artists artists_created_by_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.artists
-    ADD CONSTRAINT artists_created_by_user_id_fkey FOREIGN KEY (created_by_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='artists_created_by_user_id_fkey') THEN ALTER TABLE ONLY public.artists ADD CONSTRAINT artists_created_by_user_id_fkey FOREIGN KEY (created_by_user_id) REFERENCES public.users(id) ON DELETE SET NULL; END IF; END $dbmig$;
 
 
 --
 -- Name: auth_devices auth_devices_sid_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.auth_devices
-    ADD CONSTRAINT auth_devices_sid_fkey FOREIGN KEY (sid) REFERENCES public.auth_sessions(sid) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='auth_devices_sid_fkey') THEN ALTER TABLE ONLY public.auth_devices ADD CONSTRAINT auth_devices_sid_fkey FOREIGN KEY (sid) REFERENCES public.auth_sessions(sid) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: auth_devices auth_devices_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.auth_devices
-    ADD CONSTRAINT auth_devices_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='auth_devices_user_id_fkey') THEN ALTER TABLE ONLY public.auth_devices ADD CONSTRAINT auth_devices_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: auth_sessions auth_sessions_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.auth_sessions
-    ADD CONSTRAINT auth_sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='auth_sessions_user_id_fkey') THEN ALTER TABLE ONLY public.auth_sessions ADD CONSTRAINT auth_sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: dislikes dislikes_song_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.dislikes
-    ADD CONSTRAINT dislikes_song_id_fkey FOREIGN KEY (song_id) REFERENCES public.songs(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='dislikes_song_id_fkey') THEN ALTER TABLE ONLY public.dislikes ADD CONSTRAINT dislikes_song_id_fkey FOREIGN KEY (song_id) REFERENCES public.songs(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: dislikes dislikes_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.dislikes
-    ADD CONSTRAINT dislikes_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='dislikes_user_id_fkey') THEN ALTER TABLE ONLY public.dislikes ADD CONSTRAINT dislikes_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: likes likes_song_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.likes
-    ADD CONSTRAINT likes_song_id_fkey FOREIGN KEY (song_id) REFERENCES public.songs(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='likes_song_id_fkey') THEN ALTER TABLE ONLY public.likes ADD CONSTRAINT likes_song_id_fkey FOREIGN KEY (song_id) REFERENCES public.songs(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: likes likes_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.likes
-    ADD CONSTRAINT likes_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='likes_user_id_fkey') THEN ALTER TABLE ONLY public.likes ADD CONSTRAINT likes_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: listens listens_song_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.listens
-    ADD CONSTRAINT listens_song_id_fkey FOREIGN KEY (song_id) REFERENCES public.songs(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='listens_song_id_fkey') THEN ALTER TABLE ONLY public.listens ADD CONSTRAINT listens_song_id_fkey FOREIGN KEY (song_id) REFERENCES public.songs(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: listens listens_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.listens
-    ADD CONSTRAINT listens_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='listens_user_id_fkey') THEN ALTER TABLE ONLY public.listens ADD CONSTRAINT listens_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: playlist_tracks playlist_tracks_added_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.playlist_tracks
-    ADD CONSTRAINT playlist_tracks_added_by_fkey FOREIGN KEY (added_by) REFERENCES public.users(id) ON DELETE SET NULL;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='playlist_tracks_added_by_fkey') THEN ALTER TABLE ONLY public.playlist_tracks ADD CONSTRAINT playlist_tracks_added_by_fkey FOREIGN KEY (added_by) REFERENCES public.users(id) ON DELETE SET NULL; END IF; END $dbmig$;
 
 
 --
 -- Name: playlist_tracks playlist_tracks_playlist_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.playlist_tracks
-    ADD CONSTRAINT playlist_tracks_playlist_id_fkey FOREIGN KEY (playlist_id) REFERENCES public.playlists(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='playlist_tracks_playlist_id_fkey') THEN ALTER TABLE ONLY public.playlist_tracks ADD CONSTRAINT playlist_tracks_playlist_id_fkey FOREIGN KEY (playlist_id) REFERENCES public.playlists(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: playlist_tracks playlist_tracks_song_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.playlist_tracks
-    ADD CONSTRAINT playlist_tracks_song_id_fkey FOREIGN KEY (song_id) REFERENCES public.songs(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='playlist_tracks_song_id_fkey') THEN ALTER TABLE ONLY public.playlist_tracks ADD CONSTRAINT playlist_tracks_song_id_fkey FOREIGN KEY (song_id) REFERENCES public.songs(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: playlists playlists_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.playlists
-    ADD CONSTRAINT playlists_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='playlists_user_id_fkey') THEN ALTER TABLE ONLY public.playlists ADD CONSTRAINT playlists_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: recommendation_sessions recommendation_sessions_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.recommendation_sessions
-    ADD CONSTRAINT recommendation_sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='recommendation_sessions_user_id_fkey') THEN ALTER TABLE ONLY public.recommendation_sessions ADD CONSTRAINT recommendation_sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: refresh_tokens refresh_tokens_sid_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.refresh_tokens
-    ADD CONSTRAINT refresh_tokens_sid_fkey FOREIGN KEY (sid) REFERENCES public.auth_sessions(sid) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='refresh_tokens_sid_fkey') THEN ALTER TABLE ONLY public.refresh_tokens ADD CONSTRAINT refresh_tokens_sid_fkey FOREIGN KEY (sid) REFERENCES public.auth_sessions(sid) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: refresh_tokens refresh_tokens_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.refresh_tokens
-    ADD CONSTRAINT refresh_tokens_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='refresh_tokens_user_id_fkey') THEN ALTER TABLE ONLY public.refresh_tokens ADD CONSTRAINT refresh_tokens_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: security_events security_events_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.security_events
-    ADD CONSTRAINT security_events_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE SET NULL;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='security_events_user_id_fkey') THEN ALTER TABLE ONLY public.security_events ADD CONSTRAINT security_events_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE SET NULL; END IF; END $dbmig$;
 
 
 --
 -- Name: social_post_likes social_post_likes_post_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.social_post_likes
-    ADD CONSTRAINT social_post_likes_post_id_fkey FOREIGN KEY (post_id) REFERENCES public.social_posts(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='social_post_likes_post_id_fkey') THEN ALTER TABLE ONLY public.social_post_likes ADD CONSTRAINT social_post_likes_post_id_fkey FOREIGN KEY (post_id) REFERENCES public.social_posts(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: social_post_likes social_post_likes_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.social_post_likes
-    ADD CONSTRAINT social_post_likes_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='social_post_likes_user_id_fkey') THEN ALTER TABLE ONLY public.social_post_likes ADD CONSTRAINT social_post_likes_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: social_posts social_posts_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.social_posts
-    ADD CONSTRAINT social_posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='social_posts_user_id_fkey') THEN ALTER TABLE ONLY public.social_posts ADD CONSTRAINT social_posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: song_features song_features_song_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.song_features
-    ADD CONSTRAINT song_features_song_id_fkey FOREIGN KEY (song_id) REFERENCES public.songs(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='song_features_song_id_fkey') THEN ALTER TABLE ONLY public.song_features ADD CONSTRAINT song_features_song_id_fkey FOREIGN KEY (song_id) REFERENCES public.songs(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: song_genres song_genres_genre_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.song_genres
-    ADD CONSTRAINT song_genres_genre_id_fkey FOREIGN KEY (genre_id) REFERENCES public.genres(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='song_genres_genre_id_fkey') THEN ALTER TABLE ONLY public.song_genres ADD CONSTRAINT song_genres_genre_id_fkey FOREIGN KEY (genre_id) REFERENCES public.genres(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: song_genres song_genres_song_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.song_genres
-    ADD CONSTRAINT song_genres_song_id_fkey FOREIGN KEY (song_id) REFERENCES public.songs(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='song_genres_song_id_fkey') THEN ALTER TABLE ONLY public.song_genres ADD CONSTRAINT song_genres_song_id_fkey FOREIGN KEY (song_id) REFERENCES public.songs(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: song_mood_scores song_mood_scores_song_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.song_mood_scores
-    ADD CONSTRAINT song_mood_scores_song_id_fkey FOREIGN KEY (song_id) REFERENCES public.songs(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='song_mood_scores_song_id_fkey') THEN ALTER TABLE ONLY public.song_mood_scores ADD CONSTRAINT song_mood_scores_song_id_fkey FOREIGN KEY (song_id) REFERENCES public.songs(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: song_moods song_moods_song_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.song_moods
-    ADD CONSTRAINT song_moods_song_id_fkey FOREIGN KEY (song_id) REFERENCES public.songs(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='song_moods_song_id_fkey') THEN ALTER TABLE ONLY public.song_moods ADD CONSTRAINT song_moods_song_id_fkey FOREIGN KEY (song_id) REFERENCES public.songs(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: songs songs_uploader_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.songs
-    ADD CONSTRAINT songs_uploader_id_fkey FOREIGN KEY (uploader_id) REFERENCES public.users(id) ON DELETE SET NULL;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='songs_uploader_id_fkey') THEN ALTER TABLE ONLY public.songs ADD CONSTRAINT songs_uploader_id_fkey FOREIGN KEY (uploader_id) REFERENCES public.users(id) ON DELETE SET NULL; END IF; END $dbmig$;
 
 
 --
 -- Name: statistics_cache statistics_cache_uploader_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.statistics_cache
-    ADD CONSTRAINT statistics_cache_uploader_id_fkey FOREIGN KEY (uploader_id) REFERENCES public.users(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='statistics_cache_uploader_id_fkey') THEN ALTER TABLE ONLY public.statistics_cache ADD CONSTRAINT statistics_cache_uploader_id_fkey FOREIGN KEY (uploader_id) REFERENCES public.users(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: subscriptions subscriptions_plan_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.subscriptions
-    ADD CONSTRAINT subscriptions_plan_id_fkey FOREIGN KEY (plan_id) REFERENCES public.subscription_plans(id);
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='subscriptions_plan_id_fkey') THEN ALTER TABLE ONLY public.subscriptions ADD CONSTRAINT subscriptions_plan_id_fkey FOREIGN KEY (plan_id) REFERENCES public.subscription_plans(id); END IF; END $dbmig$;
 
 
 --
 -- Name: user_daily_recommendations user_daily_recommendations_song_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.user_daily_recommendations
-    ADD CONSTRAINT user_daily_recommendations_song_id_fkey FOREIGN KEY (song_id) REFERENCES public.songs(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_daily_recommendations_song_id_fkey') THEN ALTER TABLE ONLY public.user_daily_recommendations ADD CONSTRAINT user_daily_recommendations_song_id_fkey FOREIGN KEY (song_id) REFERENCES public.songs(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: user_daily_recommendations user_daily_recommendations_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.user_daily_recommendations
-    ADD CONSTRAINT user_daily_recommendations_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_daily_recommendations_user_id_fkey') THEN ALTER TABLE ONLY public.user_daily_recommendations ADD CONSTRAINT user_daily_recommendations_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: user_eq_settings user_eq_settings_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.user_eq_settings
-    ADD CONSTRAINT user_eq_settings_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_eq_settings_user_id_fkey') THEN ALTER TABLE ONLY public.user_eq_settings ADD CONSTRAINT user_eq_settings_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: user_history user_history_song_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.user_history
-    ADD CONSTRAINT user_history_song_id_fkey FOREIGN KEY (song_id) REFERENCES public.songs(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_history_song_id_fkey') THEN ALTER TABLE ONLY public.user_history ADD CONSTRAINT user_history_song_id_fkey FOREIGN KEY (song_id) REFERENCES public.songs(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: user_history user_history_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.user_history
-    ADD CONSTRAINT user_history_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_history_user_id_fkey') THEN ALTER TABLE ONLY public.user_history ADD CONSTRAINT user_history_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: user_interactions user_interactions_song_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.user_interactions
-    ADD CONSTRAINT user_interactions_song_id_fkey FOREIGN KEY (song_id) REFERENCES public.songs(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_interactions_song_id_fkey') THEN ALTER TABLE ONLY public.user_interactions ADD CONSTRAINT user_interactions_song_id_fkey FOREIGN KEY (song_id) REFERENCES public.songs(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: user_interactions user_interactions_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.user_interactions
-    ADD CONSTRAINT user_interactions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_interactions_user_id_fkey') THEN ALTER TABLE ONLY public.user_interactions ADD CONSTRAINT user_interactions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: user_models user_models_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.user_models
-    ADD CONSTRAINT user_models_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_models_user_id_fkey') THEN ALTER TABLE ONLY public.user_models ADD CONSTRAINT user_models_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: user_mood_profile user_mood_profile_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.user_mood_profile
-    ADD CONSTRAINT user_mood_profile_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_mood_profile_user_id_fkey') THEN ALTER TABLE ONLY public.user_mood_profile ADD CONSTRAINT user_mood_profile_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: user_preferences user_preferences_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.user_preferences
-    ADD CONSTRAINT user_preferences_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_preferences_user_id_fkey') THEN ALTER TABLE ONLY public.user_preferences ADD CONSTRAINT user_preferences_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
 -- Name: user_settings user_settings_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.user_settings
-    ADD CONSTRAINT user_settings_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+DO $dbmig$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='user_settings_user_id_fkey') THEN ALTER TABLE ONLY public.user_settings ADD CONSTRAINT user_settings_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE; END IF; END $dbmig$;
 
 
 --
