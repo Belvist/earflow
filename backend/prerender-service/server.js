@@ -22,6 +22,8 @@ const ALLOWED_HOSTS = new Set(
         .filter(Boolean)
 );
 const FRONTEND_ORIGIN = String(process.env.PRERENDER_FRONTEND_ORIGIN || 'http://frontend:3004');
+const API_ORIGIN = String(process.env.PRERENDER_API_ORIGIN || 'http://api-gateway:3000');
+const API_ORIGIN = String(process.env.PRERENDER_API_ORIGIN || 'http://api-gateway:3000');
 const NAV_TIMEOUT_MS = Number(process.env.PRERENDER_NAV_TIMEOUT_MS || 8000);
 const SETTLE_MS = Number(process.env.PRERENDER_SETTLE_MS || 2000);
 const CONTENT_TITLE_TIMEOUT_MS = Number(process.env.PRERENDER_CONTENT_TITLE_TIMEOUT_MS || 6000);
@@ -125,14 +127,7 @@ async function render(url) {
             if (rt === 'image' || rt === 'media' || rt === 'font') { req.abort(); return; }
             const u = req.url();
             if (u.startsWith('https://api.earflow.ru')) {
-                // Frontend раздаёт SPA. Внутренние API идут прямо на gateway (auth headers убраны).
-                const headers = Object.assign({}, req.headers(), {
-                    'Origin': 'http://frontend:3004',
-                    'Referer': 'http://frontend:3004/',
-                });
-                for (const k of ['authorization', 'cookie', 'x-csrf-token', 'x-auth-device-id', 'x-auth-device-proof', 'x-auth-proof-access-token'])
-                    delete headers[k];
-                req.continue({ url: u.replace('https://api.earflow.ru', 'http://api-gateway:3000'), headers });
+                req.continue({ url: u.replace('https://api.earflow.ru', API_ORIGIN) });
                 return;
             }
             req.continue();
@@ -218,8 +213,8 @@ async function handleRequest(req, res) {
     }
 
     if (inFlight >= MAX_CONCURRENT) {
-        // 429 (не 503) → nginx НЕ делает fallback на SPA, бот получает понятный ответ
-        res.writeHead(429, { 'Content-Type': 'text/plain; charset=utf-8', 'Retry-After': '2' });
+        // 503 → nginx fallback на SPA (бот получит skeleton index.html, не критично)
+        res.writeHead(503, { 'Content-Type': 'text/plain; charset=utf-8', 'Retry-After': '5' });
         return res.end('Prerender busy — retry');
     }
 
