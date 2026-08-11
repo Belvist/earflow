@@ -78,15 +78,36 @@ export default function TrackPage() {
     return m ? Number(m[1]) : NaN;
   }, [trackId]);
 
+  // Ключевой SEO-момент: не полагаемся на один fetch. CSRF в prerender (без cookie)
+  // приводит к 403 → ретрай зацикливается. Делаем 2 попытки с явными логами (в консоли prerender'а).
   useEffect(() => {
     if (!Number.isFinite(numericId)) { setError('Трек не найден'); setLoading(false); return; }
     const ctrl = new AbortController();
+    let cancelled = false;
     setLoading(true); setError(null);
-    apiClient.request(`/api/songs/${numericId}`, { signal: ctrl.signal })
-      .then((data) => { if (!ctrl.signal.aborted) setSong(data && typeof data === 'object' ? data : null); })
-      .catch((e) => { if (!ctrl.signal.aborted) setError(e && e.message ? String(e.message) : 'Ошибка загрузки'); })
-      .finally(() => { if (!ctrl.signal.aborted) setLoading(false); });
-    return () => ctrl.abort();
+
+    const tryFetch = async (attempt) => {
+      try {
+        const data = await apiClient.request(`/api/songs/${numericId}`, { signal: ctrl.signal });
+        if (!cancelled && !ctrl.signal.aborted && data && typeof data === 'object') {
+          setSong(data);
+          setLoading(false);
+          return true;
+        }
+      } catch (e) {
+        if (!cancelled && !ctrl.signal.aborted) {
+          const msg = e && e.message ? String(e.message) : 'Ошибка загрузки';
+          // 403 в prerender — спам; не ретраим бесконечно
+          if (msg.includes('403') && attempt === 0) return false;
+          if (attempt === 0) return tryFetch(1);
+          setError(msg);
+          setLoading(false);
+        }
+      }
+      return false;
+    };
+    void tryFetch(0);
+    return () => { cancelled = true; ctrl.abort(); };
   }, [numericId]);
 
   const coverUrl = useMemo(() => (song && song.cover_path ? apiClient.getCoverUrl({ cover_path: song.cover_path }) : null), [song]);
