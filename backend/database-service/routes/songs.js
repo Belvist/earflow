@@ -672,7 +672,7 @@ router.get('/by-public-id/:publicId', requireService(['api-gateway']), async (re
     if (!/^[0-9a-f]{16}$/.test(publicId)) {
       return res.status(400).json({ error: 'Invalid public id format', code: 'INVALID_ID' });
     }
-    const { hasIsAvailable } = await getSchemaCapabilities();
+    const { hasIsAvailable, hasEbapReadyFlag } = await getSchemaCapabilities();
     const includeUnavailable = String(req.query.includeUnavailable || 'false') === 'true';
     const availabilityClause = (hasIsAvailable && !includeUnavailable) ? ' AND is_available = true' : '';
     const availabilityField = hasIsAvailable ? 'is_available' : 'true as is_available';
