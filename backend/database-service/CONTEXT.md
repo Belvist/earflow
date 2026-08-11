@@ -14,10 +14,9 @@
 |---|---|---|---|
 | GET | `/health` | none | liveness + DB status |
 | POST | `/auth/service-token` | service key | issue RS256 service token |
-| GET | `/api/songs*` | service token | catalog song/search/radio/waveform reads |
+| GET | `/api/songs*` (кроме `/search`) | service token | catalog song/radio/waveform reads; поиск — `/api/search/v1` в `search-service` |
 | GET/PUT | `/api/users/:id/settings` | api-gateway service token | listener profile/settings |
 | GET | `/api/users/:id/stats` | api-gateway service token | listener stats |
-| GET/POST/DELETE | `/api/playlists*` | api-gateway service token + `X-User-Id` | playlist CRUD |
 | GET | `/api/social/feed` | api-gateway service token + `X-User-Id` | backend-authored social feed DTO |
 | POST | `/api/social/posts` | api-gateway service token + `X-User-Id` | create text post |
 | POST/DELETE | `/api/social/posts/:id/like` | api-gateway service token + `X-User-Id` | like/unlike post |
@@ -62,6 +61,7 @@ Optional:
 
 ## Recent significant changes
 
+- 2026-08-11 — Удалены мёртвые роуты `/api/songs/search` и `/api/playlists` (см. `docs/DECISIONS.md`); поиск → `/api/search/v1` (search-service), плейлисты → `playlist-service`.
 - 2026-06-16 — Social feed privacy/perf pass: minimal author DTO, `likes_count`, reaction delta, process-local feed cache. См. `docs/DECISIONS.md`.
 - 2026-06-12 — Social feed v1 backend-owned posts/likes/API. См. `docs/DECISIONS.md`.
 

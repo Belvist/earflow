@@ -4,6 +4,31 @@
 
 ---
 
+## 2026-08-11 — Удаление мёртвых роутов: /api/songs/search + /api/playlists из database-service
+
+**Status:** accepted
+**Area:** go-api-gateway | database-service
+
+**Context:**
+- В коде database-service существовало две «тихие губки»: `/api/songs/search/:query` (SQL `LIKE '%term%'`, Seq Scan) и `/api/playlists` (дубрикат CRUD, полный в `playlist-service`).  
+- На практике: (a) фронт давно использует `client.searchV1()` → `/api/search/v1` в `search-service` + Meilisearch; (b) `playlist-service` владеет `/api/playlists` через gateway (`upstream: playlist`), `database-service` мёртв.
+
+**Decision:**
+1. **Удалён старый search route** `/api/songs/search/*`: вырезан роут `search/:query` из `backend/database-service/routes/songs.js` + удалён блок `songs_search` из `backend/go-api-gateway/gateway.yaml`.
+2. **Удалён мёртвый жанр playlist CRUD**: `backend/database-service/routes/playlists.js` удалён, `require`/'mount' убраны из `database-service/server.js`.
+3. **Оставлен код радио** `/api/songs/radio` — он не дублирует `search-service` (железно нужен для рекомендаций) и использует полноценные подзапросы. Индексы/pg_trgm не добавляем: больше нет клиентов на эти пути.
+
+**Consequences:**
+- Первый продовый запрос к `/api/songs/search` отдаёт 404 — но никто его не делает (подтверждено).
+- Если позже понадобится поиск по песням через Postgres (например, в backoffice) — это делается новым роутом в `search-service` или новым сервисом, но не через `database-service`.
+- Меняются caller-ки только через gatewy — не внутри сети.
+
+**Files touched:** `backend/database-service/routes/songs.js` (удалён `/search/:query`), `backend/database-service/routes/playlists.js` (deleted), `backend/database-service/server.js`, `backend/go-api-gateway/gateway.yaml`
+
+**Чтобы не повторилось:** подобная двойная имплементация (один и тот же SQL route, один сервис не получает трафик) — red flag. При добавлении роута в gateway и при удалении сервисного кода делайте `grep` по всему проекту за прямыми ссылками (`host:port/path`).
+
+---
+
 ## 2026-08-10 — SEO baseline: sitemap из каталога + PNG og:image
 
 **Status:** accepted

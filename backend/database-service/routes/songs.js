@@ -242,109 +242,6 @@ router.get('/recommendations', requireService(['api-gateway']), recommendationsL
   });
 });
 
-/**
- * GET /api/songs/search/:query
- * Улучшенный поиск песен с поддержкой:
- * - Поиска по первым буквам (prefix search)
- * - Поиска по артисту и названию
- * - Ранжирования результатов по релевантности
- */
-const searchLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: scaledRateLimit(120),
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req) => {
-    const user = req.headers['x-user-id'] || req.query.userId || '';
-    return `${req.service ? req.service.name : 'unknown'}:${user}`;
-  },
-  message: { error: 'Too many requests', code: 'RATE_LIMITED' },
-});
-
-router.get('/search/:query', requireService(['api-gateway']), searchLimiter, async (req, res) => {
-  try {
-    const rawQuery = req.params.query || '';
-    const { userId, limit = 50 } = req.query;
-
-    // Санитизация и нормализация запроса
-    const query = rawQuery
-      .trim()
-      .toLowerCase()
-      .replace(/[<>&"'\\]/g, '') // Удаляем опасные символы
-      .substring(0, 100); // Ограничиваем длину
-
-    if (!query || query.length === 0) {
-      return res.json([]);
-    }
-
-    const safeLimit = Math.min(parseInt(limit, 10) || 50, 100);
-
-    let parsedUserId = null;
-    if (userId !== undefined && userId !== null && String(userId).trim() !== '') {
-      const n = parseInt(String(userId), 10);
-      if (!Number.isFinite(n) || n <= 0) {
-        return res.status(400).json({ error: 'Некорректный userId' });
-      }
-      parsedUserId = n;
-    }
-
-    const { hasIsAvailable, hasEbapReadyFlag } = await getSchemaCapabilities();
-    const view = (req.query.view ?? '').toString().trim().toLowerCase();
-    const availabilityWhere = hasIsAvailable ? ' AND is_available = true' : '';
-    const ebapSelect = hasEbapReadyFlag ? 'has_ebap' : 'false as has_ebap';
-
-    // Улучшенный поиск с ранжированием:
-    // 1. Точное совпадение в начале title/artist (prefix) - высший приоритет
-    // 2. Совпадение где угодно - ниже приоритет
-    const sql = `
-      SELECT id, uploader_id as user_id, title, artist, album, duration, genre, year,
-             cover_path, ${ebapSelect}, created_at, updated_at,
-             CASE
-               -- Точное совпадение в начале title
-               WHEN LOWER(title) LIKE $1 || '%' THEN 100
-               -- Точное совпадение в начале artist
-               WHEN LOWER(artist) LIKE $1 || '%' THEN 90
-               -- Title содержит слово начинающееся с запроса
-               WHEN LOWER(title) LIKE '% ' || $1 || '%' THEN 80
-               -- Artist содержит слово начинающееся с запроса
-               WHEN LOWER(artist) LIKE '% ' || $1 || '%' THEN 70
-               -- Содержит где-то в title
-               WHEN LOWER(title) LIKE '%' || $1 || '%' THEN 60
-               -- Содержит где-то в artist
-               WHEN LOWER(artist) LIKE '%' || $1 || '%' THEN 50
-               -- Содержит в album
-               WHEN LOWER(album) LIKE '%' || $1 || '%' THEN 40
-               ELSE 0
-             END as relevance
-      FROM songs 
-      WHERE (
-        LOWER(title) LIKE '%' || $1 || '%' 
-        OR LOWER(artist) LIKE '%' || $1 || '%'
-        OR LOWER(album) LIKE '%' || $1 || '%'
-      )
-      ${parsedUserId ? 'AND uploader_id = $2' : ''}${availabilityWhere}
-      ORDER BY relevance DESC, created_at DESC
-      LIMIT $${parsedUserId ? 3 : 2}
-    `;
-
-    const params = parsedUserId ? [query, parsedUserId, safeLimit] : [query, safeLimit];
-    const result = await db.query(sql, params);
-
-    const rows = result.rows || [];
-    if (view === 'compact') {
-      return res.json(mapSongListCompactDto(rows));
-    }
-
-    const songs = rows.map(({ relevance, ...song }) => song);
-    return res.json(songs);
-  } catch (error) {
-    console.error('❌ Ошибка поиска песен:', error);
-    if (error && error.code === 'SCHEMA_UNAVAILABLE') {
-      return res.status(503).json({ error: 'Схема базы данных недоступна', code: 'SCHEMA_UNAVAILABLE' });
-    }
-    return res.status(500).json({ error: 'Ошибка поиска песен' });
-  }
-});
 
 router.get('/lookup', requireService(['track-processor', 'upload-service']), async (req, res) => {
   try {
@@ -658,6 +555,39 @@ router.get('/:id/waveform', requireService(['api-gateway']), async (req, res) =>
       return res.status(503).json({ error: 'Schema unavailable', code: 'SCHEMA_UNAVAILABLE' });
     }
     return res.status(500).json({ error: 'Waveform error' });
+  }
+});
+
+// DECISIONS 2026-08-11 Step 2: Public-ID based song resolver. Accepts either
+// raw numeric id (legacy path) OR a 16-char hex public_id (new opaque format).
+// This lets prerender / share urls reference songs without exposing the
+// serial id to the outside world.
+// DECISIONS 2026-08-11 Step 3: redirect numeric-id legacy URL to the public-id form
+// with 301 Moved Permanently. External share records, bookmarked links and
+// previously crawled pages now permanently re-canonicalize to the opaque
+// public_id form; crawlers update their index (and stop counting two URLs).
+router.get('/redirect-public/:id', requireService(['api-gateway']), async (req, res) => {
+  try {
+    const id = parseInt(String(req.params.id), 10);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ error: 'Invalid id', code: 'INVALID_ID' });
+    }
+    const { hasIsAvailable, hasEbapReadyFlag } = await getSchemaCapabilities();
+    const includeUnavailable = String(req.query.includeUnavailable || 'false') === 'true';
+    const availabilityClause = (hasIsAvailable && !includeUnavailable) ? ' AND is_available = true' : '';
+    const availabilityField = hasIsAvailable ? 'is_available' : 'true as is_available';
+    const ebapField = hasEbapReadyFlag ? 'has_ebap' : 'false as has_ebap';
+    const result = await db.query(
+      `SELECT public_id FROM songs WHERE id = $1${availabilityClause} LIMIT 1`,
+      [id],
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Трек не найден', code: 'NOT_FOUND' });
+    }
+    return res.redirect(301, `/track/${String(result.rows[0].public_id).toLowerCase()}`);
+  } catch (error) {
+    console.error('❌ Ошибка redirect-public:', error);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 });
 

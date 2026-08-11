@@ -296,15 +296,16 @@ routes:
       response_cache: catalog_short
       response_cache_namespace: catalog
 
-  - id: songs_search
+  - id: songs_public_redirect
     match:
-      type: prefix
-      value: /api/songs/search
+      type: regex
+      value: ^/api/songs/redirect-public/\d+$
     upstream: database
     policies:
       class: public
-      require_service_token: true
-      timeout: 8s
+      require_service_token: false
+      response_cache: catalog_short
+      response_cache_namespace: catalog
 
   - id: search_v1
     methods:
