@@ -285,6 +285,17 @@ routes:
       websocket: true
       require_user: true
 
+  - id: songs_public_lookup
+    match:
+      type: regex
+      value: ^/api/songs/by-public-id/[0-9a-f]{16}$
+    upstream: database
+    policies:
+      class: public
+      require_service_token: false
+      response_cache: catalog_short
+      response_cache_namespace: catalog
+
   - id: songs_search
     match:
       type: prefix

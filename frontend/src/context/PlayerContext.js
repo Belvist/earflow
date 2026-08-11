@@ -1904,6 +1904,7 @@ export const PlayerProvider = ({
   const mergedState = useMemo(() => ({
     ...state,
     serverQueue: serverQueueSnapshot,
+    queueTrackIds: serverQueueSnapshot.trackIds, // convenience, same object
   }), [state, serverQueueSnapshot]);
 
   const playerDispatchValue = useMemo(() => ({
