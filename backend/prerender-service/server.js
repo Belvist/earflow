@@ -49,6 +49,8 @@ async function getBrowser() {
     env.XDG_CACHE_HOME = '/tmp';
     // /dev/shm в контейнере — tmpfs 64M. При 4+ context'ах overflow → Protocol error.
     env.CHROME_DEVEL_SANDBOX = '/tmp/chrome_sandbox';
+    env.DISABLE_CRASH_REPORTER = 'true';
+    env.CHROME_HEADLESS = 'true';
     browserPromise = puppeteer.launch({
         headless: true,
         ...(executablePath ? { executablePath } : {}),
@@ -74,6 +76,7 @@ async function getBrowser() {
             '--disable-crash-reporter',
             '--disable-crashpad',
             '--disable-breakpad',
+            '--no-crashpad',
             '--no-zygote',
         ],
     }).catch((err) => {
