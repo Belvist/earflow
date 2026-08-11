@@ -1,0 +1,13 @@
+-- playlist-service line 67:      CREATE TABLE IF NOT EXISTS playlists (
+-- playlist-service line 86:      ALTER TABLE playlists
+-- playlist-service line 102:      ALTER TABLE playlists
+-- playlist-service line 107:      ALTER TABLE playlists
+-- playlist-service line 160:      CREATE INDEX IF NOT EXISTS idx_playlists_share_slug ON playlists(share_slug) WHERE share_slug IS NOT NULL
+-- playlist-service line 164:      CREATE INDEX IF NOT EXISTS idx_playlists_user_id ON playlists(user_id)
+-- playlist-service line 170:      CREATE TABLE IF NOT EXISTS playlist_tracks (
+-- playlist-service line 206:          ALTER TABLE playlist_tracks
+-- playlist-service line 217:      CREATE INDEX IF NOT EXISTS idx_playlist_tracks_playlist_id ON playlist_tracks(playlist_id)
+-- playlist-service line 220:      CREATE INDEX IF NOT EXISTS idx_playlist_tracks_song_id ON playlist_tracks(song_id)
+-- playlist-service line 226:      CREATE TABLE IF NOT EXISTS user_queue (
+-- playlist-service line 239:      CREATE TABLE IF NOT EXISTS queue_state (
+-- playlist-service line 252:      CREATE INDEX IF NOT EXISTS idx_user_queue_user_id ON user_queue(user_id)

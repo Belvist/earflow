@@ -1,0 +1,2 @@
+-- upload-service integrity-check line 292:      ALTER TABLE songs 
+-- upload-service integrity-check line 297:      CREATE INDEX IF NOT EXISTS idx_songs_is_available 

@@ -1,0 +1,13 @@
+{
+    "name": "earflow-db-migrations",
+    "private": true,
+    "version": "1.0.0",
+    "description": "Canonical PostgreSQL schema migrations pipeline for Earflow (single source of truth)",
+    "scripts": {
+        "migrate": "node runner/run.js",
+        "test": "node --test tests/runner.test.js"
+    },
+    "workspaces": [
+        "runner"
+    ]
+}

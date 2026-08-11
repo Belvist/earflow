@@ -4,6 +4,27 @@
 
 ---
 
+## 2026-08-12 — db-migrations: verified baseline + canonical runner (Phase 1)
+
+**Status:** accepted
+**Area:** database | db-migrations | schema
+
+**Context:** Аудит показал 5+ независимых источников изменения одной pg-схемы (docker-initdb bootstrap, database-service init.sql, recommendations runMigrations.js, search migrator, playlist/lyrics initialize, upload integrity-check). Drift production vs fresh-reconstruction: 3 мёртвые таблицы (`equalizer_presets`, `listening_history`, `user_song_likes` — 0 rows, 0 code refs), view `playlist_songs` + её INSTEAD OF trigger-функции (0 callers), duplicate `cleanup_expired_sessions`, orphan `refresh_recommendation_views`, matview `daily_interaction_summary`; обратный drift — 5 таблиц из bootstrap 02/03/04 (`song_moods`, `subscription_plans`, `subscriptions`, `user_mood_profile`, `user_preferences`) отсутствовали на проде, хотя живой код на них ссылается.
+
+**Decision:**
+1. Создан `db-migrations/` как единственный будущий owner schema. Старые файлы сохранены immutable в `db-migrations/legacy/`.
+2. `migrations/000001_baseline.sql` собран из **проверенной reconstruction** (не из prod dump): полный pg_dump с прода сверен со схемой, воспроизведённой из репо на пустом `pgvector/pgvector:pg15`. Prod-only мёртвые объекты исключены из baseline, bootstrap-only каноничные таблицы включены.
+3. Runner (`runner/run.js`): таблица `schema_migrations(migration_id, checksum_sha256, applied_at, execution_ms)`; sha256-mismatch применённого файла = hard fail; session-level `pg_advisory_lock(8888844444111111)` на весь run (pool max=1); SQL исполняется целиком сервером (без клиентского split — PL/pgSQL безопасен); миграции транзакционны по умолчанию, non-transactional режим по маркеру `-- migration: non-transactional`.
+4. Production НЕ трогался; legacy runners НЕ отключены; `000002_cleanup_legacy_prod.DRAFT.sql` лежит в `legacy/` и НЕ применяется.
+
+**Tests (all pass 10/10):** fresh DB apply; no-op повтор; concurrent runners (lock); checksum hard fail; broken migration rollback без записи; наличие reco/search/playlist/lyrics объектов; наличие новых 5 таблиц; отсутствие 6 исключённых legacy объектов.
+
+**Files:** `db-migrations/{README.md, runner/run.js, runner/package.json, package.json, tests/runner.test.js, migrations/000001_baseline.sql, legacy/**, .gitignore}`
+
+**Чтобы не повторилось:** любая новая schema-изменение — ТОЛЬКО через `db-migrations/migrations/NNNNNN_*.sql`. Запрещено править `000001_baseline.sql` после stamp на prod. Следующий шаг до production touch: `--verify-baseline` режим против прода (признак соответствия) — после отдельного GO.
+
+---
+
 ## 2026-08-11 — Удаление мёртвых роутов: /api/songs/search + /api/playlists из database-service
 
 **Status:** accepted

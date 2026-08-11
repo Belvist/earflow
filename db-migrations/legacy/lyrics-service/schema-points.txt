@@ -1,0 +1,6 @@
+-- lyrics-service line 51:      CREATE TABLE IF NOT EXISTS lyrics (
+-- lyrics-service line 65:      ALTER TABLE lyrics
+-- lyrics-service line 73:      CREATE TABLE IF NOT EXISTS lyrics_external_cache (
+-- lyrics-service line 87:      CREATE INDEX IF NOT EXISTS idx_lyrics_song_id ON lyrics(song_id)
+-- lyrics-service line 91:      CREATE INDEX IF NOT EXISTS idx_lyrics_plain_text 
+-- lyrics-service line 97:      CREATE TABLE IF NOT EXISTS lyrics_reports (
