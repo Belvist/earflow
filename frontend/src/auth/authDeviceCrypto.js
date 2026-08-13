@@ -123,7 +123,6 @@ async function ensureKeyPair() {
     ['sign'],
   );
   const publicKeySpki = await exportPublicKeySpki(keyPair.publicKey);
-  const pkcs8 = null;
 
   inMemoryKeyMaterial = {
     authDeviceId,

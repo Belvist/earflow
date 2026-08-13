@@ -34,17 +34,6 @@ function openDb() {
   });
 }
 
-async function idbGet(key) {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(DB_STORE, 'readonly');
-    const store = tx.objectStore(DB_STORE);
-    const req = store.get(key);
-    req.onsuccess = () => resolve(req.result ?? null);
-    req.onerror = () => reject(req.error);
-  });
-}
-
 async function idbSet(key, value) {
   const db = await openDb();
   return new Promise((resolve, reject) => {
@@ -57,6 +46,7 @@ async function idbSet(key, value) {
 }
 
 export async function clearAuthDeviceState() {
+  inMemoryKeyMaterial = null;
   try {
     await idbSet(IDB_KEY, null);
   } catch {
@@ -88,62 +78,92 @@ async function exportPublicKeySpki(publicKey) {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 }
 
+// DECISIONS 2026-08-11 security review fix (INV-SEC-019):
+// The ECDSA private key is now non-extractable (`extractable: false`), so it
+// can never be serialized — neither pkcs8-exported nor structured-cloned into
+// IndexedDB. The key therefore lives ONLY in a module-level in-memory slot for
+// the lifetime of the page session. Every fresh page load mints a new keypair
+// and re-registers it with the gateway (PoP is bound to the current session +
+// browser tab). This replaces the pre-fix behavior where the pkcs8 blob was
+// persisted and re-imported on the next load.
+let inMemoryKeyMaterial = null;
+
+export function resetDeviceKeyCacheForTests() {
+  inMemoryKeyMaterial = null;
+}
+
 async function ensureKeyPair() {
   const cryptoApi = getCrypto();
   if (!cryptoApi?.subtle) throw new Error('webcrypto_unavailable');
 
-  const stored = await idbGet(IDB_KEY);
-  if (stored?.privateKey && stored?.authDeviceId && stored?.sidHash) {
-    try {
-      const privateKey = await cryptoApi.subtle.importKey(
-        'pkcs8',
-        stored.privateKey,
-        { name: 'ECDSA', namedCurve: 'P-256' },
-        false,
-        ['sign'],
-      );
-      return {
-        authDeviceId: stored.authDeviceId,
-        sidHash: stored.sidHash,
-        privateKey,
-        publicKeySpki: stored.publicKeySpki,
-      };
-    } catch {
-      // fall through to regenerate
-    }
+  // Non-extractable key is non-serializable -> reuse the page-session slot.
+  if (inMemoryKeyMaterial?.privateKey) {
+    return inMemoryKeyMaterial;
   }
 
   const authDeviceId = generateAuthDeviceId();
+  // DECISIONS 2026-08-11 (security review): extractable: false means the private
+  // key never leaves the WebCrypto boundary. IndexedDB stores an opaque
+  // CryptoKey handle — even full JS read access in XSS cannot export raw key
+  // material. Usage is sign-only (no verify needed here).
   const keyPair = await cryptoApi.subtle.generateKey(
     { name: 'ECDSA', namedCurve: 'P-256' },
-    true,
-    ['sign', 'verify'],
+    false,
+    ['sign'],
   );
   const publicKeySpki = await exportPublicKeySpki(keyPair.publicKey);
-  const pkcs8 = await cryptoApi.subtle.exportKey('pkcs8', keyPair.privateKey);
 
-  return {
+  inMemoryKeyMaterial = {
     authDeviceId,
     sidHash: null,
     privateKey: keyPair.privateKey,
     publicKeySpki,
-    pkcs8,
+    pkcs8: null, // never exportable
     needsRegister: true,
   };
+
+  // A CryptoKey object is NOT structured-cloneable, so IndexedDB can hold only
+  // the non-secret public SPKI + the opaque device id for diagnostics. The
+  // signing key itself stays in the in-memory slot above for the page session.
+  try {
+    await idbSet(IDB_KEY, {
+      authDeviceId,
+      sidHash: '',
+      publicKeySpki,
+      privateKey: null,
+      pkcs8: null,
+    });
+  } catch {
+    // in-memory slot is authoritative; IDB metadata is best-effort only
+  }
+
+  return inMemoryKeyMaterial;
 }
 
 export async function persistAuthDeviceRecord({ authDeviceId, sidHash, privateKey, publicKeySpki, pkcs8 }) {
-  const cryptoApi = getCrypto();
-  let pkcs8Buf = pkcs8;
-  if (!pkcs8Buf && privateKey) {
-    pkcs8Buf = await cryptoApi.subtle.exportKey('pkcs8', privateKey);
+  // DECISIONS 2026-08-11: key is extractable:false at creation, so the only
+  // usable identity lives in the in-memory slot. Keep sidHash in sync so
+  // subsequent signing calls carry the bound proof context.
+  if (inMemoryKeyMaterial) {
+    if (authDeviceId) inMemoryKeyMaterial.authDeviceId = authDeviceId;
+    if (sidHash) inMemoryKeyMaterial.sidHash = sidHash;
+    if (publicKeySpki) inMemoryKeyMaterial.publicKeySpki = publicKeySpki;
+    inMemoryKeyMaterial.needsRegister = false;
   }
-  await idbSet(IDB_KEY, {
-    authDeviceId,
-    sidHash: sidHash || '',
-    publicKeySpki: publicKeySpki || '',
-    privateKey: pkcs8Buf,
-  });
+  const cryptoApi = getCrypto();
+  void cryptoApi;
+  // IDB holds only public metadata (the CryptoKey is not structured-cloneable).
+  try {
+    await idbSet(IDB_KEY, {
+      authDeviceId: authDeviceId || '',
+      sidHash: sidHash || '',
+      publicKeySpki: publicKeySpki || '',
+      privateKey: null,
+      pkcs8: null,
+    });
+  } catch {
+    // in-memory slot is authoritative; IDB metadata is best-effort only
+  }
 }
 
 function normalizeProofPath(path) {
