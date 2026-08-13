@@ -127,6 +127,21 @@
 
 ---
 
+### PEND-SEO-002 — Prerender не загружает song-данные на /track/* (title/H1 дефолтные, только cookie banner)
+
+**Priority:** medium
+**Status:** open — обнаружено 2026-08-13 при верификации numeric→public_id 301
+
+**Context:** Для любых `/track/*` (и numeric, и public_id) prerender отдаёт HTML, где JSON-контент трека отсутствует: `<title>Трек — Earflow</title>`, `<h1>` нет, в `#root` только cookie banner. При этом `/` (home) рендерится полностью (h1 «Earflow»). Значит SPA работает в Chromium, но fetch трека не завершается к моменту снятия страницы. API доступен из контейнера (проверено через node fetch к `api-gateway:3000` — 200 с данными), т.е. это не блокировка gateway/токена.
+
+**Гипотезы (на проверить):**
+1. `TrackPage` фетчит `/api/songs/:id` (или `by-public-id`), но в prerender-контексте запрос долгий/падает из-за `PRERENDER_NAV_TIMEOUT_MS`/`SETTLE_MS` + `waitForFunction` ловит дефолтный H1 («Загрузка…»/отсутствие skeleton) слишком рано. `waitForFunction` ждёт `h1, h2, [role=heading]` без skeleton — но у `/track` до загрузки нет H1 (Page→Center="Загрузка…" без h1), значит waitForFunction должен ждать song... но song не успевает.
+2. CSRF/refresh в prerender: `apiClient` может делать `/api/auth/csrf`/refresh перед публичным запросом → 403 → retry-пауза → превышение таймингов.
+
+**План:** логировать console/pageerror в prerender-рендере для `/track/*`; добавить больше `waitForFunction`-терпимости (ждать появления `Lights`-подобного текста / non-default title); или отдавать song-контент через server-рендерный meta. Не блокирует деплой 301 (canonical на public-форму работает и без song).
+
+---
+
 ### PEND-WAVE-001 — Server-side waveform peaks for hero / seek UI
 
 **Priority:** medium

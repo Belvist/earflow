@@ -4,6 +4,55 @@
 
 ---
 
+## 2026-08-13 — Numeric track ID никогда не канонический: public_id во всех API-ответах + nginx 301
+
+**Status:** accepted
+**Area:** nginx | database-service | frontend | seo
+**Related:** 0e092f6, 59b8959, 1d26268
+
+**Context:** Публичные URL треков должны содержать только opaque `public_id` (16-hex, БД UNIQUE), никогда внутренний serial `id`. Старые numeric-ссылки (`/track/303`) ещё жили: `/api/songs/:id` не возвращал `public_id` в JSON → фронт не мог канонизировать; prerender-рендер `/track/303` ссылался на numeric-URL; внутренний id протекал в canonical/og:url.
+
+**Decision:**
+1. **API:** `GET /api/songs/:id` и `GET /api/songs/by-public-id/:publicId` теперь SELECT'ят `public_id` → возвращают его в JSON (backend/database-service/routes/songs.js). Фронт `TrackPage` при numeric-пути получает public_id → клиентский redirect + canonical на `/track/{public_id}`.
+2. **nginx (жёсткий уровень):** для `earflow.ru` добавлен `location ~ ^/track/([0-9]+)$` → `return 301 /api/songs/redirect-public/$1`. Numeric-URL 301 ещё до prerender/SPA. `redirect-public` (уже существовал, база данных) резолвит id → 301 `/track/{public_id}` (404 если нет). Итог: ни бот, ни пользователь не остаются на numeric-URL; canonical всегда public-форма.
+
+**Verify (prod, Aug 13):**
+- `GET /api/songs/303` → `public_id: 1f8214e8f8dc61e1` ✅
+- bot `/track/303` → 301 (`redirect-public/303`) → 301 → final `https://earflow.ru/track/1f8214e8f8dc61e1` → **200**, canonical = `/track/1f8214e8f8dc61e1`, `frontend:3004`=0 ✅
+- user (не бот) `/track/303` → 301 ✅
+- несуществующий `/track/99999` → 301 → redirect-public → 404 (не залипает на numeric) ✅
+- публичный `/track/1f8214e8f8dc61e1` → 200 (не задет) ✅
+
+**Чтобы не повторилось:** любой новый song-эндпоинт обязан отдавать `public_id`; публичные линки — только `public_id`; numeric-пути трактовать как legacy и покрывать nginx-301, а не канвасить во фронте.
+
+---
+
+## 2026-08-13 — canonical-утечка внутреннего origin: root cause = AppLayout fallback, а не только setPageMeta
+
+**Status:** accepted
+**Area:** frontend | seo | prerender | nginx
+**Related:** aa57464, 1d26268
+
+**Context:** Первый фикс canonical/og:url (aa57464) перевёл `utils/seo.js` (`getCanonicalOrigin()` → `https://earflow.ru`) и обновил AlbumPage/MusicSeoPage/ArtistPage/TrackPage. После деплоя новый бандл ссылался на публичный origin, но prerender для `/track/303` и прочих legacy/числовых URL продолжал отдавать `<link rel="canonical" href="http://frontend:3004/track/303">`. Размер prerender-HTML был байт-в-байт идентичен до и после `docker restart music-prerender` (кэш in-memory, рестарт обязан его очищать), а HTML при этом ссылался на новый бандл — то есть рендер был свежим, а не кэшевым.
+
+**Root cause:** `AppLayout` in `frontend/src/App.js` имел собственный fallback-effect: `const origin = typeof window !== 'undefined' ? window.location.origin : 'https://earflow.ru'`, затем `canonicalUrl = ${origin}${canonicalPath}` и `setPageMeta({ canonicalUrl, ... })`. Этот fallback срабатывал на **каждом** pathname до того, как целевая страница успевала перезаписать canonical собственным `setPageMeta` с `canonicalPath`. Для `/track/303` (legacy numeric, трек не грузится в prerender) страничный meta не перезаписывался вовсе — оставался fallback с `window.location.origin` = `frontend:3004`. В prerender это и есть ломальный клинок: SPA открывается как `http://frontend:3004`, и canonical/og:url утекают ботам.
+
+**Decision:**
+1. Fallback-эффект `AppLayout` теперь использует `getCanonicalOrigin()` из `utils/seo.js` (единый источник публичного origin), а не `window.location.origin`. Никаких других `window.location.origin` в SEO-пути не осталось (grep подтверждён).
+2. Правило: **вся** установка canonical/og:url на фронте — только через `setPageMeta`/`getCanonicalOrigin()`; прямое использование `window.location.origin` в SEO-контексте запрещено (`INV-SEO-*`).
+
+**Verify (prod):** после деплоя бандла с фиксом prerender выдаёт:
+- `/track/303` → `https://earflow.ru/track/303`
+- `/` → `https://earflow.ru/`
+- `/music` → `https://earflow.ru/music`
+- `/artist/Kino` → `https://earflow.ru/artist/Kino`
+- `/album/...` → `https://earflow.ru/album/...`
+`grep -c "frontend:3004"` по отрендеренному HTML = 0. Первый рендер после рестарта prerender может дать 504 (прогрев Chromium), повторный — 200.
+
+**Чтобы не повторилось:** при любом SEO-изменении проверять не только страничные `setPageMeta`, но и глобальные fallback-эффекты в layout (`AppLayout` и т.п.); верифицировать canonical через бот-UA curl на реальном URL с legacy/числовым путём, а не только на канонических.
+
+---
+
 ## 2026-08-12 — db-migrations: verified baseline + canonical runner (Phase 1)
 
 **Status:** accepted
