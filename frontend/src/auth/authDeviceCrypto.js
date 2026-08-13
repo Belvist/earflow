@@ -56,7 +56,22 @@ async function idbSet(key, value) {
   });
 }
 
+// DECISIONS 2026-08-11 security review fix (INV-SEC-019):
+// The ECDSA private key is now non-extractable (`extractable: false`), so it
+// can never be serialized — neither pkcs8-exported nor structured-cloned into
+// IndexedDB. The key therefore lives ONLY in a module-level in-memory slot for
+// the lifetime of the page session. Every fresh page load mints a new keypair
+// and re-registers it with the gateway (PoP is bound to the current session +
+// browser tab). This replaces the pre-fix behavior where the pkcs8 blob was
+// persisted and re-imported on the next load.
+let inMemoryKeyMaterial = null;
+
+export function resetDeviceKeyCacheForTests() {
+  inMemoryKeyMaterial = null;
+}
+
 export async function clearAuthDeviceState() {
+  inMemoryKeyMaterial = null;
   try {
     await idbSet(IDB_KEY, null);
   } catch {
@@ -92,25 +107,9 @@ async function ensureKeyPair() {
   const cryptoApi = getCrypto();
   if (!cryptoApi?.subtle) throw new Error('webcrypto_unavailable');
 
-  const stored = await idbGet(IDB_KEY);
-  if (stored?.privateKey && stored?.authDeviceId && stored?.sidHash) {
-    try {
-      const privateKey = await cryptoApi.subtle.importKey(
-        'pkcs8',
-        stored.privateKey,
-        { name: 'ECDSA', namedCurve: 'P-256' },
-        false,
-        ['sign'],
-      );
-      return {
-        authDeviceId: stored.authDeviceId,
-        sidHash: stored.sidHash,
-        privateKey,
-        publicKeySpki: stored.publicKeySpki,
-      };
-    } catch {
-      // fall through to regenerate
-    }
+  // Non-extractable key is non-serializable -> reuse the page-session slot.
+  if (inMemoryKeyMaterial?.privateKey) {
+    return inMemoryKeyMaterial;
   }
 
   const authDeviceId = generateAuthDeviceId();
@@ -126,7 +125,7 @@ async function ensureKeyPair() {
   const publicKeySpki = await exportPublicKeySpki(keyPair.publicKey);
   const pkcs8 = null;
 
-  return {
+  inMemoryKeyMaterial = {
     authDeviceId,
     sidHash: null,
     privateKey: keyPair.privateKey,
@@ -134,25 +133,56 @@ async function ensureKeyPair() {
     pkcs8: null, // never exportable
     needsRegister: true,
   };
+
+  // A CryptoKey object is NOT structured-cloneable, so IndexedDB can hold only
+  // the non-secret public SPKI + the opaque device id for diagnostics. The
+  // signing key itself stays in the in-memory slot above for the page session.
+  try {
+    await idbSet(IDB_KEY, {
+      authDeviceId,
+      sidHash: '',
+      publicKeySpki,
+      privateKey: null,
+      pkcs8: null,
+    });
+  } catch {
+    // in-memory slot is authoritative; IDB metadata is best-effort only
+  }
+
+  return inMemoryKeyMaterial;
 }
 
 export async function persistAuthDeviceRecord({ authDeviceId, sidHash, privateKey, publicKeySpki, pkcs8 }) {
   // DECISIONS 2026-08-11: key is extractable:false at creation, so the only
-  // thing we can persist is the opaque CryptoKey handle. pkcs8 export is impossible.
-  // We keep the pkcs8 param for API compatibility with older callers, but it is
-  // unused — we never write raw key material to IndexedDB.
+  // usable identity lives in the in-memory slot. Keep sidHash in sync so
+  // subsequent signing calls carry the bound proof context.
+  if (inMemoryKeyMaterial) {
+    if (authDeviceId) inMemoryKeyMaterial.authDeviceId = authDeviceId;
+    if (sidHash) inMemoryKeyMaterial.sidHash = sidHash;
+    if (publicKeySpki) inMemoryKeyMaterial.publicKeySpki = publicKeySpki;
+    inMemoryKeyMaterial.needsRegister = false;
+  }
   const cryptoApi = getCrypto();
   void cryptoApi;
-  await idbSet(IDB_KEY, {
-    authDeviceId,
-    sidHash: sidHash || '',
-    publicKeySpki: publicKeySpki || '',
-    privateKey,
-    pkcs8: null,
-  });
+  // IDB holds only public metadata (the CryptoKey is not structured-cloneable).
+  try {
+    await idbSet(IDB_KEY, {
+      authDeviceId: authDeviceId || '',
+      sidHash: sidHash || '',
+      publicKeySpki: publicKeySpki || '',
+      privateKey: null,
+      pkcs8: null,
+    });
+  } catch {
+    // in-memory slot is authoritative; IDB metadata is best-effort only
+  }
 }
 
 export async function invalidateAuthDeviceBinding() {
+  if (inMemoryKeyMaterial) {
+    inMemoryKeyMaterial.sidHash = '';
+    inMemoryKeyMaterial.needsRegister = true;
+  }
   try {
     const stored = await idbGet(IDB_KEY);
     if (!stored || typeof stored !== 'object') return;

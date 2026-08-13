@@ -6,10 +6,13 @@ const { webcrypto } = require('node:crypto');
 if (!globalThis.crypto?.subtle) {
   globalThis.crypto = webcrypto;
 }
+if (typeof globalThis.TextEncoder === 'undefined') {
+  globalThis.TextEncoder = require('node:util').TextEncoder;
+}
 
 require('fake-indexeddb/auto');
 
-import { buildCanonicalProofString, signDeviceProofRequest } from '../authDeviceCrypto';
+import { buildCanonicalProofString, persistAuthDeviceRecord, resetDeviceKeyCacheForTests, signDeviceProofRequest } from '../authDeviceCrypto';
 
 const CANONICAL_MATRIX = [
   {
@@ -95,6 +98,10 @@ const CANONICAL_MATRIX = [
 ];
 
 describe('signDeviceProofRequest register path', () => {
+  beforeEach(() => {
+    resetDeviceKeyCacheForTests();
+  });
+
   test('exposes publicKeySpki when sidHash is not yet bound', async () => {
     const result = await signDeviceProofRequest(
       'POST',
@@ -108,6 +115,36 @@ describe('signDeviceProofRequest register path', () => {
     // DECISIONS 2026-08-11 (security review): private key is now extractable=false.
     // The caller must receive null pkcs8 and rely purely on the in-memory CryptoKey.
     expect(result.pkcs8).toBeNull();
+  });
+
+  test('keeps the non-extractable key in the page-session slot after bind (regression for DEVICE_PROOF_REQUIRED loop)', async () => {
+    const first = await signDeviceProofRequest(
+      'POST',
+      'https://api.earflow.ru/api/auth/device/register',
+    );
+    expect(first.needsRegister).toBe(true);
+    expect(first.headers).toBeNull();
+
+    // Gateway binds the device -> sidHash is stored in the in-memory slot.
+    await persistAuthDeviceRecord({
+      authDeviceId: first.authDeviceId,
+      sidHash: 'bound-sid-hash',
+      publicKeySpki: first.publicKeySpki,
+      pkcs8: null,
+    });
+
+    // Second call must reuse the SAME keypair and now produce a real proof.
+    const second = await signDeviceProofRequest(
+      'GET',
+      'https://api.earflow.ru/api/auth/profile',
+    );
+    expect(second.needsRegister).toBe(false);
+    expect(second.authDeviceId).toBe(first.authDeviceId);
+    expect(second.publicKeySpki).toBe(first.publicKeySpki);
+    expect(second.headers).not.toBeNull();
+    expect(second.headers['X-Auth-Device-Id']).toBe(first.authDeviceId);
+    expect(second.headers['X-Auth-Device-Proof']).toBeTruthy();
+    expect(second.headers['X-Auth-Device-Proof-Ts']).toBeTruthy();
   });
 });
 
