@@ -16,7 +16,7 @@ import { OfflineProvider } from './offline/OfflineContext';
 import OfflineBanner from './offline/OfflineBanner';
 import apiClient from './api/client';
 import { isAuthDomain, redirectToAuth, sanitizeReturnTo, shouldSuppressAuthRedirectAfterLogout } from './utils/authRedirect';
-import { setPageMeta } from './utils/seo';
+import { getCanonicalOrigin, setPageMeta } from './utils/seo';
 import { buildMusicSeoMeta } from './seo/musicSeoCatalog';
 // Eager import: один провайдер device-sync вне ленивого Suspense плеера.
 import DeviceSyncProvider from './components/DeviceSync/DeviceSyncProvider';
@@ -748,7 +748,7 @@ function AppLayout() {
   const { isAuthenticated } = useAuth();
 
   React.useEffect(() => {
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://earflow.ru';
+    const origin = getCanonicalOrigin();
 
     const meta = computePageMeta(location.pathname, isAuthDomain());
     const canonicalPath = meta.canonicalPath || location.pathname;
