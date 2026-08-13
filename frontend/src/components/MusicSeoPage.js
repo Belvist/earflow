@@ -10,7 +10,7 @@ import {
   getMusicSeoIntents,
   resolveRelatedLinks,
 } from '../seo/musicSeoCatalog';
-import { setPageMeta } from '../utils/seo';
+import { getCanonicalOrigin, setPageMeta } from '../utils/seo';
 
 const Page = styled.div`
   min-height: 0;
@@ -235,7 +235,7 @@ export default function MusicSeoPage() {
   }, [hasExtraPath, topicSlug, intentSlug]);
   const jsonLd = useMemo(() => {
     if (hasExtraPath) return null;
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://earflow.ru';
+    const origin = getCanonicalOrigin();
     return buildMusicSeoJsonLd({ origin, topicSlug, intentSlug });
   }, [hasExtraPath, topicSlug, intentSlug]);
   const groups = useMemo(() => getMusicSeoGroups(), []);
@@ -243,7 +243,7 @@ export default function MusicSeoPage() {
   const related = useMemo(() => resolveRelatedLinks(meta), [meta]);
 
   React.useEffect(() => {
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://earflow.ru';
+    const origin = getCanonicalOrigin();
     setPageMeta({
       title: meta.title,
       description: meta.description,

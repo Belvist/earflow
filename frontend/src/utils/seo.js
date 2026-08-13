@@ -1,5 +1,14 @@
 const PAGE_JSON_LD_ID = 'earflow-page-jsonld';
 
+const PUBLIC_SITE_ORIGIN = 'https://earflow.ru';
+
+// Canonical/og:url всегда должны указывать на публичный origin (https://earflow.ru),
+// а не на window.location.origin: внутри prerender-service фронт открывается как
+// http://frontend:3004, и canonical с внутренним хостом утекает ботам (INV-SEO-*).
+export function getCanonicalOrigin() {
+  return PUBLIC_SITE_ORIGIN;
+}
+
 export function setPageMeta(options = {}) {
     if (typeof document === 'undefined') return;
 
@@ -18,12 +27,12 @@ export function setPageMeta(options = {}) {
         setMetaByProperty('twitter:description', description.trim());
     }
 
-    // canonicalPath (internal path) is resolved against origin to a full URL.
-    // The seo-page emits the canonical form directly. Use of one form throttles
-    // external consumers (crawls together). Back-compat: canonicalUrl still wins.
+    // canonicalPath (internal path) is resolved against the public origin — never
+    // window.location.origin (pre-render runs the SPA as http://frontend:3004 and
+    // would leak the internal host into canonical). canonicalUrl still wins.
     if (typeof canonicalPath === 'string' && canonicalPath.trim()) {
         const path = canonicalPath.trim().startsWith('/') ? canonicalPath.trim() : `/${canonicalPath.trim()}`;
-        const origin = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
+        const origin = getCanonicalOrigin();
         if (origin) {
             setCanonicalLink(`${origin}${path}`);
             setMetaByProperty('og:url', `${origin}${path}`);

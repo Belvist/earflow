@@ -14,7 +14,7 @@ import {
 import { normalizeArtistNameForRoute } from '../utils/artist';
 import { resolveArtistPath } from '../utils/artistRoute';
 import { slugifyForRoute } from '../utils/routeSlug';
-import { setPageMeta } from '../utils/seo';
+import { getCanonicalOrigin, setPageMeta } from '../utils/seo';
 
 const Page = styled.div`
   min-height: 0;
@@ -91,7 +91,7 @@ export default function ArtistPage() {
   const canonicalUrl = useMemo(() => {
     const pid = meta && meta.artistPublicId ? String(meta.artistPublicId).trim().toLowerCase() : '';
     if (!pid) return typeof window !== 'undefined' ? window.location.href : '';
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://earflow.ru';
+    const origin = getCanonicalOrigin();
     const slug = slugifyForRoute(meta?.artist || displayArtistName);
     const path = `/artist/${encodeURIComponent(pid)}${slug ? `-${encodeURIComponent(slug)}` : ''}`;
     return `${origin}${path}`;

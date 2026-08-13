@@ -12,7 +12,7 @@ import BrandLink from './BrandLink';
 import ArtistLinks from './ArtistLinks';
 import asyncMapLimit from '../utils/asyncMapLimit';
 import { resolveArtistPath } from '../utils/artistRoute';
-import { setPageMeta } from '../utils/seo';
+import { getCanonicalOrigin, setPageMeta } from '../utils/seo';
 
 const Page = styled.div`
   min-height: 0;
@@ -532,7 +532,7 @@ export default function AlbumPage() {
     const pid = canonicalAlbumPublicId || (albumMeta && (albumMeta.albumPublicId || albumMeta.album_public_id) ? String(albumMeta.albumPublicId || albumMeta.album_public_id).trim().toLowerCase() : '');
     if (!pid) return;
 
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://earflow.ru';
+    const origin = getCanonicalOrigin();
     const slug = slugifyForRoute(displayAlbumName);
     const canonicalPath = `/album/${encodeURIComponent(pid)}${slug ? `-${encodeURIComponent(slug)}` : ''}`;
     const canonicalUrl = `${origin}${canonicalPath}`;
