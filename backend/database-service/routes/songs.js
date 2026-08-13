@@ -608,7 +608,7 @@ router.get('/by-public-id/:publicId', requireService(['api-gateway']), async (re
     const availabilityField = hasIsAvailable ? 'is_available' : 'true as is_available';
     const ebapField = hasEbapReadyFlag ? 'has_ebap' : 'false as has_ebap';
     const result = await db.query(
-      `SELECT id, uploader_id as user_id, title, artist, album, duration, genre, year,
+      `SELECT id, public_id, uploader_id as user_id, title, artist, album, duration, genre, year,
               cover_path, ${availabilityField}, ${ebapField}, created_at, updated_at
          FROM songs
         WHERE public_id = $1${availabilityClause}
@@ -640,7 +640,7 @@ router.get('/:id', requireService(['api-gateway']), async (req, res) => {
     const ebapField = hasEbapReadyFlag ? 'has_ebap' : 'false as has_ebap';
 
     const result = await db.query(
-      `SELECT id, uploader_id as user_id, title, artist, album, duration, genre, year,
+      `SELECT id, public_id, uploader_id as user_id, title, artist, album, duration, genre, year,
               cover_path, ${availabilityField}, ${ebapField}, created_at, updated_at
          FROM songs
         WHERE id = $1${availabilityClause}
