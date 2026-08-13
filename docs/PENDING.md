@@ -11,6 +11,17 @@
 
 ---
 
+### PEND-IOS-006 — Search: artist/album detail navigation (iOS)
+
+**Priority:** low
+**Status:** open
+
+**Context:** SearchView теперь отображает ряды артистов и альбомов с обложками (`SearchArtistRow`/`SearchAlbumRow`), но тап пока no-op — навигация на страницы артиста/альбома не реализована. Треки играют сразу. См. `CHANGELOG.md` 2026-08-12.
+
+**Что сделать:** по тапу на артиста/альбом — push страницу (аналог web `/artist/:id`, `/album/:pid`), переиспользуя `CatalogService.resolveAlbumPublicId` / `fetchAlbum` и существующие страницы каталога.
+
+---
+
 ### PEND-IOS-002 — Native web login (ASWebAuthenticationSession + PKCE): prod e2e
 
 **Priority:** medium
@@ -305,6 +316,21 @@ The social privacy/perf pass code is prepared locally, but the full verification
 - VPS rollout must apply `backend/database-service/database/migrations/005_social_feed_likes_count.sql` after `004_social_feed.sql`, then rebuild `database-service`, `api-gateway`, `frontend`.
 
 **Why pending:** initial npm test commands were invoked through PowerShell as `npm`/`CI=true npm`; Windows blocked `npm.ps1` by execution policy and rejected POSIX env syntax. This is an execution-command issue, not a test result.
+
+---
+
+## Backend
+
+### PEND-BE-002 — ~~recommendations-service unhealthy (circuit breaker OPEN) с 2026-07-25~~ — **закрыто 2026-08-13**
+
+**Priority:** high
+**Status:** closed (fix `972bb03+exploration` deployed)
+
+**Корень (найден 2026-08-13):** НЕ рассинхрон образа — реальный **SQL-баг**. В `services/engineV2/retrieval/exploration.js` (`loadBroadDiscoveryCandidates`) алиас `jitter`, вычислен**ный в том же SELECT** (`(...) % 1000000::float / 1000000.0 AS jitter`), использовался **внутри выражения** ORDER BY: `ORDER BY LN(...) * 0.25 + jitter * 0.75`. PostgreSQL запрещает ссылаться на алиас SELECT внутри выражения ORDER BY (только голым идентификатором), поэтому `jitter` резолвился как колонка таблицы → `column "jitter" does not exist` (42703). Из-за этого circuit breaker открылся (5+ ошибок) и не восстанавливался: `checkDb()` идёт в обход breaker (`pool.query('SELECT NOW()')`), а затрагиваемый запрос всегда падал — HАLF_OPEN-попытка каждый раз тоже падала.
+
+**Фикс:** выражение `jitter` заинлайнено в ORDER BY (валидно: `+ (abs(hashtextextended((s.id::text || ...), $2::bigint)) % 1000000)::float / 1000000.0 * 0.75`). Проверено на проде: `SELECT` строго из этого кода — `OK rows=10 ms=60`. `context.js` (`ORDER BY pop * (...)`) НЕ трогается — там `pop` приходит из CTE-колонки, не алиаса того же SELECT.
+
+**Что сделано:** пересобран образ `recommendations-service` на VPS → health `200 healthy` (breaker CLOSED).
 
 ---
 

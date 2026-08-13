@@ -57,9 +57,10 @@ async function loadBroadDiscoveryCandidates(userId, seed, limit, excludeDays, ex
            OR NULLIF(s.file_path, '') IS NOT NULL
            OR COALESCE(s.has_ebap, false) = true
          )
-       ORDER BY
-         LN(GREATEST(COALESCE(s.popularity, s.play_count, 0), 0) + 2) * 0.25 + jitter * 0.75 DESC
-       LIMIT $6
+        ORDER BY
+          LN(GREATEST(COALESCE(s.popularity, s.play_count, 0), 0) + 2) * 0.25
+          + (abs(hashtextextended((s.id::text || ':' || COALESCE(s.artist, '') || ':' || COALESCE(s.genre, '')), $2::bigint)) % 1000000)::double precision / 1000000.0 * 0.75 DESC
+        LIMIT $6
      ),
      diversified AS (
        SELECT
