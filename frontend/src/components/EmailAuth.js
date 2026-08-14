@@ -227,27 +227,6 @@ const Tab = styled(motion.button)`
   }
 `;
 
-const StepIndicator = styled.div`
-  display: flex;
-  gap: 6px;
-  margin: -4px 0 2px;
-`;
-
-const StepPill = styled.div`
-  flex: 1;
-  min-height: 26px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  background: ${props => props.$active ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.03)'};
-  color: ${props => props.$active ? 'rgba(255, 255, 255, 0.85)' : 'rgba(255, 255, 255, 0.35)'};
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-`;
-
 const FormSection = styled.div`
   display: flex;
   flex-direction: column;
@@ -511,9 +490,6 @@ const EmailAuth = ({ onClose, onSuccess, initialMode = 'login', canClose = true 
   const stepKeys = isRegister
     ? ['name', 'username', 'email', 'password', 'confirm']
     : ['email', 'password'];
-  const stepLabels = isRegister
-    ? ['Имя', 'Username', 'Email', 'Пароль', 'Повтор']
-    : ['Email', 'Пароль'];
   const currentStepKey = stepKeys[step - 1];
   const isLastStep = step === stepKeys.length;
 
@@ -983,12 +959,6 @@ const EmailAuth = ({ onClose, onSuccess, initialMode = 'login', canClose = true 
         ) : null}
 
         <Form onSubmit={handleSubmit} noValidate>
-          <StepIndicator aria-label={isRegister ? 'Шаг регистрации' : 'Шаг входа'}>
-            {stepLabels.map((label, i) => (
-              <StepPill key={label} $active={i + 1 === step}>{label}</StepPill>
-            ))}
-          </StepIndicator>
-
           <FormSection>{renderStepField()}</FormSection>
 
           <AnimatePresence>
