@@ -4,6 +4,22 @@
 
 ---
 
+## 2026-08-15 — Telegram login: официальный виджет только на auth.earflow.ru, редирект с других origin (гибрид)
+
+**Status:** accepted (267 тестов PASS, build OK, prod-чанк 701 `0dbcac07` содержит widget + return_to-редирект)
+**Area:** auth | frontend
+**Related:** 2026-08-14 commit 9bc8608 (кастомная oauth-кнопка — откат), 2026-08-14 logout-фиксы (a46729a)
+
+**Context:** Пользователь: «через телеграм логин не работает». Аудит (`auth:audit`): успешные telegram-логины **14:23 и 15:20 UTC — до** деплоя кастомной кнопки 9bc8608 (~15:25 UTC), после неё **ни одного** `telegram_login_attempt/success`. Т.е. кастомная oauth-popup-кнопка не работала в проде никогда, а официальный виджет — работал. Причина: post-auth редирект oauth.telegram.org → попап-SPA с `?tgAuthResult=...` → popup-страница сбрасывает SPA-стейт и SPA не может прочитать `tgAuthResult` до того, как ссылка с параметром уедет в историю; cross-origin popup-каналы ненадёжны. Плюс сам виджет на earflow.ru невозможен: Telegram проверяет origin встраивания против зарегистрированного домена бота (@BotFather → auth.earflow.ru) и отказывает «Bot domain invalid».
+
+**Decision:** вернуть официальный `telegram-widget.js` flow на **auth.earflow.ru** (проверенный путь), на всех остальных origin'ах (earflow.ru, localhost) кнопка «Войти через Telegram» делает `window.location.assign(authOrigin + '/login?return_to=' + sanitizeReturnTo(current))` — юзер попадает на auth-домен, где виджет работает, и App.js возвращает его на return_to. WebApp-алгоритм хэша (HMAC-SHA256("WebAppData", token)) в синтетическом тесте дал 401 INVALID_TELEGRAM_SIGNATURE — auth-core использует **виджет-алгоритм** `secret = SHA256(token)` (подтверждено кодом `VerifyTelegramAuth`), это артефакт теста, не баг.
+
+**Consequences:** вход через Telegram снова работает на auth.earflow.ru (как было до 9bc8608). Кросс-доменный попап-флоу больше не существует (одна точка входа — auth-домен). `consumeTelegramAuthResult` в AuthContext остаётся инертным (виджет не использует URL-параметр).
+
+**Чтобы не повторилось:** не делать собственный oauth-попап для Telegram Login Widget — только официальный виджет и только на зарегистрированном домене бота; другие origin — редирект на auth-домен с return_to. Проверять «работает ли» по `auth:audit` `telegram_login_success`, не по ощущениям.
+
+---
+
 ## 2026-08-14 — frontend: мгновенное восстановление сессии при заходе на сайт (refresh device-proof retry)
 
 **Status:** accepted (client.login.test.js «refresh device-proof retry» PASS; 266 тестов)
