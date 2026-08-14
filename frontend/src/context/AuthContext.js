@@ -358,6 +358,42 @@ export function AuthProvider({ children }) {
     const authLostRecoverRef = useRef(false);
     const lastRevalidateAtRef = useRef(0);
 
+    const consumeTelegramAuthResult = useCallback(async () => {
+        if (typeof window === 'undefined') return null;
+        let raw = '';
+        try {
+            const query = new URLSearchParams(window.location.search);
+            raw = query.get('tgAuthResult') || '';
+            if (!raw) {
+                const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+                raw = hash.get('tgAuthResult') || '';
+            }
+        } catch {
+            raw = '';
+        }
+        if (!raw) return null;
+
+        let payload = null;
+        try {
+            payload = JSON.parse(decodeURIComponent(raw));
+        } catch {
+            payload = null;
+        }
+        if (!payload || typeof payload !== 'object') return null;
+
+        try {
+            const cleaned = window.location.href.replace(/([?&])tgAuthResult=[^&#]*/, '$1');
+            window.history.replaceState({}, '', cleaned);
+        } catch {
+        }
+
+        try {
+            return await apiClient.loginWithTelegram(payload);
+        } catch {
+            return null;
+        }
+    }, []);
+
     useEffect(() => {
         stateRef.current = state;
     }, [state]);
@@ -394,7 +430,11 @@ export function AuthProvider({ children }) {
         const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
 
         dispatch({ type: 'BOOTSTRAP_START' });
-        runAuthCheck({ signal: controller?.signal })
+        consumeTelegramAuthResult()
+            .then(() => {
+                if (disposed) return;
+                return runAuthCheck({ signal: controller?.signal });
+            })
             .then((result) => {
                 if (disposed) return;
                 applyAuthResult(dispatch, result);
@@ -415,7 +455,7 @@ export function AuthProvider({ children }) {
             } catch {
             }
         };
-    }, [runAuthCheck, state.status]);
+    }, [consumeTelegramAuthResult, runAuthCheck, state.status]);
 
     const revalidateSession = useCallback(async (options = {}) => {
         const isBootstrap = stateRef.current.status === AUTH_STATUSES.BOOTING;
