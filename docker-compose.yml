@@ -2180,7 +2180,8 @@ services:
       OTEL_TRACES_SAMPLER: ${OTEL_TRACES_SAMPLER:-parentbased_traceidratio}
       OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-0.2}
 
-      AUTH_SERVICE_URL: http://auth-service:3001
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:3001}
+      AUTH_LEGACY_SERVICE_URL: ${AUTH_LEGACY_SERVICE_URL:-http://auth-service:3001}
       UPLOAD_SERVICE_URL: http://upload-service:3002
       DATABASE_SERVICE_URL: http://database-service:3003
       RECOMMENDATIONS_SERVICE_URL: http://recommendations-service:3006
