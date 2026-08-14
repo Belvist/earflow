@@ -228,3 +228,40 @@ func TestHandleProfileRequiresAuthenticatedMiddlewareContext(t *testing.T) {
 		t.Fatalf("status with auth context = %d, want %d", w.Code, http.StatusOK)
 	}
 }
+
+func mintTokenForTest(t *testing.T, secret string, claims jwt.MapClaims) string {
+	t.Helper()
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := token.SignedString([]byte(secret))
+	if err != nil {
+		t.Fatalf("SignedString failed: %v", err)
+	}
+	return signed
+}
+
+func TestVerifyAccessRequiresTypeClaim(t *testing.T) {
+	secret := "test-secret-test-secret-test-secret-32"
+	manager := &SessionManager{jwtSecret: secret}
+
+	noType := mintTokenForTest(t, secret, jwt.MapClaims{
+		"userId": "user-1",
+		"exp":    time.Now().Add(time.Hour).Unix(),
+	})
+	if ok, _ := manager.verifyAccess(noType); ok {
+		t.Fatalf("token without type claim must be rejected")
+	}
+
+	wrongType := mintTokenForTest(t, secret, jwt.MapClaims{
+		"type":   "refresh",
+		"userId": "user-1",
+		"exp":    time.Now().Add(time.Hour).Unix(),
+	})
+	if ok, _ := manager.verifyAccess(wrongType); ok {
+		t.Fatalf("token with non-access type must be rejected")
+	}
+
+	valid := makeAccessTokenForTest(t, secret, "user-1")
+	if ok, _ := manager.verifyAccess(valid); !ok {
+		t.Fatalf("valid access token must be accepted")
+	}
+}

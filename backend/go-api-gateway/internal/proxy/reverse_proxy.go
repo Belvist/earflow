@@ -207,6 +207,11 @@ func NewReverseProxy(cfg RouteTableConfig) (*ReverseProxy, error) {
 	if err := add("auth", cfg.Upstreams.Auth); err != nil {
 		return nil, err
 	}
+	if len(cfg.Upstreams.AuthLegacy) > 0 {
+		if err := add("auth_legacy", cfg.Upstreams.AuthLegacy); err != nil {
+			return nil, err
+		}
+	}
 	if err := add("upload", cfg.Upstreams.Upload); err != nil {
 		return nil, err
 	}

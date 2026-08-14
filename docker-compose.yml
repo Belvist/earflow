@@ -578,6 +578,52 @@ services:
       retries: 3
       start_period: 10s
 
+  # auth-core (Go) — drop-in replacement for Node auth-service identity endpoints.
+  # AUTH_SERVICE_URL on api-gateway/artist-api-gateway flips to this service after
+  # e2e validation; Node auth-service stays as auth_legacy for MFA routes.
+  auth-core:
+    build:
+      context: ./backend/auth-core
+      dockerfile: Dockerfile
+    container_name: music-auth-core
+    # Security: Internal service, no public ports
+    expose:
+      - "3001"
+    environment:
+      PORT: 3001
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ISSUER: ${JWT_ISSUER:-earflow-auth}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-earflow-api}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      ACCESS_JWT_EXPIRES_IN: ${ACCESS_JWT_EXPIRES_IN:-15m}
+      REFRESH_JWT_EXPIRES_IN: ${REFRESH_JWT_EXPIRES_IN:-365d}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_MAX_CONNECTIONS: ${AUTH_CORE_DB_MAX_CONNECTIONS:-30}
+      DB_MIN_CONNECTIONS: ${AUTH_CORE_DB_MIN_CONNECTIONS:-4}
+      REDIS_HOST: redis-auth
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      PROFILE_CACHE_TTL_SECONDS: ${PROFILE_CACHE_TTL_SECONDS:-600}
+      AUTH_DECOY_SALT: ${AUTH_DECOY_SALT:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - music-network
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:3001/health" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
   # Upload Service (INTERNAL ONLY - access via api-gateway)
   upload-service:
     build:

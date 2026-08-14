@@ -689,12 +689,10 @@ func (m *SessionManager) verifyAccess(token string) (bool, jwt.MapClaims) {
 	if err != nil {
 		return false, nil
 	}
-	if tp, ok := claims["type"]; ok {
-		if s, ok := tp.(string); ok {
-			if s != "access" {
-				return false, nil
-			}
-		}
+	tp, typeOK := claims["type"]
+	s, strOK := tp.(string)
+	if !typeOK || !strOK || s != "access" {
+		return false, nil
 	}
 	if !m.verifyIssuerAudience(claims) {
 		return false, nil
