@@ -212,7 +212,7 @@ const Tab = styled(motion.button)`
   min-height: 40px;
   padding: 0 12px;
   border: none;
-  border-radius: 8px;
+  border-radius: 999px;
   background: ${props => props.$active ? 'rgba(255, 255, 255, 0.95)' : 'transparent'};
   color: ${props => props.$active ? '#0d0d0d' : 'rgba(255, 255, 255, 0.6)'};
   font-size: 13px;
@@ -239,7 +239,7 @@ const StepPill = styled.div`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  border-radius: 999px;
   background: ${props => props.$active ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.03)'};
   color: ${props => props.$active ? 'rgba(255, 255, 255, 0.85)' : 'rgba(255, 255, 255, 0.35)'};
   font-size: 10px;

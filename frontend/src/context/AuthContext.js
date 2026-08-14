@@ -156,16 +156,9 @@ async function refreshThenProfile(signal, options = {}) {
     const softRevalidate = options.softRevalidate === true;
     const refreshed = await apiClient.refreshSessionNowDetailed({ signal, broadcastAuthLost: false });
     if (refreshed?.ok) {
-        const deviceReady = await ensureDeviceProofReady();
-        if (!deviceReady) {
-            if (softRevalidate) {
-                const cached = cachedAuthUser();
-                if (hasUser(cached)) {
-                    return degradedAuthResult(0, 'device_register_pending', 'device_register_pending');
-                }
-            }
-            apiClient.clearLocalSession?.();
-            return { status: AUTH_STATUSES.GUEST };
+        const deviceProof = await ensureDeviceProofReady();
+        if (!deviceProof?.ok) {
+            return deviceProofUnavailableResult(softRevalidate, deviceProof?.code);
         }
         try {
             const user = await readProfile(signal);
@@ -224,12 +217,35 @@ async function ensureDeviceProofReady() {
     try {
         const reg = await apiClient.ensureAuthDeviceRegistered?.();
         if (reg?.ok === false) {
-            return false;
+            return reg;
         }
-        return true;
+        return { ok: true };
     } catch {
-        return false;
+        return { ok: false, code: 'device_register_failed' };
     }
+}
+
+// A failed device binding must not throw the user to the login screen:
+// every page load mints a fresh (non-extractable) device key and re-registers
+// it (INV-SEC-019), so a transient register failure right after a reload is
+// expected churn — keep the cached session and let the next revalidate retry.
+function deviceProofUnavailableResult(softRevalidate, code) {
+    if (code === 'device_key_unavailable') {
+        if (softRevalidate) {
+            const cached = cachedAuthUser();
+            if (hasUser(cached)) {
+                return degradedAuthResult(0, 'device_register_pending', 'device_register_pending');
+            }
+        }
+        apiClient.clearLocalSession?.();
+        return { status: AUTH_STATUSES.GUEST };
+    }
+    const cached = cachedAuthUser();
+    if (hasUser(cached)) {
+        return degradedAuthResult(0, 'device_register_pending', 'device_register_pending');
+    }
+    apiClient.clearLocalSession?.();
+    return { status: AUTH_STATUSES.GUEST };
 }
 
 async function recoverDeviceProofAndProfile(signal) {
@@ -280,16 +296,9 @@ async function bootstrapAuthStateCore(options = {}) {
     }
 
     try {
-        const deviceReady = await ensureDeviceProofReady();
-        if (!deviceReady) {
-            if (softRevalidate) {
-                const cached = cachedAuthUser();
-                if (hasUser(cached)) {
-                    return degradedAuthResult(0, 'device_register_pending', 'device_register_pending');
-                }
-            }
-            apiClient.clearLocalSession?.();
-            return { status: AUTH_STATUSES.GUEST };
+        const deviceProof = await ensureDeviceProofReady();
+        if (!deviceProof?.ok) {
+            return deviceProofUnavailableResult(softRevalidate, deviceProof?.code);
         }
         const user = await readProfile(signal);
         if (hasUser(user)) {

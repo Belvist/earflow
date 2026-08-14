@@ -426,12 +426,29 @@ class ApiClient {
           const proofCode = body && typeof body.code === 'string' ? body.code.trim().toUpperCase() : '';
           // A live session must not be dropped just because a fresh page load
           // could not bind its device proof in time (transient register hiccup):
-          // force re-register and retry the refresh once.
+          // re-register and retry with a short bounded backoff. One retry was
+          // not enough under rapid reloads — the register/CSRF round-trip can
+          // still be in flight when the first retry is issued, leaving a 401
+          // that the frontend would otherwise classify as fatal and log the
+          // user out even though the server session is perfectly alive.
           if (proofCode === 'DEVICE_PROOF_REQUIRED' || proofCode === 'DEVICE_PROOF_INVALID') {
-            await this.ensureAuthDeviceRegistered({ force: true }).catch(() => undefined);
-            proofHeaders = await this._resolveDeviceProofHeaders('POST', url);
-            res = await makeRefreshRequest();
-            body = null;
+            const proofRetryDelays = [0, 300, 900];
+            for (const delay of proofRetryDelays) {
+              if (delay > 0) {
+                await new Promise((resolveDelay) => setTimeout(resolveDelay, delay));
+              }
+              await this.ensureAuthDeviceRegistered({ force: true }).catch(() => undefined);
+              proofHeaders = await this._resolveDeviceProofHeaders('POST', url);
+              res = await makeRefreshRequest();
+              body = null;
+              if (res?.status !== 401) break;
+              const retryBody = await readJsonBody(res).catch(() => null);
+              const retryCode = retryBody && typeof retryBody.code === 'string' ? retryBody.code.trim().toUpperCase() : '';
+              if (retryCode !== 'DEVICE_PROOF_REQUIRED' && retryCode !== 'DEVICE_PROOF_INVALID') {
+                body = retryBody;
+                break;
+              }
+            }
           }
         }
         const status = Number(res?.status);
