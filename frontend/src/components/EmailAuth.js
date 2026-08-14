@@ -73,7 +73,7 @@ const AuthContainer = styled(motion.div)`
   min-height: var(--auth-viewport-height, 100dvh);
   background:
     radial-gradient(1200px 600px at 50% -10%, rgba(255, 255, 255, 0.05), transparent 60%),
-    #0b0b0f;
+    #0d0d0d;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -86,7 +86,7 @@ const AuthContainer = styled(motion.div)`
 `;
 
 const AuthCard = styled(motion.div)`
-  background: #131318;
+  background: #161616;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
   padding: 32px 36px 24px;
@@ -170,7 +170,7 @@ const Tab = styled(motion.button)`
   border: none;
   border-radius: 8px;
   background: ${props => props.$active ? 'rgba(255, 255, 255, 0.95)' : 'transparent'};
-  color: ${props => props.$active ? '#0b0b0f' : 'rgba(255, 255, 255, 0.6)'};
+  color: ${props => props.$active ? '#0d0d0d' : 'rgba(255, 255, 255, 0.6)'};
   font-size: 13px;
   font-weight: 650;
   font-family: 'Unbounded', sans-serif;
@@ -179,7 +179,7 @@ const Tab = styled(motion.button)`
 
   &:hover {
     background: ${props => props.$active ? '#fff' : 'rgba(255, 255, 255, 0.08)'};
-    color: ${props => props.$active ? '#0b0b0f' : 'rgba(255, 255, 255, 0.9)'};
+    color: ${props => props.$active ? '#0d0d0d' : 'rgba(255, 255, 255, 0.9)'};
   }
 `;
 
@@ -366,7 +366,7 @@ const Button = styled(motion.button)`
   background: rgba(255, 255, 255, 0.95);
   border: none;
   border-radius: 999px;
-  color: #0b0b0f;
+  color: #0d0d0d;
   font-size: 14px;
   font-weight: 700;
   font-family: 'Unbounded', sans-serif;
