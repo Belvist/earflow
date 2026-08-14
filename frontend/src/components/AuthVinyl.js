@@ -28,16 +28,47 @@ const Disc = styled.div`
   width: clamp(180px, 62%, 240px);
   aspect-ratio: 1;
   border-radius: 50%;
-  background-color: #ececef;
+  background-color: #e7e7ea;
   background-image:
-    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 46%),
-    repeating-radial-gradient(circle at center, #e0e0e3 0px, #ededf0 1px, #e0e0e3 2px);
+    radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0) 30%, rgba(0, 0, 0, 0.08) 47%, rgba(0, 0, 0, 0.14) 48.5%, rgba(0, 0, 0, 0.22) 49.6%, rgba(0, 0, 0, 0.06) 50%, rgba(0, 0, 0, 0) 51%),
+    repeating-radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.9) 0px, rgba(255, 255, 255, 0.9) 0.6px, rgba(206, 206, 211, 0.9) 0.7px, rgba(206, 206, 211, 0.9) 1.2px);
   box-shadow:
-    0 30px 70px rgba(0, 0, 0, 0.45),
-    0 0 0 1px rgba(0, 0, 0, 0.06),
-    inset 0 0 40px rgba(0, 0, 0, 0.1);
+    0 26px 60px rgba(0, 0, 0, 0.5),
+    0 2px 8px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(0, 0, 0, 0.16),
+    inset 0 0 24px rgba(0, 0, 0, 0.12);
   animation: ${spin} 6s linear infinite;
   will-change: transform;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: linear-gradient(
+      115deg,
+      transparent 22%,
+      rgba(255, 255, 255, 0.5) 34%,
+      rgba(255, 255, 255, 0.14) 42%,
+      rgba(0, 0, 0, 0.1) 52%,
+      transparent 64%
+    );
+  }
+`;
+
+const CenterHole = styled.div`
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6%;
+  height: 6%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #3a3a3d, #0a0a0b 70%);
+  box-shadow:
+    inset 0 1px 2px rgba(255, 255, 255, 0.25),
+    0 1px 3px rgba(0, 0, 0, 0.6);
+  z-index: 2;
 `;
 
 const CenterLabel = styled.div`
@@ -49,9 +80,11 @@ const CenterLabel = styled.div`
   transform: translate(-50%, -50%);
   border-radius: 50%;
   overflow: hidden;
-  border: 2px solid rgba(0, 0, 0, 0.2);
+  border: 2px solid rgba(0, 0, 0, 0.22);
   background: #161616;
-  box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.6);
+  box-shadow:
+    inset 0 0 18px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.1);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -127,6 +160,7 @@ const AuthVinyl = () => {
         <CenterLabel>
           {cover ? <CoverImage key={index} src={cover} alt="" /> : <Monogram>Earflow</Monogram>}
         </CenterLabel>
+        <CenterHole />
       </Disc>
     </VinylWrap>
   );

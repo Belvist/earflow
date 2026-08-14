@@ -12,10 +12,10 @@ const WidgetContainer = styled.div`
   min-height: 54px;
   display: flex;
   justify-content: center;
+  overflow: visible;
 
   iframe {
     border: 0;
-    width: 100%;
   }
 `;
 
@@ -51,7 +51,7 @@ export const getTelegramBotUsername = () => {
     return normalizeBotUsername(runtimeVal || envVal);
 };
 
-const createTelegramWidgetScript = ({ botUsername, onAuthCallbackName, widthPx }) => {
+const createTelegramWidgetScript = ({ botUsername, onAuthCallbackName }) => {
     const s = document.createElement('script');
     s.async = true;
     s.src = 'https://telegram.org/js/telegram-widget.js?22';
@@ -62,7 +62,6 @@ const createTelegramWidgetScript = ({ botUsername, onAuthCallbackName, widthPx }
     s.setAttribute('data-lang', 'ru');
     s.setAttribute('data-request-access', 'write');
     s.setAttribute('data-onauth', `${onAuthCallbackName}(user)`);
-    if (widthPx) s.setAttribute('data-width', String(widthPx));
     return s;
 };
 
@@ -89,8 +88,28 @@ const TelegramLoginButton = ({ onSuccess }) => {
         if (!containerRef.current) return;
 
         let cancelled = false;
+        const timers = [];
+        let resizeObserver = null;
 
         const callbackName = '__earflowTelegramAuth';
+
+        const fitToContainer = () => {
+            if (cancelled) return;
+            const container = containerRef.current;
+            if (!container) return;
+            const iframe = container.querySelector('iframe');
+            if (!iframe) return;
+            const cw = container.clientWidth;
+            const iw = iframe.offsetWidth || 238;
+            const ih = iframe.offsetHeight || 40;
+            if (!cw || !iw) return;
+            const scale = cw / iw;
+            iframe.style.width = `${iw}px`;
+            iframe.style.height = `${ih}px`;
+            iframe.style.transformOrigin = 'center';
+            iframe.style.transform = `scale(${scale})`;
+            container.style.height = `${Math.round(ih * scale)}px`;
+        };
 
         const renderWidget = async () => {
             const onTelegramAuth = async (payload) => {
@@ -124,9 +143,23 @@ const TelegramLoginButton = ({ onSuccess }) => {
                 container.removeChild(container.firstChild);
             }
 
-            const widthPx = Math.max(300, Math.round(container.clientWidth || 300));
-            const script = createTelegramWidgetScript({ botUsername, onAuthCallbackName: callbackName, widthPx });
+            const script = createTelegramWidgetScript({ botUsername, onAuthCallbackName: callbackName });
             container.appendChild(script);
+
+            const containerEl = containerRef.current;
+            if (typeof ResizeObserver !== 'undefined') {
+                resizeObserver = new ResizeObserver(() => fitToContainer());
+                resizeObserver.observe(containerEl);
+            }
+
+            const onWindowResize = () => fitToContainer();
+            window.addEventListener('resize', onWindowResize);
+            timers.push({ cancel: () => window.removeEventListener('resize', onWindowResize) });
+
+            [0, 150, 350, 700, 1200, 1800].forEach((ms) => {
+                const tid = window.setTimeout(fitToContainer, ms);
+                timers.push({ cancel: () => window.clearTimeout(tid) });
+            });
         };
 
         renderWidget().catch((e) => {
@@ -136,6 +169,12 @@ const TelegramLoginButton = ({ onSuccess }) => {
 
         return () => {
             cancelled = true;
+            if (resizeObserver) {
+                resizeObserver.disconnect();
+            }
+            timers.forEach((t) => {
+                if (t && typeof t.cancel === 'function') t.cancel();
+            });
 
             try {
                 if (typeof window !== 'undefined' && window[callbackName]) {
