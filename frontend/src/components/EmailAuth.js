@@ -544,22 +544,33 @@ const EmailAuth = ({ onClose, onSuccess, initialMode = 'login', canClose = true 
 
   useEffect(() => {
     const root = document.documentElement;
-    const setAuthViewportHeight = () => {
+    let timer = null;
+    let raf = null;
+
+    const applyHeight = () => {
       const height = window.visualViewport?.height || window.innerHeight;
       if (height > 0) {
         root.style.setProperty('--auth-viewport-height', `${Math.round(height)}px`);
       }
     };
 
-    setAuthViewportHeight();
-    window.addEventListener('resize', setAuthViewportHeight);
-    window.visualViewport?.addEventListener('resize', setAuthViewportHeight);
-    window.visualViewport?.addEventListener('scroll', setAuthViewportHeight);
+    const schedule = () => {
+      if (timer) return;
+      timer = window.setTimeout(() => {
+        timer = null;
+        raf = window.requestAnimationFrame(applyHeight);
+      }, 140);
+    };
+
+    applyHeight();
+    window.addEventListener('resize', schedule);
+    window.visualViewport?.addEventListener('resize', schedule);
 
     return () => {
-      window.removeEventListener('resize', setAuthViewportHeight);
-      window.visualViewport?.removeEventListener('resize', setAuthViewportHeight);
-      window.visualViewport?.removeEventListener('scroll', setAuthViewportHeight);
+      if (timer) window.clearTimeout(timer);
+      if (raf) window.cancelAnimationFrame(raf);
+      window.removeEventListener('resize', schedule);
+      window.visualViewport?.removeEventListener('resize', schedule);
       root.style.removeProperty('--auth-viewport-height');
     };
   }, []);
@@ -579,6 +590,10 @@ const EmailAuth = ({ onClose, onSuccess, initialMode = 'login', canClose = true 
       setConfirmPassword('');
     }
   }, [mode]);
+
+  const handleTelegramSuccess = useCallback((data) => {
+    if (onSuccess) onSuccess(data);
+  }, [onSuccess]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -715,11 +730,7 @@ const EmailAuth = ({ onClose, onSuccess, initialMode = 'login', canClose = true 
 
         {!isRegister && hasTelegramLogin ? (
           <>
-            <TelegramLoginButton
-              onSuccess={(data) => {
-                if (onSuccess) onSuccess(data);
-              }}
-            />
+            <TelegramLoginButton onSuccess={handleTelegramSuccess} />
             <Divider>или</Divider>
           </>
         ) : null}

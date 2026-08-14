@@ -9,11 +9,13 @@ const Root = styled.div`
 
 const WidgetContainer = styled.div`
   width: 100%;
+  min-height: 54px;
   display: flex;
   justify-content: center;
 
   iframe {
     border: 0;
+    width: 100%;
   }
 `;
 
@@ -49,7 +51,7 @@ export const getTelegramBotUsername = () => {
     return normalizeBotUsername(runtimeVal || envVal);
 };
 
-const createTelegramWidgetScript = ({ botUsername, onAuthCallbackName }) => {
+const createTelegramWidgetScript = ({ botUsername, onAuthCallbackName, widthPx }) => {
     const s = document.createElement('script');
     s.async = true;
     s.src = 'https://telegram.org/js/telegram-widget.js?22';
@@ -60,6 +62,7 @@ const createTelegramWidgetScript = ({ botUsername, onAuthCallbackName }) => {
     s.setAttribute('data-lang', 'ru');
     s.setAttribute('data-request-access', 'write');
     s.setAttribute('data-onauth', `${onAuthCallbackName}(user)`);
+    if (widthPx) s.setAttribute('data-width', String(widthPx));
     return s;
 };
 
@@ -67,6 +70,14 @@ const TelegramLoginButton = ({ onSuccess }) => {
     const { loginWithTelegram } = useAuth();
     const containerRef = useRef(null);
     const inFlightRef = useRef(false);
+
+    const onSuccessRef = useRef(onSuccess);
+    const loginWithTelegramRef = useRef(loginWithTelegram);
+
+    useEffect(() => {
+        onSuccessRef.current = onSuccess;
+        loginWithTelegramRef.current = loginWithTelegram;
+    }, [onSuccess, loginWithTelegram]);
 
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
@@ -89,9 +100,9 @@ const TelegramLoginButton = ({ onSuccess }) => {
                 setLoading(true);
 
                 try {
-                    const response = await loginWithTelegram(payload);
-                    if (onSuccess) {
-                        onSuccess(response);
+                    const response = await loginWithTelegramRef.current(payload);
+                    if (onSuccessRef.current) {
+                        onSuccessRef.current(response);
                     }
                 } catch (e) {
                     const msg = e && typeof e === 'object' && 'message' in e ? String(e.message) : 'Login failed';
@@ -113,7 +124,8 @@ const TelegramLoginButton = ({ onSuccess }) => {
                 container.removeChild(container.firstChild);
             }
 
-            const script = createTelegramWidgetScript({ botUsername, onAuthCallbackName: callbackName });
+            const widthPx = Math.max(300, Math.round(container.clientWidth || 300));
+            const script = createTelegramWidgetScript({ botUsername, onAuthCallbackName: callbackName, widthPx });
             container.appendChild(script);
         };
 
@@ -132,7 +144,7 @@ const TelegramLoginButton = ({ onSuccess }) => {
             } catch {
             }
         };
-    }, [botUsername, loginWithTelegram, onSuccess]);
+    }, [botUsername]);
 
     if (!botUsername) {
         return null;
