@@ -142,7 +142,7 @@ const VinylPanel = styled.div`
     position: relative;
     background:
       radial-gradient(circle at 50% 28%, rgba(255, 255, 255, 0.06), transparent 62%),
-      linear-gradient(165deg, #1a1a1e, #0e0e10);
+      linear-gradient(165deg, rgb(24 23 23), rgb(36 36 37));
   }
 `;
 
@@ -202,9 +202,9 @@ const TabsContainer = styled.div`
   gap: 4px;
   margin: 0 0 20px;
   padding: 4px;
-  background: rgba(255, 255, 255, 0.055);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
 `;
 
 const Tab = styled(motion.button)`
@@ -212,9 +212,9 @@ const Tab = styled(motion.button)`
   min-height: 40px;
   padding: 0 12px;
   border: none;
-  border-radius: 999px;
-  background: ${props => props.$active ? 'rgba(255, 255, 255, 0.95)' : 'transparent'};
-  color: ${props => props.$active ? '#0d0d0d' : 'rgba(255, 255, 255, 0.6)'};
+  border-radius: 10px;
+  background: ${props => props.$active ? 'rgba(255, 255, 255, 0.12)' : 'transparent'};
+  color: ${props => props.$active ? '#fff' : 'rgba(255, 255, 255, 0.55)'};
   font-size: 13px;
   font-weight: 650;
   font-family: 'Unbounded', sans-serif;
@@ -222,8 +222,8 @@ const Tab = styled(motion.button)`
   transition: background 0.15s ease, color 0.15s ease;
 
   &:hover {
-    background: ${props => props.$active ? '#fff' : 'rgba(255, 255, 255, 0.08)'};
-    color: ${props => props.$active ? '#0d0d0d' : 'rgba(255, 255, 255, 0.9)'};
+    background: ${props => props.$active ? 'rgba(255, 255, 255, 0.16)' : 'rgba(255, 255, 255, 0.06)'};
+    color: ${props => props.$active ? '#fff' : 'rgba(255, 255, 255, 0.85)'};
   }
 `;
 
@@ -239,7 +239,7 @@ const StepPill = styled.div`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
+  border-radius: 8px;
   background: ${props => props.$active ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.03)'};
   color: ${props => props.$active ? 'rgba(255, 255, 255, 0.85)' : 'rgba(255, 255, 255, 0.35)'};
   font-size: 10px;
@@ -252,14 +252,6 @@ const FormSection = styled.div`
   display: flex;
   flex-direction: column;
   gap: 12px;
-`;
-
-const SectionLabel = styled.div`
-  color: rgba(255, 255, 255, 0.45);
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
 `;
 
 const ActionRow = styled.div`
@@ -501,7 +493,7 @@ const EmailAuth = ({ onClose, onSuccess, initialMode = 'login', canClose = true 
   const [confirmPassword, setConfirmPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [username, setUsername] = useState('');
-  const [registerStep, setRegisterStep] = useState(1);
+  const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -515,6 +507,15 @@ const EmailAuth = ({ onClose, onSuccess, initialMode = 'login', canClose = true 
 
   const hasTelegramLogin = useMemo(() => Boolean(getTelegramBotUsername()), []);
   const isRegister = mode === 'register';
+
+  const stepKeys = isRegister
+    ? ['name', 'username', 'email', 'password', 'confirm']
+    : ['email', 'password'];
+  const stepLabels = isRegister
+    ? ['Имя', 'Username', 'Email', 'Пароль', 'Повтор']
+    : ['Email', 'Пароль'];
+  const currentStepKey = stepKeys[step - 1];
+  const isLastStep = step === stepKeys.length;
 
   const trimmedEmail = email.trim();
   const trimmedFirstName = firstName.trim();
@@ -553,18 +554,50 @@ const EmailAuth = ({ onClose, onSuccess, initialMode = 'login', canClose = true 
     ? 'Пароли не совпадают.'
     : '';
 
-  const canSubmit = (() => {
+  const canAdvance = (() => {
     if (loading) return false;
-    if (isRegister && registerStep === 1) {
-      return Boolean(trimmedFirstName) && isUsernameValid;
+    switch (currentStepKey) {
+      case 'name': return Boolean(trimmedFirstName);
+      case 'username': return isUsernameValid;
+      case 'email': return isEmailValid;
+      case 'password': return isRegister ? passwordStrength.meetsPolicy : Boolean(password);
+      case 'confirm': return Boolean(confirmPassword) && confirmPassword === password;
+      default: return false;
     }
-    if (!isEmailValid) return false;
-    if (!password) return false;
+  })();
+
+  const stepError = (() => {
+    switch (currentStepKey) {
+      case 'name': return 'Введите имя.';
+      case 'username': return 'Username: 3-32 символа, буквы, цифры, точка, дефис или _';
+      case 'email': return 'Неверный формат email';
+      case 'password': return isRegister
+        ? `Минимум ${PASSWORD_MIN_LENGTH} символов, хотя бы одна буква и цифра`
+        : 'Введите пароль';
+      case 'confirm': return 'Пароли не совпадают';
+      default: return '';
+    }
+  })();
+
+  const submitLabel = (() => {
+    if (loading) return 'Загрузка...';
+    if (!isLastStep) return 'Продолжить';
+    return isRegister ? 'Создать аккаунт' : 'Войти';
+  })();
+
+  const subtitleText = (() => {
     if (isRegister) {
-      if (!passwordStrength.meetsPolicy) return false;
-      if (password !== confirmPassword) return false;
+      switch (currentStepKey) {
+        case 'name': return 'Начнём с имени.';
+        case 'username': return 'Придумайте уникальный username.';
+        case 'email': return 'Email для входа в аккаунт.';
+        case 'password': return 'Минимум 8 символов, буква и цифра.';
+        default: return 'Подтвердите пароль.';
+      }
     }
-    return true;
+    return currentStepKey === 'email'
+      ? 'Продолжайте слушать с того места, где остановились.'
+      : 'Введите пароль.';
   })();
 
   useEffect(() => {
@@ -629,7 +662,7 @@ const EmailAuth = ({ onClose, onSuccess, initialMode = 'login', canClose = true 
     setTouchedConfirm(false);
     setTouchedFirstName(false);
     setTouchedUsername(false);
-    setRegisterStep(1);
+    setStep(1);
     if (nextMode === 'login') {
       setConfirmPassword('');
     }
@@ -644,24 +677,19 @@ const EmailAuth = ({ onClose, onSuccess, initialMode = 'login', canClose = true 
     setError('');
     setSuccess('');
 
-    if (isRegister && registerStep === 1) {
-      setTouchedFirstName(true);
-      setTouchedUsername(true);
+    if (!isLastStep) {
+      if (currentStepKey === 'name') setTouchedFirstName(true);
+      if (currentStepKey === 'username') setTouchedUsername(true);
+      if (currentStepKey === 'email') setTouchedEmail(true);
+      if (currentStepKey === 'password') setTouchedPassword(true);
+      if (currentStepKey === 'confirm') setTouchedConfirm(true);
 
-      if (!trimmedFirstName) {
-        setError('Введите имя');
-        return;
-      }
-      if (!normalizedUsername) {
-        setError('Введите username');
-        return;
-      }
-      if (!isUsernameValid) {
-        setError('Username должен быть 3-32 символа: буквы, цифры, точка, дефис или _');
+      if (!canAdvance) {
+        setError(stepError);
         return;
       }
 
-      setRegisterStep(2);
+      setStep(step + 1);
       return;
     }
 
@@ -684,16 +712,17 @@ const EmailAuth = ({ onClose, onSuccess, initialMode = 'login', canClose = true 
     if (isRegister) {
       if (!trimmedFirstName) {
         setError('Введите имя');
-        setRegisterStep(1);
+        setStep(1);
         return;
       }
       if (!isUsernameValid) {
         setError('Проверьте username');
-        setRegisterStep(1);
+        setStep(2);
         return;
       }
       if (!passwordStrength.meetsPolicy) {
         setError(`Пароль должен быть минимум ${PASSWORD_MIN_LENGTH} символов и содержать хотя бы одну букву и цифру`);
+        setStep(4);
         return;
       }
       if (password !== confirmPassword) {
@@ -722,6 +751,183 @@ const EmailAuth = ({ onClose, onSuccess, initialMode = 'login', canClose = true 
       setError(msg);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleBack = () => {
+    setError('');
+    setSuccess('');
+    if (step > 1) setStep(step - 1);
+  };
+
+  const renderStepField = () => {
+    switch (currentStepKey) {
+      case 'name':
+        return (
+          <Field>
+            <FieldLabel htmlFor="auth-first-name">Имя</FieldLabel>
+            <Input
+              id="auth-first-name"
+              type="text"
+              placeholder="Иван"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              onBlur={() => setTouchedFirstName(true)}
+              autoComplete="given-name"
+              autoCapitalize="words"
+              enterKeyHint="next"
+              maxLength={64}
+              required
+              autoFocus
+              aria-invalid={firstNameError ? 'true' : 'false'}
+              aria-describedby={firstNameError ? 'first-name-error' : undefined}
+            />
+            {firstNameError && (
+              <FieldMessage id="first-name-error" $tone="error">{firstNameError}</FieldMessage>
+            )}
+          </Field>
+        );
+      case 'username':
+        return (
+          <Field>
+            <FieldLabel htmlFor="auth-username">Username</FieldLabel>
+            <Input
+              id="auth-username"
+              type="text"
+              placeholder="yourname"
+              value={username}
+              onChange={(e) => setUsername(normalizeUsernameInput(e.target.value))}
+              onBlur={() => setTouchedUsername(true)}
+              autoComplete="username"
+              autoCapitalize="none"
+              enterKeyHint="next"
+              inputMode="text"
+              spellCheck={false}
+              maxLength={32}
+              required
+              autoFocus
+              aria-invalid={usernameError ? 'true' : 'false'}
+              aria-describedby={usernameError ? 'username-error' : undefined}
+            />
+            {usernameError && (
+              <FieldMessage id="username-error" $tone="error">{usernameError}</FieldMessage>
+            )}
+          </Field>
+        );
+      case 'email':
+        return (
+          <Field>
+            <FieldLabel htmlFor="auth-email">Email</FieldLabel>
+            <Input
+              id="auth-email"
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              onBlur={() => setTouchedEmail(true)}
+              inputMode="email"
+              autoComplete={isRegister ? 'email' : 'username'}
+              autoCapitalize="none"
+              enterKeyHint="next"
+              spellCheck={false}
+              maxLength={254}
+              required
+              autoFocus
+              aria-invalid={emailError ? 'true' : 'false'}
+              aria-describedby={emailError ? 'email-error' : undefined}
+            />
+            {emailError && (
+              <FieldMessage id="email-error" $tone="error">{emailError}</FieldMessage>
+            )}
+          </Field>
+        );
+      case 'password':
+        return (
+          <Field>
+            <FieldLabel htmlFor="auth-password">Пароль</FieldLabel>
+            <Input
+              id="auth-password"
+              type={showPassword ? 'text' : 'password'}
+              placeholder={isRegister ? `Минимум ${PASSWORD_MIN_LENGTH} символов` : 'Пароль'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onBlur={() => setTouchedPassword(true)}
+              autoComplete={isRegister ? 'new-password' : 'current-password'}
+              autoCapitalize="none"
+              enterKeyHint={isLastStep ? 'done' : 'next'}
+              required
+              minLength={isRegister ? PASSWORD_MIN_LENGTH : 1}
+              maxLength={256}
+              $hasTrailingAction
+              autoFocus
+              aria-invalid={passwordError ? 'true' : 'false'}
+              aria-describedby={passwordError ? 'password-error' : undefined}
+            />
+            <PasswordToggleBtn
+              type="button"
+              onClick={() => setShowPassword(v => !v)}
+              aria-label={showPassword ? 'Скрыть пароль' : 'Показать пароль'}
+              aria-pressed={showPassword}
+              tabIndex={0}
+            >
+              {showPassword ? <FaEyeSlash size={14} /> : <FaEye size={14} />}
+            </PasswordToggleBtn>
+            {isRegister ? (
+              <PasswordStrength aria-live="polite">
+                <PasswordStrengthTrack>
+                  <PasswordStrengthFill
+                    $percent={passwordStrength.percent}
+                    $tone={passwordStrength.tone}
+                  />
+                </PasswordStrengthTrack>
+                <PasswordStrengthLabel $tone={passwordStrength.tone}>
+                  {passwordStrength.label || 'Сложность'}
+                </PasswordStrengthLabel>
+              </PasswordStrength>
+            ) : null}
+            {passwordError && (
+              <FieldMessage id="password-error" $tone="error">{passwordError}</FieldMessage>
+            )}
+          </Field>
+        );
+      case 'confirm':
+        return (
+          <Field>
+            <FieldLabel htmlFor="auth-confirm">Подтвердите пароль</FieldLabel>
+            <Input
+              id="auth-confirm"
+              type={showConfirmPassword ? 'text' : 'password'}
+              placeholder="Повторите пароль"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              onBlur={() => setTouchedConfirm(true)}
+              autoComplete="new-password"
+              autoCapitalize="none"
+              enterKeyHint="done"
+              required
+              minLength={PASSWORD_MIN_LENGTH}
+              maxLength={256}
+              $hasTrailingAction
+              autoFocus
+              aria-invalid={confirmPasswordError ? 'true' : 'false'}
+              aria-describedby={confirmPasswordError ? 'confirm-error' : undefined}
+            />
+            <PasswordToggleBtn
+              type="button"
+              onClick={() => setShowConfirmPassword(v => !v)}
+              aria-label={showConfirmPassword ? 'Скрыть пароль' : 'Показать пароль'}
+              aria-pressed={showConfirmPassword}
+              tabIndex={0}
+            >
+              {showConfirmPassword ? <FaEyeSlash size={14} /> : <FaEye size={14} />}
+            </PasswordToggleBtn>
+            {confirmPasswordError && (
+              <FieldMessage id="confirm-error" $tone="error">{confirmPasswordError}</FieldMessage>
+            )}
+          </Field>
+        );
+      default:
+        return null;
     }
   };
 
@@ -756,11 +962,7 @@ const EmailAuth = ({ onClose, onSuccess, initialMode = 'login', canClose = true 
           <BrandLink size="lg" title="Earflow" />
           <Title>{isRegister ? 'Создать аккаунт' : 'Войти в Earflow'}</Title>
           <Subtitle>
-            {isRegister ? (
-              registerStep === 1
-                ? 'Сначала имя и username. Потом email и пароль.'
-                : 'Email и пароль защищают вход в аккаунт.'
-            ) : 'Продолжайте слушать с того места, где остановились.'}
+            {subtitleText}
           </Subtitle>
         </AuthHeader>
 
@@ -781,171 +983,13 @@ const EmailAuth = ({ onClose, onSuccess, initialMode = 'login', canClose = true 
         ) : null}
 
         <Form onSubmit={handleSubmit} noValidate>
-          {isRegister && (
-            <StepIndicator aria-label="Шаг регистрации">
-              <StepPill $active={registerStep === 1}>Профиль</StepPill>
-              <StepPill $active={registerStep === 2}>Вход</StepPill>
-            </StepIndicator>
-          )}
+          <StepIndicator aria-label={isRegister ? 'Шаг регистрации' : 'Шаг входа'}>
+            {stepLabels.map((label, i) => (
+              <StepPill key={label} $active={i + 1 === step}>{label}</StepPill>
+            ))}
+          </StepIndicator>
 
-          {isRegister && registerStep === 1 ? (
-            <FormSection>
-              <SectionLabel>Профиль</SectionLabel>
-              <Field>
-                <FieldLabel htmlFor="auth-first-name">Имя</FieldLabel>
-                <Input
-                  id="auth-first-name"
-                  type="text"
-                  placeholder="Иван"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  onBlur={() => setTouchedFirstName(true)}
-                  autoComplete="given-name"
-                  autoCapitalize="words"
-                  enterKeyHint="next"
-                  maxLength={64}
-                  required
-                  aria-invalid={firstNameError ? 'true' : 'false'}
-                  aria-describedby={firstNameError ? 'first-name-error' : undefined}
-                />
-                {firstNameError && (
-                  <FieldMessage id="first-name-error" $tone="error">{firstNameError}</FieldMessage>
-                )}
-              </Field>
-
-              <Field>
-                <FieldLabel htmlFor="auth-username">Username</FieldLabel>
-                <Input
-                  id="auth-username"
-                  type="text"
-                  placeholder="yourname"
-                  value={username}
-                  onChange={(e) => setUsername(normalizeUsernameInput(e.target.value))}
-                  onBlur={() => setTouchedUsername(true)}
-                  autoComplete="username"
-                  autoCapitalize="none"
-                  enterKeyHint="next"
-                  inputMode="text"
-                  spellCheck={false}
-                  maxLength={32}
-                  required
-                  aria-invalid={usernameError ? 'true' : 'false'}
-                  aria-describedby={usernameError ? 'username-error' : undefined}
-                />
-                {usernameError && (
-                  <FieldMessage id="username-error" $tone="error">{usernameError}</FieldMessage>
-                )}
-              </Field>
-            </FormSection>
-          ) : (
-            <FormSection>
-              {isRegister && <SectionLabel>Email и пароль</SectionLabel>}
-              <Field>
-                <FieldLabel htmlFor="auth-email">Email</FieldLabel>
-                <Input
-                  id="auth-email"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  onBlur={() => setTouchedEmail(true)}
-                  inputMode="email"
-                  autoComplete={isRegister ? 'email' : 'username'}
-                  autoCapitalize="none"
-                  enterKeyHint="next"
-                  spellCheck={false}
-                  maxLength={254}
-                  required
-                  aria-invalid={emailError ? 'true' : 'false'}
-                  aria-describedby={emailError ? 'email-error' : undefined}
-                />
-                {emailError && (
-                  <FieldMessage id="email-error" $tone="error">{emailError}</FieldMessage>
-                )}
-              </Field>
-
-              <Field>
-                <FieldLabel htmlFor="auth-password">Пароль</FieldLabel>
-                <Input
-                  id="auth-password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder={isRegister ? `Минимум ${PASSWORD_MIN_LENGTH} символов` : 'Пароль'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  onBlur={() => setTouchedPassword(true)}
-                  autoComplete={isRegister ? 'new-password' : 'current-password'}
-                  autoCapitalize="none"
-                  enterKeyHint={isRegister ? 'next' : 'done'}
-                  required
-                  minLength={isRegister ? PASSWORD_MIN_LENGTH : 1}
-                  maxLength={256}
-                  $hasTrailingAction
-                  aria-invalid={passwordError ? 'true' : 'false'}
-                  aria-describedby={passwordError ? 'password-error' : undefined}
-                />
-                <PasswordToggleBtn
-                  type="button"
-                  onClick={() => setShowPassword(v => !v)}
-                  aria-label={showPassword ? 'Скрыть пароль' : 'Показать пароль'}
-                  aria-pressed={showPassword}
-                  tabIndex={0}
-                >
-                  {showPassword ? <FaEyeSlash size={14} /> : <FaEye size={14} />}
-                </PasswordToggleBtn>
-                {isRegister ? (
-                  <PasswordStrength aria-live="polite">
-                    <PasswordStrengthTrack>
-                      <PasswordStrengthFill
-                        $percent={passwordStrength.percent}
-                        $tone={passwordStrength.tone}
-                      />
-                    </PasswordStrengthTrack>
-                    <PasswordStrengthLabel $tone={passwordStrength.tone}>
-                      {passwordStrength.label || 'Сложность'}
-                    </PasswordStrengthLabel>
-                  </PasswordStrength>
-                ) : null}
-                {passwordError && (
-                  <FieldMessage id="password-error" $tone="error">{passwordError}</FieldMessage>
-                )}
-              </Field>
-
-              {isRegister && (
-                <Field>
-                  <FieldLabel htmlFor="auth-confirm">Подтвердите пароль</FieldLabel>
-                  <Input
-                    id="auth-confirm"
-                    type={showConfirmPassword ? 'text' : 'password'}
-                    placeholder="Повторите пароль"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    onBlur={() => setTouchedConfirm(true)}
-                    autoComplete="new-password"
-                    autoCapitalize="none"
-                    enterKeyHint="done"
-                    required
-                    minLength={PASSWORD_MIN_LENGTH}
-                    maxLength={256}
-                    $hasTrailingAction
-                    aria-invalid={confirmPasswordError ? 'true' : 'false'}
-                    aria-describedby={confirmPasswordError ? 'confirm-error' : undefined}
-                  />
-                  <PasswordToggleBtn
-                    type="button"
-                    onClick={() => setShowConfirmPassword(v => !v)}
-                    aria-label={showConfirmPassword ? 'Скрыть пароль' : 'Показать пароль'}
-                    aria-pressed={showConfirmPassword}
-                    tabIndex={0}
-                  >
-                    {showConfirmPassword ? <FaEyeSlash size={14} /> : <FaEye size={14} />}
-                  </PasswordToggleBtn>
-                  {confirmPasswordError && (
-                    <FieldMessage id="confirm-error" $tone="error">{confirmPasswordError}</FieldMessage>
-                  )}
-                </Field>
-              )}
-            </FormSection>
-          )}
+          <FormSection>{renderStepField()}</FormSection>
 
           <AnimatePresence>
             {error && (
@@ -974,26 +1018,19 @@ const EmailAuth = ({ onClose, onSuccess, initialMode = 'login', canClose = true 
           </AnimatePresence>
 
           <ActionRow>
-            {isRegister && registerStep === 2 ? (
-              <BackButton
-                type="button"
-                onClick={() => {
-                  setError('');
-                  setSuccess('');
-                  setRegisterStep(1);
-                }}
-              >
+            {step > 1 ? (
+              <BackButton type="button" onClick={handleBack}>
                 Назад
               </BackButton>
             ) : null}
             <Button
               type="submit"
-              disabled={!canSubmit}
+              disabled={!canAdvance}
               aria-busy={loading ? 'true' : 'false'}
-              whileHover={canSubmit ? { scale: 1.01 } : undefined}
-              whileTap={canSubmit ? { scale: 0.99 } : undefined}
+              whileHover={canAdvance ? { scale: 1.01 } : undefined}
+              whileTap={canAdvance ? { scale: 0.99 } : undefined}
             >
-              {loading ? 'Загрузка...' : isRegister && registerStep === 1 ? 'Продолжить' : isRegister ? 'Создать аккаунт' : 'Войти'}
+              {submitLabel}
             </Button>
           </ActionRow>
         </Form>
