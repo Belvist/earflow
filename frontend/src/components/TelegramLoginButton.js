@@ -10,7 +10,7 @@ const Root = styled.div`
 
 const WidgetContainer = styled.div`
   width: 100%;
-  min-height: 54px;
+  min-height: 44px;
   display: flex;
   justify-content: center;
   overflow: visible;
@@ -175,7 +175,7 @@ const TelegramLoginButton = ({ onSuccess }) => {
             const iw = iframe.offsetWidth || 238;
             const ih = iframe.offsetHeight || 40;
             if (!cw || !iw) return;
-            const scale = cw / iw;
+            const scale = Math.min(1, cw / iw);
             iframe.style.width = `${iw}px`;
             iframe.style.height = `${ih}px`;
             iframe.style.transformOrigin = 'center';
