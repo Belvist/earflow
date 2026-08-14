@@ -5,6 +5,7 @@ import { FaLock, FaTimes, FaEye, FaEyeSlash } from 'react-icons/fa';
 
 import useAuth from '../hooks/useAuth';
 import BrandLink from './BrandLink';
+import AuthVinyl from './AuthVinyl';
 import TelegramLoginButton, { getTelegramBotUsername } from './TelegramLoginButton';
 
 // Контракт должен точно совпадать с backend auth-service/server.js handleEmailRegister:
@@ -83,6 +84,13 @@ const AuthContainer = styled(motion.div)`
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+
+  @media (min-width: 1024px) {
+    background:
+      radial-gradient(1000px 620px at 12% 50%, rgba(255, 255, 255, 0.035), transparent 65%),
+      radial-gradient(1400px 700px at 50% -10%, rgba(255, 255, 255, 0.045), transparent 60%),
+      #0a0a0a;
+  }
 `;
 
 const AuthCard = styled(motion.div)`
@@ -688,6 +696,7 @@ const EmailAuth = ({ onClose, onSuccess, initialMode = 'login', canClose = true 
       exit={{ opacity: 0 }}
       onClick={canClose ? onClose : undefined}
     >
+      <AuthVinyl />
       <AuthCard
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
