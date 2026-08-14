@@ -194,8 +194,7 @@ func (p *Postgres) CreateUser(ctx context.Context, params CreateUserParams) (*Au
 	q := `
 		INSERT INTO users (email, email_hash, password_hash, username, first_name, last_name, photo_url, email_encrypted, salt, metadata, telegram_id)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-		RETURNING id, email, email_hash, username, photo_url, COALESCE(is_admin, FALSE), created_at, last_login, salt, email_encrypted, metadata, telegram_id, COALESCE(mfa_enabled, FALSE), mfa_enabled_at, mfa_recovery_codes
-	`
+		RETURNING ` + authUserSelect
 	row := p.pool.QueryRow(ctx, q,
 		params.Email,
 		params.EmailHash,
