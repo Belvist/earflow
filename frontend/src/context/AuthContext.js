@@ -82,12 +82,19 @@ const isTransientAuthStatus = (status) => {
 
 const isBackendReauthRequired = (resultOrError) => {
     if (!resultOrError || typeof resultOrError !== 'object') return false;
-    if (resultOrError.reauthRequired === true) return true;
     const code = typeof resultOrError.code === 'string' ? resultOrError.code.trim().toUpperCase() : '';
+    // A DEVICE_PROOF_* response means the device binding could not be proven
+    // yet — a transient register/proof hiccup, NOT a dead session. Treating it
+    // as "reauth required" throws the user to the login screen on reloads even
+    // though the server session is perfectly alive (it keeps rotating). The
+    // device re-binds on the next revalidate/API call instead.
+    if (code === 'DEVICE_PROOF_REQUIRED' || code === 'DEVICE_PROOF_INVALID') {
+        return false;
+    }
+    if (resultOrError.reauthRequired === true) return true;
     return code === 'NO_SESSION'
         || code === 'SESSION_REVOKED'
         || code === 'REFRESH_REVOKED'
-        || code === 'DEVICE_PROOF_REQUIRED'
         || code === 'DEVICE_REVOKED';
 };
 
@@ -214,15 +221,25 @@ async function refreshThenProfile(signal, options = {}) {
 }
 
 async function ensureDeviceProofReady() {
-    try {
-        const reg = await apiClient.ensureAuthDeviceRegistered?.();
-        if (reg?.ok === false) {
-            return reg;
+    const retries = [0, 200, 500];
+    for (const delay of retries) {
+        if (delay > 0) {
+            await new Promise((resolve) => setTimeout(resolve, delay));
         }
-        return { ok: true };
-    } catch {
-        return { ok: false, code: 'device_register_failed' };
+        try {
+            const reg = await apiClient.ensureAuthDeviceRegistered?.();
+            if (reg?.ok === false) {
+                if (reg.code === 'device_key_unavailable') return reg;
+                if (delay < retries[retries.length - 1]) continue;
+                return reg;
+            }
+            return { ok: true };
+        } catch {
+            if (delay < retries[retries.length - 1]) continue;
+            return { ok: false, code: 'device_register_failed' };
+        }
     }
+    return { ok: false, code: 'device_register_failed' };
 }
 
 // A failed device binding must not throw the user to the login screen:
@@ -309,16 +326,18 @@ async function bootstrapAuthStateCore(options = {}) {
         const status = asHttpStatus(err) || 0;
         if (status === 401) {
             const code = typeof err?.code === 'string' ? err.code.trim().toUpperCase() : '';
-            if (code === 'DEVICE_PROOF_REQUIRED' || code === 'DEVICE_REVOKED') {
+            if (code === 'DEVICE_REVOKED') {
+                apiClient.clearLocalSession?.();
+                return { status: AUTH_STATUSES.GUEST };
+            }
+            if (code === 'DEVICE_PROOF_REQUIRED' || code === 'DEVICE_PROOF_INVALID') {
                 const recovered = await recoverDeviceProofAndProfile(signal);
                 if (hasUser(recovered)) {
                     return { status: AUTH_STATUSES.AUTHENTICATED, user: recovered };
                 }
-                if (softRevalidate) {
-                    const cached = cachedAuthUser();
-                    if (hasUser(cached)) {
-                        return degradedAuthResult(401, code, code);
-                    }
+                const cached = cachedAuthUser();
+                if (hasUser(cached)) {
+                    return degradedAuthResult(401, code, code);
                 }
                 apiClient.clearLocalSession?.();
                 return { status: AUTH_STATUSES.GUEST };
@@ -397,7 +416,20 @@ export function AuthProvider({ children }) {
         }
 
         try {
-            return await apiClient.loginWithTelegram(payload);
+            const user = await apiClient.loginWithTelegram(payload);
+            // The login completes in the popup (same origin as the opener —
+            // Telegram redirects back to return_to), but the opener tab has no
+            // way to know about it: the popup SPA already stripped tgAuthResult
+            // from the URL before the opener's poll could read it. Broadcast so
+            // every other tab revalidates with the freshly set cookies, then
+            // close the popup (no-op for normal tabs).
+            broadcastAuthEvent('LOGIN_SUCCESS');
+            try {
+                window.close();
+            } catch {
+                // ignore
+            }
+            return user;
         } catch {
             return null;
         }
