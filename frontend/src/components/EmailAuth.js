@@ -108,6 +108,42 @@ const AuthCard = styled(motion.div)`
   @media (max-width: 520px) {
     padding: 26px 22px 20px;
   }
+
+  @media (min-width: 1024px) {
+    padding: 0;
+    max-width: 760px;
+    width: min(760px, 100%);
+    display: flex;
+    overflow: hidden;
+  }
+`;
+
+const AuthCardBody = styled.div`
+  @media (min-width: 1024px) {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 430px;
+    padding: 32px 34px 24px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+`;
+
+const VinylPanel = styled.div`
+  display: none;
+
+  @media (min-width: 1024px) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 44%;
+    min-width: 0;
+    overflow: hidden;
+    position: relative;
+    background:
+      radial-gradient(circle at 50% 28%, rgba(255, 255, 255, 0.06), transparent 62%),
+      linear-gradient(165deg, #1a1a1e, #0e0e10);
+  }
 `;
 
 const CloseButton = styled(motion.button)`
@@ -696,7 +732,6 @@ const EmailAuth = ({ onClose, onSuccess, initialMode = 'login', canClose = true 
       exit={{ opacity: 0 }}
       onClick={canClose ? onClose : undefined}
     >
-      <AuthVinyl />
       <AuthCard
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -716,6 +751,7 @@ const EmailAuth = ({ onClose, onSuccess, initialMode = 'login', canClose = true 
           </CloseButton>
         ) : null}
 
+        <AuthCardBody>
         <AuthHeader>
           <BrandLink size="lg" title="Earflow" />
           <Title>{isRegister ? 'Создать аккаунт' : 'Войти в Earflow'}</Title>
@@ -965,6 +1001,10 @@ const EmailAuth = ({ onClose, onSuccess, initialMode = 'login', canClose = true 
           <FaLock />
           Защищенная cookie-сессия Earflow
         </SafetyLine>
+        </AuthCardBody>
+        <VinylPanel>
+          <AuthVinyl />
+        </VinylPanel>
       </AuthCard>
     </AuthContainer>
   );

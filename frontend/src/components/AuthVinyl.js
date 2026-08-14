@@ -14,34 +14,28 @@ const coverFade = keyframes`
 `;
 
 const VinylWrap = styled.div`
-  display: none;
-
-  @media (min-width: 1024px) {
-    display: flex;
-    position: absolute;
-    top: 50%;
-    left: max(12px, calc(50vw - 520px));
-    width: clamp(220px, 20vw, 280px);
-    height: clamp(220px, 20vw, 280px);
-    transform: translateY(-50%);
-    pointer-events: none;
-    z-index: 0;
-  }
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
 `;
 
 const Disc = styled.div`
   position: relative;
-  width: 100%;
-  height: 100%;
+  width: clamp(180px, 62%, 240px);
+  aspect-ratio: 1;
   border-radius: 50%;
-  background-color: #0e0e0e;
+  background-color: #ececef;
   background-image:
-    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0) 42%),
-    repeating-radial-gradient(circle at center, #101010 0px, #151515 1px, #101010 2px);
+    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 46%),
+    repeating-radial-gradient(circle at center, #e0e0e3 0px, #ededf0 1px, #e0e0e3 2px);
   box-shadow:
-    0 40px 90px rgba(0, 0, 0, 0.6),
-    0 0 0 1px rgba(255, 255, 255, 0.06),
-    inset 0 0 60px rgba(0, 0, 0, 0.85);
+    0 30px 70px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(0, 0, 0, 0.06),
+    inset 0 0 40px rgba(0, 0, 0, 0.1);
   animation: ${spin} 6s linear infinite;
   will-change: transform;
 `;
@@ -55,7 +49,7 @@ const CenterLabel = styled.div`
   transform: translate(-50%, -50%);
   border-radius: 50%;
   overflow: hidden;
-  border: 2px solid rgba(255, 255, 255, 0.16);
+  border: 2px solid rgba(0, 0, 0, 0.2);
   background: #161616;
   box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.6);
   display: flex;
@@ -80,11 +74,20 @@ const Monogram = styled.span`
   letter-spacing: 0.5px;
 `;
 
+const isDesktop = () => {
+  try {
+    return typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches;
+  } catch {
+    return false;
+  }
+};
+
 const AuthVinyl = () => {
   const [covers, setCovers] = useState([]);
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
+    if (!isDesktop()) return;
     let cancelled = false;
 
     const load = async () => {
