@@ -28,6 +28,7 @@ const REAUTH_REQUIRED_REFRESH_CODES = new Set([
   'REFRESH_REVOKED',
   'DEVICE_PROOF_REQUIRED',
   'DEVICE_REVOKED',
+  'SESSION_UNVERIFIED',
 ]);
 
 const normalizeRefreshCode = (code) => (typeof code === 'string' ? code.trim().toUpperCase() : '');
@@ -42,6 +43,7 @@ const deriveCoverOrigin = () => {
 
 // Кеш URL обложек для предотвращения повторных вычислений
 const coverUrlCache = new LruCache({ maxEntries: 500, ttlMs: 30 * 60 * 1000 });
+const socialFeedCache = new LruCache({ maxEntries: 32, ttlMs: 8000 });
 
 const decodeUtf8 = (buf) => {
   try {
@@ -99,6 +101,7 @@ class ApiClient {
     this.baseUrl = API_BASE_URL;
     this.streamingBaseUrl = STREAMING_BASE_URL;
     this._hasSession = false;
+    this._sessionEpoch = 0;
     this._refreshCoreInFlight = null;
     this._lastRefreshAttemptAt = 0;
     this._lastRefreshOkAt = 0;
@@ -310,14 +313,10 @@ class ApiClient {
     return second;
   }
 
-  async _clearBrowserCaches() {
-    try {
-      if (typeof caches === 'undefined') return;
-      const keys = await caches.keys();
-      await Promise.all(keys.map((k) => caches.delete(k)));
-    } catch {
-      // ignore
-    }
+  resetRefreshBackoff() {
+    this._refreshBackoffUntilAt = 0;
+    this._lastRefreshAttemptAt = 0;
+    this._lastRefreshOkAt = 0;
   }
 
   _getCookieValue(name) {
@@ -383,6 +382,7 @@ class ApiClient {
     const signal = options && options.signal ? options.signal : undefined;
     return await runRefresh(async () => {
       const now = Date.now();
+      const epochAtStart = this._sessionEpoch;
 
       if (this._refreshBackoffUntilAt && now < this._refreshBackoffUntilAt) {
         return { ...classifyRefreshResult({ ok: false, status: 0 }), backoff: true };
@@ -400,7 +400,7 @@ class ApiClient {
       try {
         const url = `${this.baseUrl}/api/auth/refresh`;
         let csrf = this._getCsrfTokenValue() || (await this._ensureCsrfCookie());
-        const proofHeaders = await this._resolveDeviceProofHeaders('POST', url);
+        let proofHeaders = await this._resolveDeviceProofHeaders('POST', url);
         const makeRefreshRequest = () => {
           const headers = {
             'Content-Type': 'application/json',
@@ -420,9 +420,25 @@ class ApiClient {
           csrf = (await this._ensureCsrfCookie({ force: true })) || this._getCsrfTokenValue() || csrf || null;
           res = await makeRefreshRequest();
         }
+        let body = null;
+        if (res?.status === 401) {
+          body = await readJsonBody(res);
+          const proofCode = body && typeof body.code === 'string' ? body.code.trim().toUpperCase() : '';
+          // A live session must not be dropped just because a fresh page load
+          // could not bind its device proof in time (transient register hiccup):
+          // force re-register and retry the refresh once.
+          if (proofCode === 'DEVICE_PROOF_REQUIRED' || proofCode === 'DEVICE_PROOF_INVALID') {
+            await this.ensureAuthDeviceRegistered({ force: true }).catch(() => undefined);
+            proofHeaders = await this._resolveDeviceProofHeaders('POST', url);
+            res = await makeRefreshRequest();
+            body = null;
+          }
+        }
         const status = Number(res?.status);
         const ok = !!(res && (res.status === 204 || res.ok));
-        const body = ok ? null : await readJsonBody(res);
+        if (body === null) {
+          body = ok ? null : await readJsonBody(res);
+        }
         const classified = classifyRefreshResult({
           ok,
           status: Number.isFinite(status) ? status : 0,
@@ -432,7 +448,9 @@ class ApiClient {
         });
         if (ok) {
           this._lastRefreshOkAt = Date.now();
-          this._markSessionActive();
+          if (this._sessionEpoch === epochAtStart) {
+            this._markSessionActive();
+          }
           void this.ensureAuthDeviceRegistered().catch(() => undefined);
         }
         if (!ok && res) {
@@ -498,6 +516,15 @@ class ApiClient {
 
   _clearLocalSession() {
     this._hasSession = false;
+    this._sessionEpoch += 1;
+    this._lastRefreshAttemptAt = 0;
+    this._lastRefreshOkAt = 0;
+    this._refreshBackoffUntilAt = 0;
+    this._hlsSessionCache?.clear?.();
+    this._hlsSessionInFlight?.clear?.();
+    this._directSessionCache?.clear?.();
+    this._directSessionInFlight?.clear?.();
+    this._lyricsSessionCache?.clear?.();
     try {
       if (typeof localStorage !== 'undefined') {
         localStorage.removeItem('user');
@@ -509,6 +536,18 @@ class ApiClient {
     void clearAuthDeviceState();
     clearProofAccessToken();
     clearStreamTicketCache();
+  }
+
+  // Device binding after login is best-effort: a transient register failure must
+  // NOT throw away a completed login (else the user is bounced in a login loop).
+  // The binding self-heals asynchronously: bootstrap ensureDeviceProofReady,
+  // deviceProofRecovery on 401 DEVICE_PROOF_*, and _refreshSessionCore.
+  async _bestEffortBindDevice() {
+    try {
+      await this.ensureAuthDeviceRegistered({ required: false });
+    } catch {
+      // ignore — recovery paths re-register the device later.
+    }
   }
 
   async ensureAuthDeviceRegistered(options = {}) {
@@ -705,7 +744,7 @@ class ApiClient {
       } catch {
         // ignore
       }
-      await this.ensureAuthDeviceRegistered({ required: true });
+      await this._bestEffortBindDevice();
     }
 
     return response;
@@ -739,7 +778,7 @@ class ApiClient {
       } catch {
         // ignore
       }
-      await this.ensureAuthDeviceRegistered({ required: true });
+      await this._bestEffortBindDevice();
     }
 
     return response;
@@ -765,7 +804,7 @@ class ApiClient {
       } catch {
         // ignore
       }
-      await this.ensureAuthDeviceRegistered({ required: true });
+      await this._bestEffortBindDevice();
     }
 
     return response;
@@ -941,7 +980,6 @@ class ApiClient {
       }
     }
     this._clearLocalSession();
-    await this._clearBrowserCaches();
   }
 
   async getAuthSessions() {
@@ -2261,6 +2299,68 @@ class ApiClient {
     });
   }
 
+  _clearSocialFeedCache() {
+    socialFeedCache.clear();
+  }
+
+  async getSocialFeed({ limit, cursor, after, signal, cache = true } = {}) {
+    const query = new URLSearchParams();
+    if (limit !== undefined && limit !== null) query.set('limit', String(limit));
+    if (cursor) query.set('cursor', String(cursor));
+    if (after) query.set('after', String(after));
+    const qs = query.toString();
+    const endpoint = `/api/social/feed${qs ? `?${qs}` : ''}`;
+
+    if (cache !== false) {
+      const hit = socialFeedCache.get(endpoint);
+      if (hit) return hit;
+    }
+
+    const data = await this.request(endpoint, {
+      signal,
+      cache: cache === false ? 'no-store' : undefined,
+    });
+
+    if (cache !== false && data && typeof data === 'object') {
+      socialFeedCache.set(endpoint, data);
+    }
+
+    return data;
+  }
+
+  async createSocialPost({ title, body } = {}) {
+    const response = await this.request('/api/social/posts', {
+      method: 'POST',
+      body: JSON.stringify({ title, body }),
+    });
+    this._clearSocialFeedCache();
+    return response;
+  }
+
+  async likeSocialPost(postId) {
+    const response = await this.request(`/api/social/posts/${encodeURIComponent(postId)}/like`, {
+      method: 'POST',
+    });
+    this._clearSocialFeedCache();
+    return response;
+  }
+
+  async unlikeSocialPost(postId) {
+    const response = await this.request(`/api/social/posts/${encodeURIComponent(postId)}/like`, {
+      method: 'DELETE',
+    });
+    this._clearSocialFeedCache();
+    return response;
+  }
+
+  async deleteSocialPost(postId) {
+    const response = await this.request(`/api/social/posts/${encodeURIComponent(postId)}`, {
+      method: 'DELETE',
+    });
+    this._clearSocialFeedCache();
+    return response;
+  }
+
   // ==================== PLAYLISTS / QUEUE / PARTY ====================
 
   async getPlaylists(params = {}) {
@@ -2501,3 +2601,4 @@ class ApiClient {
 // Экспортируем singleton
 const apiClient = new ApiClient();
 export default apiClient;
+export { ApiClient };

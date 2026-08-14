@@ -192,14 +192,10 @@ async function refreshThenProfile(signal, options = {}) {
     }
 
     if (isBackendReauthRequired(refreshed)) {
-        const cached = cachedAuthUser();
-        if (softRevalidate && hasUser(cached)) {
-            return degradedAuthResult(
-                refreshed?.status || 401,
-                refreshed?.code || refreshed?.state || 'session_unverified',
-                refreshed?.state || 'session_unverified',
-            );
-        }
+        // Confirmed dead session (refresh endpoint explicitly says reauth):
+        // escalate to GUEST even on soft revalidate. Keeping DEGRADED here put
+        // the user in an endless silent 401 loop (isAuthenticated=true but every
+        // API call failed) for up to the 12-min revalidate tick.
         apiClient.clearLocalSession?.();
         return { status: AUTH_STATUSES.GUEST };
     }
@@ -552,6 +548,12 @@ export function AuthProvider({ children }) {
                     apiClient.clearAuthLostState?.();
                     return;
                 }
+
+                // Recovery must hit the server for a definitive answer: a 60s
+                // backoff (or <1s throttle) inherited from the failed refresh
+                // would classify the rehydrate as transient and keep the user in
+                // DEGRADED with every API call failing for ~12 min.
+                apiClient.resetRefreshBackoff?.();
 
                 const ok = await rehydrateSession();
                 if (disposed) return;

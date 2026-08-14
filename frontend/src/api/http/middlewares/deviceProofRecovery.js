@@ -1,5 +1,6 @@
 import { readJsonSafely } from '../readJsonSafely';
 import { invalidateAuthDeviceBinding } from '../../../auth/authDeviceCrypto';
+import { clearProofAccessToken } from '../../../auth/proofAccessToken';
 
 const RECOVERABLE_PROOF_CODES = new Set([
   'DEVICE_PROOF_INVALID',
@@ -44,6 +45,7 @@ export const createDeviceProofRecoveryMiddleware = (deps = {}) => {
 
     try {
       await invalidateAuthDeviceBinding();
+      clearProofAccessToken();
       const reg = await ensureAuthDeviceRegistered({ force: true, required: false });
       if (reg?.ok === false) {
         return resp;

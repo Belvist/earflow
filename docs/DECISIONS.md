@@ -4,6 +4,156 @@
 
 ---
 
+## 2026-08-14 — frontend: мгновенное восстановление сессии при заходе на сайт (refresh device-proof retry)
+
+**Status:** accepted (client.login.test.js «refresh device-proof retry» PASS; 266 тестов)
+**Area:** auth | frontend
+**Related:** 2026-08-14 auth-ревью (silent 401 loop), PEND-AUTH-004
+
+**Context:** Пользователь: «когда перезаходишь на сайт, он должен мгновенно подтянуть аккаунт, а не [показывать] нажимать на кнопку войти». При каждом свежем заходе ключ устройства живёт только в памяти (INV-SEC-019, non-extractable) → нужен register + refresh. Refresh на gateway обложен device-proof (SEC-013 DoD). `_refreshSessionCore` использовал сырой fetch: если транзиентная регистрация устройства на свежем заходе не успела/упала (503, CSRF race), refresh возвращал `401 DEVICE_PROOF_REQUIRED` → classify → fatal → GUEST → редирект на страницу логина, хотя сессия жива.
+
+**Decision:** в `_refreshSessionCore` добавлен retry: при `401` с кодом `DEVICE_PROOF_REQUIRED`/`DEVICE_PROOF_INVALID` — `ensureAuthDeviceRegistered({force:true})`, пересборка proof-заголовков, повторный refresh один раз (аналог уже существующего 403-CSRF-retry). Живая сессия не выкидывается на логин из-за транзиентной проблемы привязки устройства.
+
+**Consequences:** повторный заход с валидной cookie-сессией восстанавливает аккаунт без экрана логина. Случай по-настоящему мёртвой сессии по-прежнему → GUEST (правильно).
+
+**Чтобы не повторилось:** любые привязки device-proof на критичных путях (refresh/verify) — с retry после форс-перерегистрации, не fatal с первого 401.
+
+---
+
+## 2026-08-14 — auth полный ревью (client+server) + load test: silent 401 loop устранён, logout-гигиена, verifyAccess
+
+**Status:** accepted (client 266 тестов PASS; gateway build/vet/test PASS; load test PASS — см. `reports/auth-capacity-20260814.md`)
+**Area:** auth | security | frontend | gateway
+**Related:** 2026-08-14 login-loop fix, PEND-AUTH-001, PEND-SEC-CAPACITY-001
+
+**Context:** Пользователь: «после обновления вылетаешь, по кругу гоняет; проверь нагрузку и весь код входа/выхода на клиенте и сервере». Нагрузочный прогон: hot path 578.6 RPS (p95 16.9ms, err 0%), proof_token 286.7 RPS, refresh 490.3 RPS — PASS. Полный ревью (два агента: gateway+auth-service+auth-core и frontend) выявил главный клиентский баг: пользователь «залогинен», но каждый API-вызов падает 401 до ~12 минут.
+
+**Root cause (silent 401 loop):** `SESSION_UNVERIFIED` от **refresh-эндпоинта** классифицировался как `recoverable` (refreshManager), а gateway выдаёт его при ротации только когда сессия реально мертва (revoke/password-change локально, reuse-детект съел старый токен). Результат: middleware ретраил refresh вечно, auth-lost не бродкастился, `refreshThenProfile` на soft revalidate держал `DEGRADED` с закэшированным user → `isAuthenticated`=true при полностью мёртвой сессии. Дополнительно recovery после fatal refresh упирался в 60s backoff → рефреш не доходил до сервера → тоже застревал в DEGRADED.
+
+**Decision:**
+1. **`SESSION_UNVERIFIED` на refresh-эндпоинте — fatal.** `refreshManager.classifyRefreshResult`: 401 с refresh-эндпоинта всегда fatal (проверка `status===401` перенесена выше флага `recoverable`); код убран из `RECOVERABLE_AUTH_CODES`; добавлен в `REAUTH_REQUIRED_REFRESH_CODES` (client.js) → `refreshSessionNowDetailed.reauthRequired=true`. Для обычных API-401 `SESSION_UNVERIFIED` остаётся recoverable (ретрай один раз) — контракт нетронут.
+2. **Confirmed reauth на soft revalidate → GUEST** (AuthContext `refreshThenProfile`): ветка soft+DEGRADED удалена; `isBackendReauthRequired` → `clearLocalSession` + GUEST. Ранее это держало юзера в вечном DEGRADED. Транзиентные сбои (503/AUTH_UNAVAILABLE/CSRF) по-прежнему → DEGRADED с кэшем (resilience-тесты сохраняют поведение).
+3. **Recovery сбрасывает backoff** (`ApiClient.resetRefreshBackoff` вызывается в onAuthLost до `rehydrateSession`) — иначе recovery упирался в 60s backoff и не делал реальный запрос.
+4. **Logout-гигиена:** `_clearLocalSession` сбрасывает refresh-таймеры/backoff, очищает стрим-кэши (`_hls/_direct/_lyricsSessionCache` + in-flight maps), инкрементит `_sessionEpoch`; успешный refresh после logout НЕ воскрешает `_hasSession` (epoch-guard в `_refreshSessionCore`). Удалён `_clearBrowserCaches` (удалял app-shell `static-*` кэш при каждом logout; медиа/API и так байпасят CacheStorage — см. sw.js `shouldBypass`).
+5. **`deviceProofRecovery`** дополнительно чистит `clearProofAccessToken()`.
+6. **Gateway `verifyAccess`:** claim `type` теперь обязателен и должен быть `"access"` (ранее токен без `type` проходил).
+7. **Multi-tab device-proof ping-pong — НЕ подтверждён:** каждый таб минтит свой `authDeviceId`+keypair (INV-SEC-019, key non-extractable, in-memory per-tab), сервер хранит PoP per-device → вкладки не инвалидируют друг друга. Рост device-записей при каждом fresh load — PEND.
+
+**Consequences:** мёртвая сессия → экран логина в секундах, а не через 12 мин тихого 401-loop. Легитимные транзиентные сбои не выкидывают юзера (DEGRADED с кэшем). Logout не воскрешается in-flight refresh'ем и не трогает app-shell кэш.
+
+**Чтобы не повторилось:** 401 от refresh-эндпоинта = «сессия не может быть повёрнута» — никогда не классифицировать как transient; подтверждённый reauth на revalidate — GUEST, не DEGRADED. Регрессионные тесты: `refreshManager.test.js`, `AuthContext.resilience.test.jsx` («confirmed reauth during soft revalidate…»), `client.login.test.js`.
+
+---
+
+## 2026-08-14 — frontend: login больше не падает из-за транзиентной ошибки device-binding (fix login loop)
+
+**Status:** accepted (regression-тесты PASS: `client.login.test.js` + существующие deviceProofRecovery/resilience/authDeviceCrypto)
+**Area:** auth | frontend
+**Related:** 2026-08-13 commit 972bb03 (полный ликвидирован не был — только при свежем keypair), PEND-AUTH-001
+
+**Context:** Пользователь: «после обновления иногда вылетает, пытаюсь войти и по кругу гоняет». Корень: `loginWithEmail/Telegram/registerWithEmail` вызывали `ensureAuthDeviceRegistered({required: true})` — при транзиентной ошибке register (CSRF race, 401 NO_SESSION после рестарта redis-auth, 503) метод **брасывал исключение и терял уже выполненный успешный login** (`finishInteractiveAuth` → `LOGIN_FAILED`, пользователь остаётся на форме → повторный ввод → снова фейл = «круг»). Фикс 972bb03 закрыл только случай пересоздаваемого keypair, но НЕ транзиентную ошибку register.
+
+**Decision:**
+1. Device-binding после login/register — **best-effort** (`_bestEffortBindDevice`, `required:false`, ошибка глотается). Самовосстановление уже существует: bootstrap `ensureDeviceProofReady`, deviceProofRecovery-мидлварь на 401 `DEVICE_PROOF_*`, `_refreshSessionCore` вызывает `ensureAuthDeviceRegistered`.
+2. `verifyToken` в `finishInteractiveAuth` НЕ менялся: profile-запрос без proof получает 401 `DEVICE_PROOF_REQUIRED` → `deviceProofRecovery` форс-регистрирует устройство и повторяет — то есть логин доходит до AUTHENTICATED, даже если привязка на странице логина не успела.
+3. Экспортирован `ApiClient` (named export) — только для юнит-тестов.
+
+**Consequences:** успешный логин НЕ может быть выброшен из-за транзиентной ошибки устройства. Реальный «infinite loop» при этом устраняется: единственный оставшийся фейл «Session not established» требует, чтобы и force-register, и profile-повтор оба упали (стойкая недоступность/блокировка CSRF) — тогда корректный LOGIN_FAILED на форме, без bounce.
+
+**Чтобы не повторилось:** НЕ возвращать `required: true` в login/register flow; любая обязательная привязка устройства — только после того, как логин зафиксирован (отдельный вызов, не блокирует успех). Регрессионный тест: `frontend/src/api/client.login.test.js`.
+
+---
+
+## 2026-08-13 — auth-core полный code-review pass: паритет-дыры закрыты, grace 6h, throttling register/telegram
+
+**Status:** accepted (code + tests PASS; review по всем 20 файлам + сверка с Node server.js и gateway-контрактом)
+**Area:** auth | security
+**Related:** hardening pass (2026-08-13), PEND-AUTH-001/002/003
+
+**Context:** Полный построчный ревью auth-core (каждый файл, сверка с Node `server.js`, gateway `http_routes.go`/`session_manager.go`, схемой `users`, Redis-ключами) выявил 4 расхождения и 2 усиления.
+
+**Decision:**
+1. **`throttleAuthIP` на register + telegram login** (паритет с Node `authLimiter` 10/15мин/IP, успехи не считаются). Ранее в auth-core register/telegram не имели IP-лимита → спам аккаунтов + email-энумерация через `EMAIL_TAKEN`. Login остаётся на своём dual-lockout (email+IP). Тест `TestThrottleAuthIPBlocksAfterMaxFailures` (miniredis).
+2. **Grace default 30m → 6h.** Безопасность не страдает: Refresh на gateway обложен device-proof (SEC-013 DoD #4; cookie-only/token-only → 401), значит reuse-401 достигают только легитимные мультитаб-гонки → увеличиваем окно, чтобы не выкидывать юзера, вернувшегося на старую вкладку. Узел «вылета» на границе grace до конца убирается PG SoT (PEND-AUTH-003).
+3. **`truncateRunes`** для `SanitizeUsername`/`SanitizeProfileField`/telegram username: Go `[:32]`/`[:64]` резал кириллицу по байтам → invalid UTF-8 в БД. Node `.slice()` — по UTF-16 code units.
+4. **`bustCache` регистронезависимо** (Node `toLowerCase()`).
+5. **Подтверждены (не менялось):** JSON-контракт exchange `{token,refreshToken,user}` и `{accessToken,refreshToken}` совпадает с gateway (проверен `http_routes.go:24`, `session_manager.go:134-135`, rotateOnce маппит 400/401→invalid, 2xx→OK); Redis DB=0 у Node и auth-core; мета-ключи сессии и JSON-поля байт-в-байт (userId/createdAt/lastSeenAt/ip/ua); кэши `auth:profile:{uid}`/`auth:is_admin:{uid}`; telegram username = sha256(seed).hex[0:16]; Node хранит имена только в encrypted metadata (first_name/last_name NULL — auth-core паритетно); `id` int4 → int64 scan ок (pgx).
+
+**Consequences:** `go build/vet/gofmt` чисто, `go test -race` PASS. На VPS ничего нового кроме уже известных steps из PEND-AUTH-001.
+
+**Чтобы не повторилось:** любые правки санфазы register/telegram верстать против Node `authLimiter`; не снижать grace без пересмотра device-proof гейта; строковый слайс по байтам в user-facing данных — запрещён (только руны).
+
+---
+
+## 2026-08-13 — auth-core hardening pass: durability («не вылетают») + client-IP trust + email race + audit
+
+**Status:** accepted (code + tests, VPS flip по PEND-AUTH-001)
+**Area:** auth | security | db-migrations
+
+**Context:** После code-review auth-core (2026-08-13) сформулированы требования: (1) пользователь **не должен вылетать** из системы после релизов/рестартов/долгого отсутствия; (2) **не полагаться на куки** — session validится серверно (sid) + device-proof PoP на gateway (SEC-013 уже закрыт); (3) задел под Telegram-код подтверждения. Найденные дыры: IP-троттл спуфился через первый `X-Forwarded-For`; регистрация email имела race (lookup→insert без UNIQUE → дубликаты под параллельными запросами); не было аудита login/refresh/reuse.
+
+**Decision:**
+1. **Client IP = `X-Real-IP` только.** nginx edge перезаписывает `X-Real-IP` реальным TCP-пиром (`proxy_set_header X-Real-IP $remote_addr`); левый элемент `XFF` клиент-контролируемый. `clientIP()` больше не читает `X-Forwarded-For` (fallback — socket peer после RealIP). Это чинит обход `auth:ip_fail` спуфингом (миграция с Node-паритета осознанная — Node читал первый XFF). Тесты `httpapi/server_test.go`.
+2. **Email race: UNIQUE на `users.email_hash`.** Миграция `db-migrations/migrations/000003_users_email_hash_unique.sql` (дедуп legacy-дублей → минимальный id выживает, остальным `email_hash=NULL`; они остаются доступны по plaintext email). `CreateUser` маппит `23505` → `ErrUserConflict` → 400 `EMAIL_TAKEN`.
+3. **Audit-стрим `auth:audit`** (Redis, RPUSH+LTRIM(-10000)+EXPIRE 7d, fire-and-forget): `register`, `login_fail`, `login_locked`, `login_ip_blocked`, `login_success`, `telegram_login_attempt/success`, `refresh_rotate`, `refresh_reuse`. Сырьё для risk-engine (`SECURE-008`) и расследования «почему выкинуло». Без секретов/токенов, только userId/emailHash/ip/ua.
+4. **Durability подтверждена и зафиксирована:** redis-auth в compose уже AOF (`appendonly yes`, `appendfsync everysec`) + named volume `redis-auth-data` + `noeviction` 512mb → рестарты/релизы сессии переживают. Refresh sliding: каждая ротация выпускает токен с полным TTL (default 365d, `REFRESH_JWT_EXPIRES_IN`). Единственный «вылет всех» — смена `JWT_SECRET`/`ENCRYPTION_KEY`: ротация только по запланированной миграции (gap зафиксирован в CONTEXT).
+5. **Telegram-код подтверждения** — НЕ реализован сейчас (по решению пользователя «добавим потом»), зафиксирован как `PEND-AUTH-002`.
+
+**Alternatives considered:** (1) доверять последнему `XFF` — rejected: после gateway-хопа Rightmost = nginx-container IP, клиент теряется (2-hop). (2) UNIQUE на `email` — rejected: legacy NULL/дубли. (3) Полный PG SoT для сессий сейчас — rejected: отдельный большой кусок (roadmap п.3), зафиксирован как `PEND-AUTH-003`, не блокирует flip.
+
+**Consequences:** Код: `go build/vet` чисто, `go test -race` PASS (включая clientIP-тесты). На VPS: **миграция 000003 до флипа**, стабильный `AUTH_DECOY_SALT`, `JWT_SECRET` не трогать. Потом: Telegram-код (PEND-AUTH-002), PG SoT + epoch revoke (PEND-AUTH-003).
+
+**Чтобы не повторилось:** не доверять client-заголовкам для rate-limit без подтверждения edge-оверхеда (nginx); любые изменения схемы `users` — только через `db-migrations` runner (checksum, идемпотентно); ротация `JWT_SECRET`/`ENCRYPTION_KEY` возможна только с планом миграции сессий.
+
+---
+
+## 2026-08-13 — auth-core (Go): Node auth-service identity endpoints на Go с opaque refresh
+
+**Status:** accepted (phase 1 — scaffold + drop-in, e2e на VPS впереди)
+**Area:** auth | go | gateway | security
+**Related:** AUTH_TARGET_ARCHITECTURE.md (accepted 2026-06-04), AUTH_ROLLOUT_GATES.md, SECURITY_ROADMAP.md
+
+**Context:** Node auth-service — единственный hot-path identity сервис на event loop; логин/refresh/verify/profile это его горячие эндпоинты. Цель миграции (по решению пользователя): «перехожу на Go, потому что он многопоточный, и нужно сделать систему легче и ещё безопаснее». Три прежних решения приняты: (1) **отдельный auth-core сервис** (не слияние в gateway), (2) refresh-токены **opaque** (свойства чьи — Redis), (3) двойной sid (Node `auth:sid` + gateway `mp_sid`) упрощается единым sid в более поздней фазе. В phase 1 refresh остаётся HS256 JWT с тем же контрактом, чтобы gateway `handleAuthExchange`/`handleRefresh` не менялись; переход на полноценный opaque-токен — phase 2.
+
+**Decision:**
+1. **Новый сервис `backend/auth-core` (Go 1.22+, chi/pgx/go-redis/jwt):** реплика identity-эндпоинтов Node auth-service — `POST /api/auth/email/register|login`, `POST /api/auth/telegram/login`, `POST /api/auth/refresh`, `POST /api/verify`, `GET /api/profile` (+`/api/auth/profile`). Byte-совместимость обязательна: PBKDF2-SHA512 (600k/legacy 100k), AES-256-GCM encryptData v2 (`{v,encrypted,iv,authTag}`, 16-byte IV, версия-специфичные iterations), HS256 JWT claims `{type,userId,sid,jti,ts,isAdmin}` (iss/aud), Redis-ключи `auth:sid:{sid}`/`auth:refresh:{jti}`/`auth:grace:{jti}`/`auth:session:meta:*`/`auth:user_sids:*`, login lockout (`auth:login_lock:`/`auth:login_fail:`) + per-IP `auth:ip_fail:`, profile cache `auth:profile:{uid}`. Крипто-тесты сверены с Node-векторами.
+2. **Прямой Postgres, без database-service:** auth-core читает/пишет `users` напрямую (прецедент — security-service `store/postgres.go`). Убирает лишний хоп `auth-service → database-service`; `isAuthService()` в `database-service/routes/users.js` не меняется (auth-core не претендует на него).
+3. **Refresh-ротация с grace/reuse** — та же семантика Node `rotateRefreshSession` (WATCH/MULTI, single jti per sid, grace 30m), переиспользует существующие Redis-ключи. Старые HS256 refresh-токены, выданные Node, продолжают работать после флипа (тот же JWT_SECRET и ключи) — юзеры не вылетают.
+4. **Gateway:** добавлен необязательный upstream `auth_legacy` (`AUTH_LEGACY_SERVICE_URL`, по умолчанию = `AUTH_SERVICE_URL`) + маршрут `auth_2fa` (prefix `/api/auth/2fa` → auth_legacy) перед `auth_passthrough`. Флип = `AUTH_SERVICE_URL=http://auth-core:3001` на api-gateway; MFA-роуты (Node `lib/mfa/httpRoutes.js`) продолжают идти на Node. artist-api-gateway остаётся на Node до phase 2.
+5. **docker-compose:** сервис `auth-core` (порт 3001 internal, healthcheck, direct PG + redis-auth). Node auth-service не удаляется — становится `auth_legacy` для MFA.
+
+**Alternatives considered:**
+- (1) Перенести всё сразу (включая MFA) — rejected: крупный diff и риск регрессии входа/MFA на проде без staging. MFA переносится в phase 2 (TOTP на Go, recovery уже в security-service).
+- (2) Оставить user CRUD через database-service — rejected: нужен `isAuthService`-апгрейд database-service для нового имени; direct PG проще и убирает хоп.
+- (3) Переписать refresh сразу в opaque — rejected: `gateway.handleRefresh`/`rotateOnce` жёстко ждут `{accessToken,refreshToken}`; opaque внедряется в phase 2 без смены HTTP-контракта.
+
+**Consequences:** Phase 1 — новый сервис, unit-тесты (PBKDF2/encrypt v2/Telegram HMAC/JWT/refresh-ротация с miniredis PASS), gateway-апстрим и compose добавлены без регрессии. **e2e на VPS (впереди):** build image → `AUTH_SERVICE_URL=http://auth-core:3001` + `AUTH_LEGACY_SERVICE_URL=http://auth-service:3001` → smoke register/login/refresh/verify/profile + MFA через auth_legacy. Финальная цель (SECURITY_ROADMAP): единый sid, opaque refresh, PoP — уже частично в gateway/security-service.
+
+**Чтобы не повторилось:** менять JWT/крипто-форматы или Redis-ключи только с миграцией и проверкой на старых токенах; не удалять Node auth-service до полного перевода MFA на Go; при флипе всегда задавать оба `AUTH_SERVICE_URL` и `AUTH_LEGACY_SERVICE_URL` (иначе MFA 502). См. `backend/auth-core/CONTEXT.md`.
+
+---
+
+
+
+**Status:** accepted
+**Area:** ios-app | go-api-gateway | frontend | social | player
+
+**Context:** В коммите 6ec9915 ("feat: auth errors, recommendations v2, streaming recovery, iOS handoff") из `gateway.yaml` был удалён маршрут `/api/social` (id: `social`, upstream database) и из `frontend/src/api/client.js` — методы `getSocialFeed`/`createSocialPost`/`likeSocialPost`/`unlikeSocialPost`/`deleteSocialPost` + кэш `socialFeedCache`. При этом `SocialPage.js` и его тесты продолжали вызывать эти методы, бэкенд `database-service/routes/social.js` полностью реализован, rate-limit профиль `social` в gateway остался. Это был **регресс без решения в DECISIONS**, а не осознанное отключение: веб `/social` фактически падал (`getSocialFeed is not a function`), а `/api/social/*` через gateway давал 404.
+
+**Decision:**
+1. **Восстановить social stack как есть:** маршрут `social` в `gateway.yaml` (prefix `/api/social`, upstream database, class unsafe, require_user + require_service_token, rate_limit social, timeout 10s — ровно как в 847faa6); методы + `socialFeedCache` в `frontend/src/api/client.js`. Мотивация: бэкенд, веб-UI и тесты живы и хотят этот контракт; удаление делало веб `/social` сломанным без рациональной замены.
+2. **iOS parity, Фаза A:** `SocialService` получил `createPost`/`deletePost` и пагинацию (`cursor`/`after`); `SocialView` — composer (title 120 / body 2000), «Показать ещё» по `page.nextCursor`, delete-меню при `viewer.canManage`, авто-рефреш 45с (`after=<topId>`) при foreground.
+3. **iOS parity, плеер (web `MobilePlayerModal`):** dislike (`dislikeTrack`/`undislikeTrack`, `dislikedTrackIds` в coordinator, префетч при старте сессии), repeat off/one/all (логика в `PlaybackCoordinator.repeatMode` + `advanceAfterEnd`), lyrics sheet (EBAP: `lyrics.keyB64` из `/session` → GET `/api/ebap-hls/v1/lyrics.bin` с `x-lyrics-key` → AES-GCM decrypt, mirror web `decryptEbapLyricsPayload`), queue overlay, more-menu.
+4. **iOS parity, Фаза B:** новый `ArtistPageView` (`GET /api/artists/:name/meta` + `/tracks`, тап из поиска и popular artists), `MoodRadarPageView` (`/api/recommendations/mood-radar` + `/mood-tracks/:mood`), profile tabs **Понравилось / Скрытые** (Плейлисты — TODO в фазу C).
+
+**Alternatives considered:** (1) Не чинить social, заблокировать кнопку под флагом — rejected: это ломало и без того работавший веб и тесты. (2) Хранить repeat-логику в UI — rejected: `INV-ARCH-001` (единый control path через coordinator). (3) Lyrics через отдельный API минуя EBAP — rejected: adapter уже отдаёт `lyrics.bin` и ключ через `/session`; web-контракт не расширять.
+
+**Consequences:** Веб `/social` снова рабочий; iOS покрывает соцсеть, плеерные кнопки, artist и mood-radar. Gateway-маршруты для всех фаз проверены и присутствуют (`/api/social`, `/api/lyrics`, `/api/party`, `/api/subscriptions`, `/api/user`, `/api/likes`, `/api/dislikes`, `/api/recommendations`, `/api/artists`, `/api/albums`). Verify: gateway `go test ./...` PASS, frontend `npm run build` + SocialPage tests PASS, iOS `xcodebuild build` + 94/94 тестов PASS. Плейлисты-вкладка в профиле и subscription-экран остаются в фазу C (см. `docs/IOS_PARITY_TZ.md`).
+
+**Чтобы не повторилось:** не удалять API-контракты партиями без сопутствующего удаления потребителей и записи в `DECISIONS.md`; любую «оптимистичную» правку client.js сверять с тестами страниц.
+
+---
+
 ## 2026-08-13 — Numeric track ID никогда не канонический: public_id во всех API-ответах + nginx 301
 
 **Status:** accepted

@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 const mockApiClient = {
@@ -9,10 +9,12 @@ const mockApiClient = {
     clearLocalSession: jest.fn(),
     clearAuthLostState: jest.fn(),
     onAuthLost: jest.fn(),
+    resetRefreshBackoff: jest.fn(),
     logout: jest.fn(),
 };
 
 let mockAuthEventHandler = null;
+let mockAuthLostHandler = null;
 const mockBroadcastAuthEvent = jest.fn();
 const mockRedirectToAuth = jest.fn();
 
@@ -55,7 +57,11 @@ describe('AuthContext resilience', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         mockAuthEventHandler = null;
-        mockApiClient.onAuthLost.mockReturnValue(() => undefined);
+        mockAuthLostHandler = null;
+        mockApiClient.onAuthLost.mockImplementation((cb) => {
+            mockAuthLostHandler = cb;
+            return () => undefined;
+        });
         mockApiClient.getUser.mockReturnValue({ id: 'user-1', username: 'cached' });
     });
 
@@ -110,6 +116,32 @@ describe('AuthContext resilience', () => {
         expect(screen.getByTestId('authenticated')).toHaveTextContent('false');
         expect(mockApiClient.clearLocalSession).toHaveBeenCalled();
         expect(mockRedirectToAuth).not.toHaveBeenCalled();
+    });
+
+    it('confirmed reauth during soft revalidate (auth-lost recovery) escalates to guest instead of looping in degraded', async () => {
+        mockApiClient.verifyToken.mockResolvedValue({ user: { id: 'user-1', username: 'live' } });
+        mockApiClient.refreshSessionNowDetailed.mockResolvedValue({ ok: true, status: 204, state: 'ok' });
+
+        const { AuthProvider, useAuth } = await loadAuthContext();
+        render(
+            <AuthProvider>
+                <Probe useAuth={useAuth} />
+            </AuthProvider>,
+        );
+
+        await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('authenticated'));
+
+        mockApiClient.refreshSessionNowDetailed.mockResolvedValue({ ok: false, status: 401, code: 'SESSION_UNVERIFIED', state: 'SESSION_UNVERIFIED', recoverable: false, reauthRequired: true });
+
+        expect(typeof mockAuthLostHandler).toBe('function');
+        await act(async () => {
+            await mockAuthLostHandler();
+        });
+
+        await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('guest'));
+        expect(screen.getByTestId('authenticated')).toHaveTextContent('false');
+        expect(mockApiClient.clearLocalSession).toHaveBeenCalled();
+        expect(mockApiClient.resetRefreshBackoff).toHaveBeenCalled();
     });
 
     it('revalidates cross-tab session lost events without local logout cascade', async () => {

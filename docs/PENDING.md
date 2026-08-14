@@ -11,6 +11,84 @@
 
 ---
 
+### PEND-AUTH-001 — auth-core (Go): VPS e2e flip + phase 2 (opaque refresh, MFA, artist gateway, k8s)
+
+**Priority:** high
+**Status:** open
+
+**Context:** Phase 1 миграции Node auth-service → `backend/auth-core` (Go) реализован и протестирован unit-тестами (крипто-векторы, refresh-ротация с grace, gateway `auth_legacy` upstream, compose-сервис добавлен). Node auth-service **не удалён**, а обёрнут в `auth_legacy` для MFA-роутов. Харденинг 2026-08-13 (см. `DECISIONS.md` "auth-core hardening pass"): clientIP доверяет только `X-Real-IP`, UNIQUE `users_email_hash_unique` (миграция `000003`) + `23505`→`EMAIL_TAKEN`, audit-стрим `auth:audit`. См. `DECISIONS.md` 2026-08-13, `backend/auth-core/CONTEXT.md`.
+
+**Что сделать (VPS e2e — cannot validate from repo):**
+1. **Применить миграцию `000003_users_email_hash_unique.sql`** (runner `db-migrations`) ДО флипа — иначе регистрация на auth-core сохраняет гонку.
+2. Собрать и развернуть auth-core image на VPS; логи: `POST /api/auth/email/login` идёт на auth-core, `/api/auth/2fa/*` — на Node (auth_legacy).
+3. Flip на api-gateway: `AUTH_SERVICE_URL=http://auth-core:3001` + `AUTH_LEGACY_SERVICE_URL=http://auth-service:3001` (обязательно оба). Smoke: register → login → refresh → verify → profile; повторный refresh до истечения grace даёт 401 reuse (есть в audit `auth:audit`), MFA-flow жив.
+4. Задать стабильный prod `AUTH_DECOY_SALT` (VPS env; ephemeral default — только локально/тесты).
+5. Проверить существующие пользователи (старые 100k-итерации) — rehash upgrade и legacy decrypt v1; проверить, что UNIQUE-дедуп не зацепил реальных дублей.
+6. Убедиться, что `JWT_SECRET`/`ENCRYPTION_KEY` НЕ меняются при деплое (иначе ВСЕ сессии умрут).
+
+**Готово в репо (2026-08-13 hardening, pre-VPS):**
+- clientIP: `X-Real-IP` (nginx-authoritative) вместо первого `X-Forwarded-For` → IP-троттл не спуфится (`httpapi/server_test.go`).
+- Миграция `000003_users_email_hash_unique.sql` + `CreateUser`→`23505`→400 `EMAIL_TAKEN`.
+- Audit: `auth:audit` (register/login_locked/login_fail/login_success/telegram_login_*/refresh_rotate/refresh_reuse) — fire-and-forget, LTRIM 10k, TTL 7d.
+- Durability подтверждена: redis-auth = AOF + named volume + `noeviction` — сессии переживают релиз/рестарт. Refresh sliding 365d.
+- Полный code-review pass (2026-08-13): register/telegram под `throttleAuthIP` (паритет Node `authLimiter`), grace 30m→6h (device-proof гейт на gateway позволяет), `truncateRunes` (кириллица не раскалывается), `bustCache` регистронезависимо. См. `DECISIONS.md` "auth-core полный code-review pass".
+
+**Phase 2 (после стабильного флипа):**
+- Opaque refresh-токены (свойства — только Redis), единый sid (gateway ↔ auth-core).
+- MFA (TOTP) на Go → полностью отключить Node auth-service и `auth_legacy`.
+- artist-api-gateway flip на auth-core; `k8s/configmap.yaml` `AUTH_SERVICE_URL: "http://auth-core"`; удаление Node auth-service из docker-compose и deployment.
+
+---
+
+### PEND-AUTH-002 — Telegram-код подтверждения (2FA/step-up через бота)
+
+**Priority:** medium
+**Status:** pending (user: «добавим потом»)
+
+**Что задумано:** после стабильного флипа — код подтверждения через Telegram-бота (аналог Telegram login-code) для: вход на новом устройстве, step-up на критичные действия (revoke-others, смена email/password, delete). Текущий MFA (TOTP) живёт в `security-service` (Go) + Node `lib/mfa/httpRoutes.js`; Telegram-код — отдельный второй фактор, не заменяет PoP (см. `SECURITY_ROADMAP.md`).
+
+**Что сделать:** в `security-service` (или auth-core): выдача одноразового кода через бота по `telegram_id`, Redis `auth:tg2fa:{userId}` TTL ~5m, verify + короткоживущий step-up токен; gateway — маршруты `/api/auth/tg2fa/*`. UI: модалка ввода кода. Интеграция с Telegram Bot API `sendMessage`.
+
+---
+
+### PEND-AUTH-003 — Postgres SoT для refresh-сессий (durability beyond Redis)
+
+**Priority:** high
+**Status:** pending (roadmap `SECURITY_ROADMAP.md` п.3 — Postgres SoT)
+
+**Контекст:** сессии целиком в Redis (`auth:sid:`, `auth:refresh:`, `grace`). AOF+volume+noeviction покрывают рестарты, НО: (а) форс-смена пароля/новый деплой с `-v` сносит все сессии (все вылетают), (б) нет epoch revoke (мгновенный масс-ривок), (в) нет источника правды для `revoke-all` и риск-аналитики. Цель — «не вылетает после обновления/долгого незахода» в терминах уровня крупных сервисов.
+
+**Что сделать:** таблицы `auth_sessions`, `auth_devices`, `refresh_tokens`, `security_events` (схема по `AUTH_TARGET_ARCHITECTURE.md`); refresh-бидинг читается из PG c Redis-кэшем (grace-семантика сохраняется); `sessionEpoch`/`deviceEpoch` + Redis pub/sub для мгновенного revoke. После этого — PoP hot path (`PEND-SEC-013`) и `revoke-all`.
+
+---
+
+### PEND-AUTH-004 — Полный auth-ревью 2026-08-14: остаток findings после фиксов (client+server)
+
+**Priority:** high
+**Status:** open (часть исправлена 2026-08-14 — см. `DECISIONS.md` "auth полный ревью (client+server)"; ниже — НЕ исправленное, требует решений)
+
+**Исправлено 2026-08-14:** silent 401 loop (SESSION_UNVERIFIED с refresh → fatal + soft-reauth → GUEST + resetRefreshBackoff), logout-гигиена (эпоха refresh, сброс таймеров, чистка стрим-кэшей, удалён wipe app-shell CacheStorage), deviceProofRecovery чистит proof-токен, gateway `verifyAccess` требует `type=access`. Тесты: `refreshManager.test.js`, `AuthContext.resilience.test.jsx`, `client.login.test.js`, `deviceProofRecovery.test.js` (266 client tests PASS; gateway build/vet/test PASS). Load test локально: hot 578.6 RPS p95 16.9ms err 0% — `reports/auth-capacity-20260814.md`.
+
+**Server findings (gateway/auth-service/auth-core) — НЕ исправлены, на ревью человеку:**
+1. **H2 XFF/X-Real-IP spoof** (`http_routes.go:490-513 copyClientMetadataHeaders`): клиентский XFF/X-Real-IP пробрасывается в upstream как есть; на prod закрыто nginx (`proxy_set_header X-Real-IP $remote_addr`), но defense-in-depth: санитайзлер должен снимать их или gateway выставлять от своего пира; + лимит длины password/login (CPU-DoS на PBKDF2 600k при спуфнутом IP).
+2. **H3 logout↔refresh race** (`session_revoke.go`, `session_manager.go:386`): неатомарные Del/Set `mp:sess:{sid}` могут воскресить сессию после logout. Фикс: сериализовать по sid (singleflight), jti читать внутри атомарной операции.
+3. **M1 logout требует полный ECDSA proof** (`proof_access_token.go:49-67`): с потерянным device-ключом пользователь не может разлогиниться (401 DEVICE_PROOF_REQUIRED). Решение: разрешить logout без PoP (Origin+CSRF достаточно).
+4. **M2** транзиентный сбой локального `store.Set` после ротации = перманентный логаут (recovery только перечитывает Redis 5×) — использовать grace для восстановления.
+5. **M3** gateway `/api/profile` отдаёт устаревший `sess.User` снапшот с момента логина (username/mfaEnabled/isAdmin устаревают) — обновлять из refresh-ответа или проксировать на upstream.
+6. **M4** grace-окно 6h (auth-core) vs 30m (Node) + reuse не убивает grace-токены: многократный replay устаревшего jti до 6h. Сократить/сделать одноразовым.
+7. **M5** контракт ошибок Node↔auth-core↔gateway расходится (`code` то есть, то нет; 400/401 сливаются) — единый контракт до флипа.
+8. **M6** кэш `auth:profile:{uid}`/`auth:is_admin:{uid}` не инвалидируется при security-изменениях (до 600с) — SPA показывает неверный auth-flow.
+9. **M7** refresh/verify/profile на Node без rate-limit (globalLimiter skip internal IP) — явные лимиты.
+10. **M8** proof-access-токен (90с) не привязан к IP/path; sweep не покрывает gateway-логауты (пишут только security-service) — писать `auth:sids:revoked` при gateway logout.
+11. **M9 cross-portal cookie clear** (`cookies.go:72-73 SetSessionCookies→ClearSessionCookies` чистит alt `mp_sid_artists`/`mp_csrf_artists`): логин/refresh на listener стирает куку artist-портала → тихий разлогин в соседнем портале. **Нужно продуктовое решение** (одна сессия на браузер vs раздельные) — сейчас намеренно не менялось.
+
+**Client findings — НЕ исправлены:**
+12. **Multi-tab device registration growth:** каждый fresh load минтит новый `authDeviceId`+keypair (INV-SEC-019: non-extractable key, in-memory per-tab) → при каждом обновлении страницы сервер получает новый device-запись; старые не чистятся. Не баг входа (ping-pong не подтверждён — сервер хранит PoP per-device), но ресурсный рост + длинный список устройств. Нужен GC/смержение.
+13. **EmailAuth double-submit** — нет guard на повторный клик в `handleSubmit`; **ошибка формы не чистится при вводе**. UX-low.
+14. **verifyToken empty-profile** не чистит localStorage user (намеренно не трогается — иначе ломается DEGRADED-with-cache при транзиентном пустом профиле).
+
+---
+
 ### PEND-IOS-006 — Search: artist/album detail navigation (iOS)
 
 **Priority:** low
