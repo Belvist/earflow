@@ -61,12 +61,11 @@ func (m *SessionManager) deviceProofRequiredForRequest(r *http.Request) bool {
 	if !strings.HasPrefix(path, "/api") {
 		return false
 	}
-	if path == "/api/auth/refresh" || deviceProofSensitivePath(path) {
-		if IsValidSID(m.pickSIDFromRequest(r)) {
-			return true
-		}
-		authenticatedSID, _ := r.Context().Value(ctxSID).(string)
-		return IsValidSID(authenticatedSID)
+	// DeviceProofMiddleware runs OUTER to SessionAuthMiddleware (H-1: rotation
+	// only after proof), so ctxSID may not be set yet — resolve the sid from
+	// cookies directly. This keeps PoP enforced for all authenticated /api paths.
+	if IsValidSID(m.pickSIDFromRequest(r)) {
+		return true
 	}
 	authenticatedSID, _ := r.Context().Value(ctxSID).(string)
 	return IsValidSID(authenticatedSID)

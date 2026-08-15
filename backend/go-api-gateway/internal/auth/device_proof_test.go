@@ -116,7 +116,7 @@ func TestProfileRequiresDeviceProof(t *testing.T) {
 	req.Header.Set("Origin", "https://earflow.ru")
 	req.AddCookie(&http.Cookie{Name: "mp_sid", Value: sid})
 	w := httptest.NewRecorder()
-	handler := manager.SessionAuthMiddleware()(manager.DeviceProofMiddleware()(http.HandlerFunc(manager.handleProfile())))
+	handler := manager.DeviceProofMiddleware()(manager.SessionAuthMiddleware()(http.HandlerFunc(manager.handleProfile())))
 	handler.ServeHTTP(w, req)
 
 	if w.Code != http.StatusUnauthorized {

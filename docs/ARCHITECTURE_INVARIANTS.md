@@ -218,6 +218,14 @@ Gateway `RevokeSessionFull` MUST чистить не только `mp:sess:{gw-s
 - **Red flag:** новый `SET ... EX 0` / `Set(..., 0)` на auth-ключи; device/session-ключ, который не обновляет TTL при активности.
 - **Red flag:** писатель device/session-ключей мимо `AuthDeviceStore` (обход TTL).
 
+### INV-SEC-023 (2026-08-15) — Device-proof выполняется ДО refresh-ротации; PoP нельзя ослаблять
+
+Refresh-ротация (gateway `SessionAuthMiddleware`) не имеет права происходить раньше, чем пройден device-proof на этом же запросе. Порядок middleware на gateway: `DeviceProofMiddleware` НАРУЖУ, `SessionAuthMiddleware` внутри. Украденный `mp_sid` cookie без device-ключа → 401 (proof), refresh жертвы не ротируется/не сжигается. При `ALLOW_COOKIE_AUTH_WITHOUT_PROOF=1` (не-прод) ослабление — осознанный escape hatch, не default.
+
+- **Red flag:** снова `SessionAuthMiddleware(DeviceProofMiddleware(...))` (Session наружу) в server.go/тестах — это возвращает ротацию до proof (H-1).
+- **Red flag:** `deviceProofRequiredForRequest` без резолва sid из cookie (только `ctxSID`) — под флипом PoP перестанет применяться к не-sensitive `/api`-путям.
+- **Red flag:** PoP-требование смягчено/сделано условным в проде без аудита.
+
 ---
 
 ## Frontend

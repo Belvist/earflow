@@ -93,8 +93,8 @@ func StartPopE2EHarness(ctx context.Context) (*PopE2EHarness, error) {
 	r.Post("/e2e/seed-session", h.handleSeedSession)
 
 	r.Group(func(api chi.Router) {
-		api.Use(manager.SessionAuthMiddleware())
 		api.Use(manager.DeviceProofMiddleware())
+		api.Use(manager.SessionAuthMiddleware())
 		api.Use(manager.CSRFEnsureCookieMiddleware())
 		manager.MountRoutes(api)
 	})

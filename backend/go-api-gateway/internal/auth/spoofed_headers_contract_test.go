@@ -51,8 +51,8 @@ func TestSpoofedUserIDWithSessionCookieStillRequiresProof(t *testing.T) {
 
 	var downstreamUID string
 	chain := middleware.InternalHeaderSanitizer(
-		manager.SessionAuthMiddleware()(
-			manager.DeviceProofMiddleware()(
+		manager.DeviceProofMiddleware()(
+			manager.SessionAuthMiddleware()(
 				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					downstreamUID = r.Header.Get("X-User-Id")
 					w.WriteHeader(http.StatusOK)
@@ -94,8 +94,8 @@ func TestSpoofedUserIDWithoutSessionDoesNotAuthenticate(t *testing.T) {
 	manager := newProofTestManager(t, mr, auditAuthenticatedSID, "adev_audit1234567890123456", "unused", 901)
 
 	chain := middleware.InternalHeaderSanitizer(
-		manager.SessionAuthMiddleware()(
-			manager.DeviceProofMiddleware()(
+		manager.DeviceProofMiddleware()(
+			manager.SessionAuthMiddleware()(
 				http.HandlerFunc(manager.handleProfile()),
 			),
 		),

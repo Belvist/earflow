@@ -4,6 +4,26 @@
 
 ---
 
+## 2026-08-15 — Auth-аудит на live Go-стеке: C-1 XFF, H-1 PoP-до-ротации, auth-core гонка регистраций
+
+**Status:** accepted (gateway/security-service/auth-core build + `go test ./...` PASS; prod e2e зелёный через auth-core; SoT IP верифицирован)
+**Area:** auth | security | backend
+**Related:** PEND-AUTH-005, PEND-AUTH-001, INV-SEC-023, INV-SEC-021/022
+
+**Context:** Аудит «от и до» выявил, что на проде auth-core (Go) УЖЕ live (`AUTH_SERVICE_URL=http://auth-core:3001`, Node только `auth_legacy`/MFA — подтверждено `auth:audit`). Значит Node-специфичные находки (pbkdf2Sync event-loop, per-email lockout, register race в Node, resolveIsAdminFromDb) мертвы; актуальны gateway-фиксы + hardening auth-core. Отдельно: SoT-IP в PG был всегда NULL — security-service игнорировал доверенный IP гейтвея.
+
+**Decision:**
+1. **C-1 XFF-spoofing:** gateway `clientIPFromRequest` доверяет только `X-Real-IP` (nginx-authoritative) → последний XFF → RemoteAddr; `copyClientMetadataHeaders` переписывает XFF/X-Real-IP в одно доверенное значение перед форвардом upstream; лимитер берёт последний XFF. security-service `pickIP` использует доверенный `req.ip` гейтвея (был NULL/RemoteAddr-с-портом в SoT). Проверено на проде: спуф `X-Forwarded-For: 6.6.6.6` → в `auth_sessions.ip` реальный клиентский IP.
+2. **H-1 PoP до ротации:** порядок middleware перевёрнут — `DeviceProofMiddleware` НАРУЖУ, `SessionAuthMiddleware` внутри. Ротация refresh теперь недостижима без валидного device-proof (украденный cookie → 401, refresh жертвы не сжигается). `deviceProofRequiredForRequest` резолвит sid из cookie (не только ctxSID). `INV-SEC-023`.
+3. **auth-core:** миграция `007_users_email_hash_unique.sql` (UNIQUE `users.email_hash`) закрывает гонку регистраций одного email (`CreateUser` уже мапил 23505→EMAIL_TAKEN, но индекса не было). `PROFILE_CACHE_TTL_SECONDS` default 600→60 (кэш не инвалидируется при удалении/демоции юзера). CONTEXT исправлен: пула горутин PBKDF2 нет; путь миграции поправлен.
+4. **Grace 6h auth-core** (`AUTH_GRACE_TTL_SECONDS`) — сознательное решение (CONTEXT): украденный refresh бесполезен без device-ключа, grace защищает мультитаб-гонки. Не менялся.
+
+**Consequences:** SoT-мета сессий теперь хранит реальный IP клиента; украденные cookie не ротируют refresh; регистрации не гонятся на UNIQUE; кэш профиля возвращает устаревшие данные максимум 60с. Остаются H-2 (exp access), H-3 (CSRF), H-4 (proof-token bearer), M-* (см. PEND-AUTH-005).
+
+**Чтобы не повторилось:** PoP-требование и порядок DeviceProof→SessionAuth — контракт (`INV-SEC-023`), не менять без аудита. Trusted-client-IP — единственный X-Real-IP/последний XFF. Любая миграция auth-схемы — через `database-service/database/migrations/` с применением на проде.
+
+---
+
 ## 2026-08-15 — backend auth e2e: устранены ghost-сессии при logout и device-key TTL-leak
 
 **Status:** accepted (gateway build/vet PASS; `go test ./...` PASS; prod e2e `e2e_auth.js` зелёный: register→login→device-proof→profile→refresh 204→nonce-replay 403 `DEVICE_PROOF_REPLAY`→logout 204→после logout profile/refresh 401→rate-limit 429)

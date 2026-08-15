@@ -119,8 +119,12 @@ func NewServerFromEnv(ctx context.Context) (*http.Server, error) {
 	r.Use(middleware.SecurityHeaders)
 
 	r.Use(limiter.GlobalMiddleware())
-	r.Use(sessions.SessionAuthMiddleware())
+	// Order matters (H-1): DeviceProof runs BEFORE SessionAuth so refresh rotation
+	// in SessionAuthMiddleware only happens after a valid device proof — a stolen
+	// cookie alone can no longer burn/rotate the victim's refresh token (it fails
+	// proof first with 401).
 	r.Use(sessions.DeviceProofMiddleware())
+	r.Use(sessions.SessionAuthMiddleware())
 	r.Use(observability.Middleware())
 	r.Use(limiter.UserMiddleware())
 	r.Use(sessions.CSRFEnsureCookieMiddleware())
