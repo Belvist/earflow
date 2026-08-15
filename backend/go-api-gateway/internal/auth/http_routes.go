@@ -52,13 +52,22 @@ func (m *SessionManager) MountRoutes(r chi.Router) {
 	r.Post("/api/auth/email/register", m.handleEmailRegister())
 	r.Post("/api/auth/telegram/login", m.handleTelegramLogin())
 	r.Get("/api/auth/csrf", m.handleCSRFCookie())
-	r.Post("/api/auth/refresh", m.handleRefresh())
-	r.Post("/api/auth/logout", m.handleLogout())
-	r.Post("/api/auth/device/register", m.handleDeviceRegister())
+	// H-3: sensitive local auth POSTs get full double-submit CSRF (Origin +
+	// cookie/header + HMAC), not just Origin. Pre-session routes above are
+	// excluded — they have no csrf cookie yet. Native flows are non-browser
+	// (no CSRF surface) and stay on EnforceOrigin.
+	r.Group(func(g chi.Router) {
+		g.Use(m.CSRFProtectionMiddleware())
+		g.Post("/api/auth/refresh", m.handleRefresh())
+		g.Post("/api/auth/logout", m.handleLogout())
+		g.Post("/api/auth/proof/token", m.handleProofToken())
+		g.Post("/api/auth/stream-ticket", m.handleStreamTicket())
+		// device binding is a high-value CSRF target (attacker binds their own
+		// device key to the victim's session and passes PoP), so it gets CSRF too.
+		g.Post("/api/auth/device/register", m.handleDeviceRegister())
+	})
 	r.Get("/api/auth/native/finalize", m.handleNativeFinalize())
 	r.Post("/api/auth/native/exchange", m.handleNativeExchange())
-	r.Post("/api/auth/proof/token", m.handleProofToken())
-	r.Post("/api/auth/stream-ticket", m.handleStreamTicket())
 	r.Post("/api/log/error", m.handleClientErrorLog())
 	r.Get("/api/profile", m.handleProfile())
 	r.Get("/api/auth/profile", m.handleProfile())

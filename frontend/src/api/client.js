@@ -991,7 +991,7 @@ class ApiClient {
     const { localOnly = false } = options || {};
     if (!localOnly) {
       try {
-        await this.request('/api/auth/logout', { method: 'POST', skipAuth: true, skipCsrf: true });
+        await this.request('/api/auth/logout', { method: 'POST', skipAuth: true });
       } catch {
         // ignore
       }

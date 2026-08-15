@@ -541,20 +541,15 @@ func (m *SessionManager) CSRFEnsureCookieMiddleware() func(http.Handler) http.Ha
 	}
 }
 
+// CSRFProtectionMiddleware enforces double-submit CSRF (Origin + cookie/header
+// match + HMAC) on unsafe methods. Mounted on sensitive LOCAL auth POSTs
+// (refresh/logout/proof-token/stream-ticket — see MountRoutes). Pre-session
+// routes (login/register/telegram) must NOT pass through it: they have no
+// session/csrf cookie yet and rely on EnforceOrigin only.
 func (m *SessionManager) CSRFProtectionMiddleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if isSafeMethod(r.Method) {
-				next.ServeHTTP(w, r)
-				return
-			}
-			path := r.URL.Path
-			if path == "/health" || path == "/metrics" {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			if path == "/api/auth/refresh" || path == "/api/auth/logout" {
 				next.ServeHTTP(w, r)
 				return
 			}
