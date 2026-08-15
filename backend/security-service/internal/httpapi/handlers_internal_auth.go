@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"net"
 	"net/http"
 	"strings"
 
@@ -63,7 +64,7 @@ func internalSessionUpsertHandler(d Deps) http.HandlerFunc {
 		}
 		if err := d.AuthSoT.PG.UpsertSession(r.Context(), authpg.SessionUpsertParams{
 			SID: req.SID, UserID: req.UserID, RefreshJTI: req.RefreshJTI,
-			IP: clientIP(r), UserAgent: pickUA(req.UserAgent, r),
+			IP: pickIP(req.IP, r), UserAgent: pickUA(req.UserAgent, r),
 		}); err != nil {
 			d.Logger.Warn("internal session upsert failed", "err", err, "sid", req.SID)
 			writeError(w, http.StatusServiceUnavailable, "PG_WRITE_FAILED", "Session SoT write failed")
@@ -150,12 +151,28 @@ func internalSessionRevokeHandler(d Deps) http.HandlerFunc {
 	}
 }
 
+// pickIP prefers the gateway-resolved client IP (already trusted: X-Real-IP /
+// last XFF / RemoteAddr) over recomputing one here; falls back to a locally
+// resolved address only when the explicit value is absent or not a valid IP.
+func pickIP(explicit string, r *http.Request) string {
+	if ip := strings.TrimSpace(explicit); net.ParseIP(ip) != nil {
+		return ip
+	}
+	return clientIP(r)
+}
+
+// clientIP resolves the immediate peer; used only as a fallback when the
+// gateway did not supply an explicit client IP. The first XFF entry is
+// client-controlled and never trusted.
 func clientIP(r *http.Request) string {
 	if xff := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); xff != "" {
-		if i := strings.Index(xff, ","); i > 0 {
-			return strings.TrimSpace(xff[:i])
+		parts := strings.Split(xff, ",")
+		if last := strings.TrimSpace(parts[len(parts)-1]); net.ParseIP(last) != nil {
+			return last
 		}
-		return xff
+	}
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return strings.TrimSpace(host)
 	}
 	return strings.TrimSpace(r.RemoteAddr)
 }
