@@ -208,8 +208,8 @@ Redis Pub/Sub revoke events are **best-effort**. Every consumer (gateway, device
 
 Gateway `RevokeSessionFull` MUST чистить не только `mp:sess:{gw-sid}`, но и auth-service ключи, адресованные node-sid/node-jti из claims refresh-токена: `auth:sid:{node-sid}`, `auth:session:meta:{node-sid}`, `auth:stepup:{node-sid}`, `auth:refresh:{node-jti}`, `auth:grace:{node-jti}`, `SRem auth:user_sids:{uid}` (`revokeNodeSession`). Иначе logout оставляет ghost-сессию живой до 365d TTL (подтверждено на проде).
 
-- **Реализация:** `SessionManager.RevokeSessionFull` вызывает `nodeSessionClaims` (чтение `mp:sess` ДО удаления) + `revokeNodeSession`; то же в NATS/pubsub subscriber. Все новые revoke-пути обязаны идти через `SessionManager.RevokeSessionFull`.
-- **Red flag:** прямой вызов package-level `RevokeSessionFull(ctx, rdb, prefix, sid, ...)` без последующей чистки node-ключей; revoke-путь, который не читает refresh-токен из `mp:sess` до его удаления.
+- **Реализация:** `SessionManager.RevokeSessionFull` вызывает `nodeSessionClaims` (чтение `mp:sess` ДО удаления) + `revokeNodeSession`; то же в NATS/pubsub subscriber. Все новые revoke-пути обязаны идти через `SessionManager.RevokeSessionFull`. Извлечение claims — строго ДО любых downstream-ревоков, которые удаляют `mp:sess` (при `AUTH_PG_SOT_MODE=dual_write` security-service revoke удаляет `mp:sess` раньше локального — иначе ghost-сессия выживает, см. DECISIONS 2026-08-15).
+- **Red flag:** прямой вызов package-level `RevokeSessionFull(ctx, rdb, prefix, sid, ...)` без последующей чистки node-ключей; revoke-путь, который не читает refresh-токен из `mp:sess` до его удаления; чтение `mp:sess` после sot/security-service revoke.
 
 ### INV-SEC-022 (2026-08-15) — Писатели Redis-ключей auth — с TTL, активные устройства обновляют его
 
