@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import styled, { keyframes } from 'styled-components';
 import { useNavigate, useParams } from 'react-router-dom';
-import { FaPlay, FaPlus, FaCheck, FaChevronLeft } from 'react-icons/fa';
+import { FaPlay, FaPlus, FaCheck, FaChevronLeft, FaShareAlt } from 'react-icons/fa';
 import apiClient from '../api/client';
 import { usePlayer } from '../context/PlayerContext';
 import useAuth from '../hooks/useAuth';
@@ -26,6 +26,7 @@ import {
   formatTrackDuration,
 } from './tracks/trackRowStyles';
 import { heroOverlayBackground } from './tracks/heroStyles';
+import TrackRowMenu from './tracks/TrackRowMenu';
 
 const Page = styled.div`
   min-height: 0;
@@ -500,6 +501,23 @@ export default function AlbumPage() {
     fetchAlbum();
   }, [artist, albumName, canonicalAlbumPublicId, isAuthenticated, navigate]);
 
+  const handleShareAlbum = useCallback(async () => {
+    const url = `${getCanonicalOrigin()}/album/${encodeURIComponent(canonicalAlbumPublicId || '')}`;
+    const title = displayAlbumName || 'Альбом';
+    if (navigator.share) {
+      try {
+        await navigator.share({ title, text: title, url });
+      } catch {
+      }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      window.prompt('Скопируйте ссылку:', url);
+    }
+  }, [canonicalAlbumPublicId, displayAlbumName]);
+
   const handlePlayAll = useCallback(() => {
     if (tracks.length === 0) return;
     player.playFromList(tracks, tracks[0].id, displayAlbumName || 'Альбом');
@@ -649,6 +667,9 @@ export default function AlbumPage() {
               <SecondaryButton onClick={handleSaveAlbum} title="Добавить в медиатеку" disabled={isSaved || isSaving} aria-disabled={isSaved || isSaving}>
                 {isSaved ? <FaCheck color="#32d74b" /> : <FaPlus />}
               </SecondaryButton>
+              <SecondaryButton onClick={handleShareAlbum} title="Поделиться альбомом" aria-label="Поделиться альбомом">
+                <FaShareAlt />
+              </SecondaryButton>
             </Actions>
           </ActionBar>
         </HeroContent>
@@ -690,6 +711,7 @@ export default function AlbumPage() {
                     )}
                   </TrackRowInfo>
                   <TrackRowDuration>{formatTrackDuration(track.duration)}</TrackRowDuration>
+                  <TrackRowMenu track={track} />
                 </TrackRow>
               );
             })}

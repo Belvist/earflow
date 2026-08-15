@@ -4,9 +4,7 @@ import styled from 'styled-components';
 const FooterWrapper = styled.footer`
   width: 100%;
   padding: 18px 16px calc(18px + env(safe-area-inset-bottom, 0px));
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(0, 0, 0, 0.92);
-  backdrop-filter: blur(12px);
+  background: transparent;
   position: relative;
   z-index: 1;
 `;

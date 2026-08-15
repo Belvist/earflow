@@ -14,6 +14,7 @@ import {
   TrackRowTitle,
   TrackRowSubtitle,
 } from './tracks/trackRowStyles';
+import TrackRowMenu from './tracks/TrackRowMenu';
 
 const Section = styled.section`
   padding: 22px 16px 0;
@@ -246,6 +247,7 @@ export default function ArtistTracksSection({
                 <TrackBadge>
                   {!isActive && <FaPlay size={10} />}
                 </TrackBadge>
+                <TrackRowMenu track={t} />
               </TrackRow>
             );
           })}

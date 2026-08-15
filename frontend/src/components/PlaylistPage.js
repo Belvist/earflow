@@ -31,6 +31,7 @@ import {
     TrackRowActionButton,
     formatTrackDuration,
 } from './tracks/trackRowStyles';
+import TrackRowMenu from './tracks/TrackRowMenu';
 
 const Page = styled.div`
   min-height: 0;
@@ -643,6 +644,7 @@ const PlaylistTrackRow = ({
                     <FaTimes />
                 </TrackRowActionButton>
             ) : null}
+            <TrackRowMenu track={track} />
         </TrackRow>
     );
 };

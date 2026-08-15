@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import styled from 'styled-components';
 import { FaChevronLeft, FaCheckCircle } from 'react-icons/fa';
 import CachedCoverImage, { CachedCoverImageBase } from '../CachedCoverImage';
+import { heroOverlayBackground } from '../tracks/heroStyles';
 
 const Wrapper = styled.div`
   position: relative;
@@ -36,9 +37,8 @@ const HeroImage = styled(CachedCoverImageBase)`
 const HeroOverlay = styled.div`
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(1300px 460px at 50% 12%, rgba(0,0,0,0.20) 0%, rgba(0,0,0,0.80) 68%, rgba(0,0,0,1) 100%),
-    linear-gradient(180deg, rgba(0,0,0,0.10) 0%, rgba(0,0,0,0.68) 55%, rgba(0,0,0,1) 100%);
+  pointer-events: none;
+  ${heroOverlayBackground}
 `;
 
 const Inner = styled.div`

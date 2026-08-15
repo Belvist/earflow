@@ -11,6 +11,7 @@ import {
   TrackRowSubtitle,
   TrackRowActionButton,
 } from "./tracks/trackRowStyles";
+import TrackRowMenu from "./tracks/TrackRowMenu";
 import {
   FaCog,
   FaHeart,
@@ -997,6 +998,7 @@ const ProfilePage = () => {
                       {activeTab === "liked" && <FaHeart />}
                       {activeTab === "hidden" && <FaTimes />}
                     </TrackBtn>
+                    <TrackRowMenu track={song} />
                   </Track>
                 ))}
               </Tracks>
