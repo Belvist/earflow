@@ -87,15 +87,53 @@ func startRevocationSweep(ctx context.Context, m *SessionManager) {
 	go func() {
 		defer ticker.Stop()
 		slog.Info("auth revocation sweep worker started", slog.String("interval", interval.String()))
+		// M-4: sync IMMEDIATELY on startup. After a restart the epoch floor and
+		// revoke marks are empty, so a token revoked during the outage would
+		// validate until the first tick (~30s). The immediate pass closes it.
+		m.reconcileRevocationsWithRedis(ctx)
+		ticks := 0
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
 				m.reconcileRevocationsWithRedis(ctx)
+				ticks++
+				if ticks%proofEpochGCEveryNTicks == 0 {
+					m.gcLocalAuthCaches()
+				}
 			}
 		}
 	}()
+}
+
+const (
+	// M-5: in-memory auth caches are bounded by activity window. Proof-epoch
+	// floors protect only tokens issued before a bump — those die with token
+	// TTL (≤60s) — so floors untouched for a day are dead weight. Revoked-sid
+	// marks protect only tokens issued before the revocation (expired quickly)
+	// AND the session key itself is already deleted by RevokeSessionFull; the
+	// sweep re-populates still-revoked sids every tick, so GC is safe.
+	proofEpochMaxAge        = 24 * time.Hour
+	revokeMarkMaxAge        = time.Hour
+	proofEpochGCEveryNTicks = 10 // ≈5min at the default 30s sweep interval
+)
+
+// gcLocalAuthCaches drops stale entries from the local auth caches (M-5).
+func (m *SessionManager) gcLocalAuthCaches() {
+	now := time.Now().UTC()
+	if m.proofEpochs != nil {
+		m.proofEpochs.gc(now, proofEpochMaxAge)
+	}
+	if m.revokeMarks == nil {
+		return
+	}
+	m.revokeMarks.Range(func(k, v any) bool {
+		if mark, ok := v.(localRevokeMark); ok && !mark.at.IsZero() && now.Sub(mark.at) > revokeMarkMaxAge {
+			m.revokeMarks.Delete(k)
+		}
+		return true
+	})
 }
 
 // revocationSweepInterval resolves to `AUTH_REVOCATION_SWEEP_INTERVAL` env;
@@ -126,8 +164,8 @@ func (m *SessionManager) reconcileRevocationsWithRedis(ctx context.Context) {
 	revoked, err := m.rdb.SMembers(ctxTimeout, "auth:sids:revoked").Result()
 	if err != nil {
 		slog.Warn("auth revocation sweep: Redis list failed",
-			 slog.String("key", "auth:sids:revoked"),
-		  slog.Any("err", err),)
+			slog.String("key", "auth:sids:revoked"),
+			slog.Any("err", err))
 		return
 	}
 	if len(revoked) == 0 {
@@ -155,6 +193,12 @@ func (m *SessionManager) reconcileRevocationsWithRedis(ctx context.Context) {
 			}
 			// Mark locally without writing to Redis (caller already knows).
 			m.markSessionLocallyRevoked(sid, epoch, "sweep")
+			// M-4: also bump the proof epoch floor, matching the live pub/sub
+			// handler. Without this a token issued at the old epoch would pass
+			// sessionEpochStale after a restart until the floor is raised.
+			if m.proofEpochs != nil {
+				m.proofEpochs.bumpSessionEpoch(sid, epoch)
+			}
 		}
 		count++
 	}

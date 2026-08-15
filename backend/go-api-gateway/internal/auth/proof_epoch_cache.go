@@ -3,11 +3,21 @@ package auth
 import (
 	"strings"
 	"sync"
+	"time"
 )
 
+// proofEpochEntry stores an epoch floor plus when it was last used, so stale
+// floors can be garbage-collected (M-5). A floor only matters for tokens
+// issued BEFORE the bump; those die with the token TTL (≤60s), so a floor
+// that goes untouched past maxAge is dead weight and safe to drop.
+type proofEpochEntry struct {
+	epoch int64
+	at    time.Time
+}
+
 type proofEpochCache struct {
-	sessions sync.Map // sid -> int64 session epoch floor
-	devices  sync.Map // authDeviceId -> int64 device epoch floor
+	sessions sync.Map // sid -> proofEpochEntry session epoch floor
+	devices  sync.Map // authDeviceId -> proofEpochEntry device epoch floor
 }
 
 func newProofEpochCache() *proofEpochCache {
@@ -22,19 +32,20 @@ func (c *proofEpochCache) bumpSessionEpoch(sid string, epoch int64) {
 	if sid == "" {
 		return
 	}
+	now := time.Now().UTC()
 	for {
 		prevAny, loaded := c.sessions.Load(sid)
 		if loaded {
-			prev, ok := prevAny.(int64)
-			if ok && prev >= epoch {
+			prev, ok := prevAny.(proofEpochEntry)
+			if ok && prev.epoch >= epoch {
 				return
 			}
 		}
 		if !loaded {
-			c.sessions.Store(sid, epoch)
+			c.sessions.Store(sid, proofEpochEntry{epoch: epoch, at: now})
 			return
 		}
-		if c.sessions.CompareAndSwap(sid, prevAny, epoch) {
+		if c.sessions.CompareAndSwap(sid, prevAny, proofEpochEntry{epoch: epoch, at: now}) {
 			return
 		}
 	}
@@ -48,19 +59,20 @@ func (c *proofEpochCache) bumpDeviceEpoch(authDeviceID string, epoch int64) {
 	if authDeviceID == "" {
 		return
 	}
+	now := time.Now().UTC()
 	for {
 		prevAny, loaded := c.devices.Load(authDeviceID)
 		if loaded {
-			prev, ok := prevAny.(int64)
-			if ok && prev >= epoch {
+			prev, ok := prevAny.(proofEpochEntry)
+			if ok && prev.epoch >= epoch {
 				return
 			}
 		}
 		if !loaded {
-			c.devices.Store(authDeviceID, epoch)
+			c.devices.Store(authDeviceID, proofEpochEntry{epoch: epoch, at: now})
 			return
 		}
-		if c.devices.CompareAndSwap(authDeviceID, prevAny, epoch) {
+		if c.devices.CompareAndSwap(authDeviceID, prevAny, proofEpochEntry{epoch: epoch, at: now}) {
 			return
 		}
 	}
@@ -74,12 +86,16 @@ func (c *proofEpochCache) snapshot(sid, authDeviceID string) (sessionEpoch, devi
 	authDeviceID = strings.TrimSpace(authDeviceID)
 	if sid != "" {
 		if v, ok := c.sessions.Load(sid); ok {
-			sessionEpoch, _ = v.(int64)
+			if e, ok := v.(proofEpochEntry); ok {
+				sessionEpoch = e.epoch
+			}
 		}
 	}
 	if authDeviceID != "" {
 		if v, ok := c.devices.Load(authDeviceID); ok {
-			deviceEpoch, _ = v.(int64)
+			if e, ok := v.(proofEpochEntry); ok {
+				deviceEpoch = e.epoch
+			}
 		}
 	}
 	return sessionEpoch, deviceEpoch
@@ -109,8 +125,8 @@ func (c *proofEpochCache) sessionEpochStale(sid string, tokenEpoch int64) bool {
 	if !ok {
 		return false
 	}
-	prev, ok := prevAny.(int64)
-	return ok && prev > tokenEpoch
+	prev, ok := prevAny.(proofEpochEntry)
+	return ok && prev.epoch > tokenEpoch
 }
 
 func (c *proofEpochCache) deviceEpochStale(authDeviceID string, tokenEpoch int64) bool {
@@ -125,6 +141,27 @@ func (c *proofEpochCache) deviceEpochStale(authDeviceID string, tokenEpoch int64
 	if !ok {
 		return false
 	}
-	prev, ok := prevAny.(int64)
-	return ok && prev > tokenEpoch
+	prev, ok := prevAny.(proofEpochEntry)
+	return ok && prev.epoch > tokenEpoch
+}
+
+// gc drops floors untouched for longer than maxAge (M-5). Floors only reject
+// tokens issued before the bump; those expire with the token TTL, so an
+// untouched floor past maxAge protects nothing.
+func (c *proofEpochCache) gc(now time.Time, maxAge time.Duration) {
+	if c == nil || maxAge <= 0 {
+		return
+	}
+	c.sessions.Range(func(k, v any) bool {
+		if e, ok := v.(proofEpochEntry); ok && now.Sub(e.at) > maxAge {
+			c.sessions.Delete(k)
+		}
+		return true
+	})
+	c.devices.Range(func(k, v any) bool {
+		if e, ok := v.(proofEpochEntry); ok && now.Sub(e.at) > maxAge {
+			c.devices.Delete(k)
+		}
+		return true
+	})
 }
