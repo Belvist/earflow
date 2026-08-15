@@ -564,7 +564,7 @@ services:
       REDIS_HOST: redis-auth
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-      PROFILE_CACHE_TTL_SECONDS: ${PROFILE_CACHE_TTL_SECONDS:-600}
+      PROFILE_CACHE_TTL_SECONDS: ${PROFILE_CACHE_TTL_SECONDS:-60}
     depends_on:
       database-service:
         condition: service_healthy
@@ -609,7 +609,7 @@ services:
       REDIS_HOST: redis-auth
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-      PROFILE_CACHE_TTL_SECONDS: ${PROFILE_CACHE_TTL_SECONDS:-600}
+      PROFILE_CACHE_TTL_SECONDS: ${PROFILE_CACHE_TTL_SECONDS:-60}
       AUTH_DECOY_SALT: ${AUTH_DECOY_SALT:-}
     depends_on:
       postgres:

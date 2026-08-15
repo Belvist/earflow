@@ -103,6 +103,18 @@
 1. **XFF-spoofing в гейтвее:** `clientIPFromRequest` теперь доверяет только `X-Real-IP` (nginx-authoritative) → последний XFF → RemoteAddr (НЕ первый XFF); `copyClientMetadataHeaders` переписывает `X-Forwarded-For`/`X-Real-IP` в одно доверенное значение перед форвардом upstream (отбрасывает инъекцию атакующего); gateway-лимитер также берёт последний XFF. Т.е. SoT/session-meta IP и upstream-rate-limit больше не отравляются клиентским XFF. Коммит `15fafa1` + тесты `client_ip_trust_test.go`. nginx продолжает ставить `X-Real-IP $remote_addr`.
 2. **Security-service игнорировал `req.IP` от гейтвея:** `internalSessionUpsertHandler` брал собственный `clientIP(r)` (XFF[0] + RemoteAddr с портом `172.18.0.4:52345`) вместо доверенного IP из тела → `parseOptionalInet` режектил → `auth_sessions.ip` всегда NULL. Теперь `pickIP` предпочитает явный IP гейтвея; fallback `clientIP` берёт последний XFF и срезает порт. Тесты `client_ip_trust_test.go` (security-service).
 
+**Аудит-коррекция 2026-08-15 (обнаружено на проде): auth-core (Go) УЖЕ live** — `AUTH_SERVICE_URL=http://auth-core:3001`, Node только `auth_legacy` (MFA). Значит: Node-специфичные M-пункты (M-1/M-2/M-7/M-8) мертвы, а H-5 относится к живому пути. Проверено по `auth:audit` (мои register/refresh идут через auth-core).
+
+**Закрыто 2026-08-15 (auth-core, live-путь):**
+3. **Миграция `users_email_hash_unique` отсутствовала в репо и в проде** (CONTEXT ссылался на несуществующий `db-migrations/migrations/000003_*`) → гонка регистраций одного email не закрыта. Создан `backend/database-service/database/migrations/007_users_email_hash_unique.sql` (CREATE UNIQUE INDEX IF NOT EXISTS users_email_hash_unique), применён на прод (дублей email_hash нет — проверено). `CreateUser` мапит 23505→EMAIL_TAKEN.
+4. **Profile-cache 600s без инвалидации** (`PROFILE_CACHE_TTL_SECONDS` default 600 → **60**) — кэш не чистится при удалении/демоции юзера, TTL сознательно уменьшен; default в `config.go` + compose.
+5. **CONTEXT.md врал про «пул горутин» для PBKDF2** — пула нет (pbkdf2.Key синхронно в горутине запроса); текст исправлен + путь миграции поправлен.
+
+**Подтверждено уже закрытым/принятым (проверка на проде):**
+6. **H-5b IP-троттл** — `clientIP` в auth-core доверяет только X-Real-IP (server_test.go), первый XFF не берётся. Закрыто hardening-pass 2026-08-13.
+7. **H-5c timing-oracle** — `burnDecoy` активен: `AUTH_DECOY_SALT` = 64-hex на проде (иначе burn не работает). Закрыто.
+8. **H-5a grace 6h** — НАМЕРЕННОЕ решение (CONTEXT): старый украденный refresh бесполезен без device-ключа, а grace защищает легитимные мультитаб-гонки. НЕ баг; при желании ужать → `AUTH_GRACE_TTL_SECONDS`.
+
 **HIGH — не исправлены, на ревью человеку:**
 2. **H-1 Ротация refresh ДО PoP-проверки** (`session_manager.go:360-362`): мидлварь ротирует refresh по одному украденному `mp_sid`, потом PoP → 401, но ротация уже сожгла токен жертвы (churn/DoS сессии). При `ALLOW_COOKIE_AUTH_WITHOUT_PROOF=1` — полный takeover по cookie. **Инвариант:** PoP нельзя ослаблять. Фикс: не ротировать до успешной PoP-проверки (двинуть rotate после device-proof).
 3. **H-2 Access-токен без требования `exp`** (`session_manager.go:700-721`): `jwt.NewParser(WithValidMethods)` без `WithExpirationRequired`/`WithLeeway`; Node всегда ставит `exp`, но defense-in-depth требует принудительно.

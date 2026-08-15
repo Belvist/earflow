@@ -129,7 +129,7 @@ func Load() (Config, error) {
 		Auth: AuthConfig{
 			AccessJWTExpire:           getDurationRaw("ACCESS_JWT_EXPIRES_IN", "15m", 15*time.Minute),
 			RefreshJWTExpire:          getDurationRaw("REFRESH_JWT_EXPIRES_IN", "365d", 365*24*time.Hour),
-			ProfileCacheTTL:           getDurationSeconds("PROFILE_CACHE_TTL_SECONDS", 600),
+			ProfileCacheTTL:           getDurationSeconds("PROFILE_CACHE_TTL_SECONDS", 60),
 			AdminFlagCacheTTL:         getDurationSeconds("ADMIN_FLAG_CACHE_TTL_SECONDS", 30),
 			PbkdfIterations:           clampInt(getInt("AUTH_PBKDF_ITERATIONS", 600000), 10000, 2000000),
 			PbkdfIterationsLegacy:     clampInt(getInt("AUTH_PBKDF_ITERATIONS_LEGACY", 100000), 10000, 2000000),

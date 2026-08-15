@@ -58,8 +58,9 @@ Postgres `users` — прямой доступ (без database-service), как
   AES-256-GCM encryptData v2 (`{v,encrypted,iv,authTag}`, 16-byte IV),
   HS256 JWT claims `{type,userId,sid,jti,ts,isAdmin}` (iss/aud), refresh-ротация
   с WATCH/MULTI и grace-окном. Не менять форматы без миграции.
-- PBKDF2 600k — дорого; в Go выполняется в пуле горутин, `http.Server` на
-  ReadHeaderTimeout защищает от тупняка. `HandlerTimeout` завышен (15s) ради хеширования.
+- PBKDF2 600k — дорого; в Go каждый request выполняется в своей горутине, так что
+  блокировка хеширования не останавливает сервер как Node event loop. `HandlerTimeout`
+  завышен (15s) ради хеширования. Отдельного пула горутин для PBKDF2 НЕТ — не утверждать обратного.
 - Email lockout: `auth:login_lock:`/`auth:login_fail:` + per-IP `auth:ip_fail:`
   (аналог Node `authLimiter`, но без счётчика успешных). Паритет с Node
   `authLimiter` (10/15мин/IP, success не считается) — также на **register и
@@ -79,8 +80,12 @@ Postgres `users` — прямой доступ (без database-service), как
 - Троттл/сессии: пользовательская строка обрезается по **рунам** (не байтам) —
   `truncateRunes` (`SanitizeUsername`/`SanitizeProfileField`/telegram), кириллица не
   раскалывается (Node `.slice()` — по UTF-16 code units).
-- Регистрация требует UNIQUE-индекс `users_email_hash_unique` (`db-migrations/migrations/000003_*`).
+- Регистрация требует UNIQUE-индекс `users_email_hash_unique`
+  (`database-service/database/migrations/007_users_email_hash_unique.sql`, применяется
+  вручную, как `scripts/rollout-auth-pg-sot.sh migrate`).
   `CreateUser` маппит `23505` → `EMAIL_TAKEN` (закрывает гонку двух параллельных регистраций).
+- Профиль: `PROFILE_CACHE_TTL_SECONDS` default **60** (не 600) — кэш не инвалидируется при
+  удалении/демоции юзера, поэтому TTL сознательно мал (см. `PEND-AUTH-005`).
 - Долговечность сессий: **не полагаемся на то, что Redis не рестартовал** — redis-auth
   в compose уже AOF + named volume + `noeviction`; рестарты обновлений сессии переживают.
   Реальный риск выброса всех — смена `JWT_SECRET`/`ENCRYPTION_KEY` (ротация только по
