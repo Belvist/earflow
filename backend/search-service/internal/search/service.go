@@ -352,6 +352,7 @@ func (s *Service) dbSearchOne(ctx context.Context, query string, limit, offset i
 	const sqlText = `
 WITH docs AS (
 SELECT id::bigint,
+       COALESCE(public_id, '') AS public_id,
        COALESCE(title, '') AS title,
        COALESCE(artist, '') AS artist,
        COALESCE(album, '') AS album,
@@ -368,6 +369,7 @@ SELECT id::bigint,
  WHERE COALESCE(is_available, true) = true
 )
 SELECT id,
+       public_id,
        title,
        artist,
        album,
@@ -427,8 +429,13 @@ SELECT id,
 		var genre string
 		var year int
 		var cover string
-		if err := rows.Scan(&t.ID, &t.Title, &t.Artist, &t.Album, &duration, &genre, &year, &cover, &t.HasEbap, &t.PlayCount, &t.Popularity); err != nil {
+		var publicID string
+		if err := rows.Scan(&t.ID, &publicID, &t.Title, &t.Artist, &t.Album, &duration, &genre, &year, &cover, &t.HasEbap, &t.PlayCount, &t.Popularity); err != nil {
 			return out, err
+		}
+		if publicID != "" {
+			v := strings.ToLower(publicID)
+			t.PublicID = &v
 		}
 		if duration > 0 {
 			v := duration

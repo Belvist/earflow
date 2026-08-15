@@ -18,8 +18,9 @@ type Response struct {
 }
 
 type Track struct {
-	ID         int64  `json:"id"`
-	Title      string `json:"title"`
+	ID         int64   `json:"id"`
+	PublicID   *string `json:"public_id,omitempty"`
+	Title      string  `json:"title"`
 	Artist     string `json:"artist"`
 	Album      string `json:"album"`
 	Duration   *int   `json:"duration"`
