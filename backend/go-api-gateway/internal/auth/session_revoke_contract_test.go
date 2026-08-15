@@ -339,6 +339,68 @@ func TestContractLogoutCleansNodeSessionKeys(t *testing.T) {
 	}
 }
 
+// Prod runs AUTH_PG_SOT_MODE=dual_write: security-service revoke deletes mp:sess
+// BEFORE the gateway local revoke. Node claims must be extracted before that,
+// otherwise the auth-service session keys survive logout (ghost session).
+func TestContractLogoutCleansNodeSessionKeysWhenSotDeletesSessFirst(t *testing.T) {
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mr.Close()
+
+	secret := "test-secret-test-secret-test-secret-32"
+	gatewaySID := "sid_sot_node_sess_1234567890"
+	jti := "jti-gateway-sot"
+	userID := int64(12)
+	nodeSID := "node-sid-sot123"
+	nodeJTI := "node-jti-sot123"
+
+	payload := map[string]any{"type": "refresh", "userId": userID, "sid": nodeSID, "jti": nodeJTI}
+	raw, _ := json.Marshal(payload)
+	refreshToken := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9." + base64.RawURLEncoding.EncodeToString(raw) + ".sig"
+
+	// Fake security-service: on revoke it removes mp:sess from the shared Redis,
+	// exactly like security-service's dual-write revoke does on prod.
+	sot := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/internal/auth/v1/sessions/revoke" {
+			var req struct {
+				SID string `json:"sid"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&req)
+			mr.Del("mp:sess:" + req.SID)
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer sot.Close()
+
+	m := newContractManager(t, mr)
+	m.sot = NewSoTClient(SoTClientConfig{SecurityBaseURL: sot.URL, ServiceKey: "gateway-test-key", Mode: SoTModeDualWrite})
+	seedUnifiedSession(t, mr, secret, seededSession{SID: gatewaySID, JTI: jti, UserID: userID, Refresh: refreshToken, DeviceIDs: []string{"adev_n2_1234567890"}})
+	mr.Set(authSIDKey(nodeSID), nodeJTI)
+	mr.Set(authRefreshKey(nodeJTI), fmt.Sprintf(`{"userId":%d,"sid":"%s"}`, userID, nodeSID))
+	mr.Set(authSessionMetaKey(nodeSID), fmt.Sprintf(`{"userId":%d}`, userID))
+	mr.SAdd(authUserSidsKey(userID), nodeSID)
+
+	if err := m.RevokeSessionFull(context.Background(), gatewaySID, userID, jti); err != nil {
+		t.Fatal(err)
+	}
+
+	if mr.Exists("mp:sess:" + gatewaySID) {
+		t.Fatal("mp:sess should be gone after revoke")
+	}
+	for _, k := range []string{authSIDKey(nodeSID), authRefreshKey(nodeJTI), authSessionMetaKey(nodeSID)} {
+		if mr.Exists(k) {
+			t.Fatalf("node session key still present: %s", k)
+		}
+	}
+	if ok, _ := mr.SIsMember(authUserSidsKey(userID), nodeSID); ok {
+		t.Fatalf("node sid still in auth:user_sids:%d", userID)
+	}
+}
+
 // PEND-SEC-011: logout must not leave mp:sess when security internal revoke is down.
 func TestContractRevokeSessionFull_ClearsRedisWhenSecuritySoTDown(t *testing.T) {
 	mr, err := miniredis.Run()

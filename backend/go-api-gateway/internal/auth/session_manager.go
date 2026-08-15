@@ -240,13 +240,15 @@ func (m *SessionManager) RevokeSessionFull(ctx context.Context, sid string, user
 	if m == nil {
 		return nil
 	}
+	// Extract auth-service sid/jti claims BEFORE any downstream revoke deletes the
+	// gateway session blob (security-service's dual-write revoke removes mp:sess).
+	nodeSID, nodeJTI := m.nodeSessionClaims(ctx, sid)
 	var sotErr error
 	if m.sot != nil && m.sot.WritesEnabled() {
 		sotErr = m.sot.RevokeSession(ctx, sid, userID, jti)
 	}
 	var redisErr error
 	if m.rdb != nil {
-		nodeSID, nodeJTI := m.nodeSessionClaims(ctx, sid)
 		prefix := m.gatewaySessionPrefix
 		if prefix == "" {
 			prefix = GatewaySessionKeyPrefix()
