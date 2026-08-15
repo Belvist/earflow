@@ -18,17 +18,29 @@ const (
 
 func deviceProofBypassPaths() map[string]struct{} {
 	return map[string]struct{}{
-		"/api/auth/email/login":     {},
-		"/api/auth/email/register":  {},
-		"/api/auth/telegram/login":  {},
-		"/api/auth/csrf":            {},
-		"/api/auth/device/register": {},
-		"/api/auth/native/finalize": {},
-		"/api/auth/native/exchange": {},
-		"/api/public-config":        {},
-		"/api/version":              {},
-		"/health":                   {},
-		"/metrics":                  {},
+		"/api/auth/email/login":       {},
+		"/api/auth/email/register":    {},
+		"/api/auth/telegram/login":    {},
+		"/api/auth/csrf":              {},
+		"/api/auth/device/register":   {},
+		"/api/auth/native/finalize":   {},
+		"/api/auth/native/exchange":   {},
+		"/api/auth/app-login/status":  {},
+		"/api/public-config":          {},
+		"/api/version":                {},
+		"/health":                     {},
+		"/metrics":                    {},
+	}
+}
+
+// Identity-free public redirects (nginx 301 chain for legacy numeric track URLs).
+// They carry no user data and no side effects — only a canonical Location 301.
+// Browsers follow them as document navigations and CANNOT attach X-Auth-Device-*
+// proof headers there, so enforcing PoP would 401 every logged-in redirect.
+func deviceProofBypassPrefixes() []string {
+	return []string{
+		"/api/songs/redirect-public/",
+		"/api/songs/by-public-id/",
 	}
 }
 
@@ -57,6 +69,11 @@ func (m *SessionManager) deviceProofRequiredForRequest(r *http.Request) bool {
 	path := r.URL.Path
 	if _, ok := deviceProofBypassPaths()[path]; ok {
 		return false
+	}
+	for _, prefix := range deviceProofBypassPrefixes() {
+		if strings.HasPrefix(path, prefix) {
+			return false
+		}
 	}
 	if !strings.HasPrefix(path, "/api") {
 		return false
