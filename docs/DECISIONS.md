@@ -4,6 +4,24 @@
 
 ---
 
+## 2026-08-15 — backend auth e2e: устранены ghost-сессии при logout и device-key TTL-leak
+
+**Status:** accepted (gateway build/vet PASS; `go test ./...` PASS; prod e2e `e2e_auth.js` зелёный: register→login→device-proof→profile→refresh 204→nonce-replay 403 `DEVICE_PROOF_REPLAY`→logout 204→после logout profile/refresh 401→rate-limit 429)
+**Area:** auth | backend (gateway)
+**Related:** PEND-AUTH-004, PEND-SEC-011, 2026-08-14 auth-ревью
+
+**Context:** Live-аудит Redis-auth показал: (1) 432 ключа без TTL — ровно device-chain `auth:device:` (218), `auth:sid_devices:` (169), `auth:user_auth_devices:` (45), при `maxmemory-policy noeviction` это неограниченный рост, который рано или поздно сломает записи; (2) после logout `mp:sess:{gw-sid}` удаляется, но ключи auth-service (`auth:sid:{node-sid}`, `auth:session:meta:{node-sid}`, `auth:refresh:{node-jti}`) живут до 365-дневного TTL — **ghost-сессия**: гейтвей чистит только по своему sid, а Node-ключи адресованы node-sid/node-jti. E2E подтвердил: у залогиненного-и-разлогиненного юзера оба `auth:refresh` живы.
+
+**Decision:**
+1. **Ghost-сессии:** `SessionManager.RevokeSessionFull` теперь перед удалением `mp:sess` читает refresh-токен из хранилища, извлекает node-sid и jti (claims `sid`/`jti`), и через `revokeNodeSession` удаляет `auth:sid:{node-sid}`, `auth:session:meta:{node-sid}`, `auth:stepup:{node-sid}`, `auth:refresh:{node-jti}`, `auth:grace:{node-jti}` + `SRem auth:user_sids:{uid}`. Покрыты все пути: logout, device re-register (`device_http.go`), NATS/pubsub revoke subscriber (`revoke_subscriber.go`). Новые `extractSIDFromRefreshToken`/`parseRefreshTokenClaims` в `jti_extract.go`.
+2. **Device-key TTL:** `AuthDeviceStore` принимает TTL (= `SESSION_TTL_SECONDS`, 365d); `Save` ставит TTL на `auth:device:*` и `Expire` на `auth:sid_devices:*`/`auth:user_auth_devices:*`. `Touch` (на каждый успешный proof) обновляет TTL — активные устройства живут, брошенные истекают. security-service только удаляет эти ключи — единственный писатель был гейтвей.
+
+**Consequences:** logout теперь по-настоящему убивает сессию и в Redis-auth (Node), и в gateway (mp:sess); после logout не остаётся ни одного ключа сессии (проверено на проде для uid 255/257/258). Device-chain перестал расти безгранично. Известный остаток: ghost-ключи от прошлых сессий в Redis доистекают сами (TTL 365d); новые — только при живых активностях.
+
+**Чтобы не повторилось:** любой revoke-путь (logout, re-register, pubsub) обязан чистить оба слоя ключей — gateway `mp:sess` И auth-service ключи по claims из refresh-токена (`INV-` см. ARCHITECTURE_INVARIANTS). Все писатели Redis-ключей — с TTL, кроме осознанных долгоживущих.
+
+---
+
 ## 2026-08-15 — Telegram login: официальный виджет только на auth.earflow.ru, редирект с других origin (гибрид)
 
 **Status:** accepted (267 тестов PASS, build OK, prod-чанк 701 `0dbcac07` содержит widget + return_to-редирект)

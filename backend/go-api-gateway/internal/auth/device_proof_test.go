@@ -90,7 +90,7 @@ func newProofTestManager(t *testing.T, mr *miniredis.Miniredis, sid, authDeviceI
 
 	return &SessionManager{
 		store:                &SessionStore{rdb: redisSessionKV{rdb: rdb}, keyPrefix: "mp:sess:", ttl: time.Hour},
-		devices:              NewAuthDeviceStore(rdb),
+		devices:              NewAuthDeviceStore(rdb, time.Hour),
 		rdb:                  rdb,
 		gatewaySessionPrefix: "mp:sess:",
 		jwtSecret:            secret,

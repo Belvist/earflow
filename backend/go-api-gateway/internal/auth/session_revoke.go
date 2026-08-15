@@ -106,6 +106,35 @@ func RevokeSessionFull(ctx context.Context, rdb *redis.Client, gatewayPrefix, si
 	return firstErr
 }
 
+// revokeNodeSession removes the auth-service session state tied to the
+// auth-service session id (nodeSid) and its current refresh jti. These keys are
+// owned by auth-service and are NOT addressed by the gateway sid, so they must
+// be cleaned explicitly using claims extracted from the stored refresh token.
+func revokeNodeSession(ctx context.Context, rdb *redis.Client, userID int64, nodeSid, nodeJti string) error {
+	if rdb == nil {
+		return nil
+	}
+	var firstErr error
+	recordErr := func(err error) {
+		if err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	if strings.TrimSpace(nodeSid) != "" {
+		recordErr(rdb.Del(ctx, authSIDKey(nodeSid)).Err())
+		recordErr(rdb.Del(ctx, authSessionMetaKey(nodeSid)).Err())
+		recordErr(rdb.Del(ctx, authStepUpKey(nodeSid)).Err())
+		if userID > 0 {
+			recordErr(rdb.SRem(ctx, authUserSidsKey(userID), nodeSid).Err())
+		}
+	}
+	if strings.TrimSpace(nodeJti) != "" {
+		recordErr(rdb.Del(ctx, authRefreshKey(nodeJti)).Err())
+		recordErr(rdb.Del(ctx, authGraceKey(nodeJti)).Err())
+	}
+	return firstErr
+}
+
 func readUserIDFromSessionMeta(ctx context.Context, rdb *redis.Client, sid string) (int64, error) {
 	raw, err := rdb.Get(ctx, authSessionMetaKey(sid)).Result()
 	if err == redis.Nil {

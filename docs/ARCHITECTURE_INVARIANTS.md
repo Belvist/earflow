@@ -204,6 +204,20 @@ Redis Pub/Sub revoke events are **best-effort**. Every consumer (gateway, device
 - **Реализация:** go-api-gateway `SessionManager.startRevocationSweep` + device-sync-service. Sweep interval — `AUTH_REVOCATION_SWEEP_INTERVAL`, default 30s.
 - **Red flag:** новый consumer pub/sub `earflow:auth:session:revoke:v1` без аналогичного sweep; revocation логика которая только подписывается.
 
+### INV-SEC-021 (2026-08-15) — Любой revoke чистит ОБА слоя ключей: gateway mp:sess И auth-service сессию
+
+Gateway `RevokeSessionFull` MUST чистить не только `mp:sess:{gw-sid}`, но и auth-service ключи, адресованные node-sid/node-jti из claims refresh-токена: `auth:sid:{node-sid}`, `auth:session:meta:{node-sid}`, `auth:stepup:{node-sid}`, `auth:refresh:{node-jti}`, `auth:grace:{node-jti}`, `SRem auth:user_sids:{uid}` (`revokeNodeSession`). Иначе logout оставляет ghost-сессию живой до 365d TTL (подтверждено на проде).
+
+- **Реализация:** `SessionManager.RevokeSessionFull` вызывает `nodeSessionClaims` (чтение `mp:sess` ДО удаления) + `revokeNodeSession`; то же в NATS/pubsub subscriber. Все новые revoke-пути обязаны идти через `SessionManager.RevokeSessionFull`.
+- **Red flag:** прямой вызов package-level `RevokeSessionFull(ctx, rdb, prefix, sid, ...)` без последующей чистки node-ключей; revoke-путь, который не читает refresh-токен из `mp:sess` до его удаления.
+
+### INV-SEC-022 (2026-08-15) — Писатели Redis-ключей auth — с TTL, активные устройства обновляют его
+
+Все ключи, создаваемые в Redis-auth (кроме осознанных долгоживущих), MUST иметь TTL. Device-chain (`auth:device:*`, `auth:sid_devices:*`, `auth:user_auth_devices:*`) при `maxmemory-policy noeviction` без TTL растёт бесконечно (на проде было 432 ключа без TTL и росло с каждым логином). `AuthDeviceStore.Save` ставит TTL = `SESSION_TTL_SECONDS`, `Touch` (каждый успешный proof) его продлевает.
+
+- **Red flag:** новый `SET ... EX 0` / `Set(..., 0)` на auth-ключи; device/session-ключ, который не обновляет TTL при активности.
+- **Red flag:** писатель device/session-ключей мимо `AuthDeviceStore` (обход TTL).
+
 ---
 
 ## Frontend

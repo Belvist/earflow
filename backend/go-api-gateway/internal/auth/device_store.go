@@ -24,10 +24,11 @@ type AuthDeviceRecord struct {
 
 type AuthDeviceStore struct {
 	rdb *redis.Client
+	ttl time.Duration
 }
 
-func NewAuthDeviceStore(rdb *redis.Client) *AuthDeviceStore {
-	return &AuthDeviceStore{rdb: rdb}
+func NewAuthDeviceStore(rdb *redis.Client, ttl time.Duration) *AuthDeviceStore {
+	return &AuthDeviceStore{rdb: rdb, ttl: ttl}
 }
 
 func (s *AuthDeviceStore) Save(ctx context.Context, rec AuthDeviceRecord) error {
@@ -44,9 +45,11 @@ func (s *AuthDeviceStore) Save(ctx context.Context, rec AuthDeviceRecord) error 
 		return err
 	}
 	pipe := s.rdb.TxPipeline()
-	pipe.Set(ctx, authDeviceKey(id), string(b), 0)
+	pipe.Set(ctx, authDeviceKey(id), string(b), s.ttl)
 	pipe.SAdd(ctx, authSidDevicesKey(sid), id)
+	pipe.Expire(ctx, authSidDevicesKey(sid), s.ttl)
 	pipe.SAdd(ctx, fmt.Sprintf("%s%d", authUserDevicesPrefix, rec.UserID), id)
+	pipe.Expire(ctx, fmt.Sprintf("%s%d", authUserDevicesPrefix, rec.UserID), s.ttl)
 	_, err = pipe.Exec(ctx)
 	return err
 }

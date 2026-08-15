@@ -209,7 +209,7 @@ func NewSessionManager(cfg SessionManagerConfig) (*SessionManager, error) {
 
 	return &SessionManager{
 		store:                 store,
-		devices:               NewAuthDeviceStore(cfg.Redis),
+		devices:               NewAuthDeviceStore(cfg.Redis, cfg.SessionTTL),
 		rdb:                   cfg.Redis,
 		gatewaySessionPrefix:  store.keyPrefix,
 		jwtSecret:             cfg.JWTSecret,
@@ -235,6 +235,7 @@ func NewSessionManager(cfg SessionManagerConfig) (*SessionManager, error) {
 
 // RevokeSessionFull clears session state. dual_write: best-effort PG via security-service, then
 // always local Redis (fail-safe if security/PG down — logout must not leave mp:sess alive).
+// It also cleans auth-service session keys addressed by the refresh token's sid/jti claims.
 func (m *SessionManager) RevokeSessionFull(ctx context.Context, sid string, userID int64, jti string) error {
 	if m == nil {
 		return nil
@@ -245,16 +246,34 @@ func (m *SessionManager) RevokeSessionFull(ctx context.Context, sid string, user
 	}
 	var redisErr error
 	if m.rdb != nil {
+		nodeSID, nodeJTI := m.nodeSessionClaims(ctx, sid)
 		prefix := m.gatewaySessionPrefix
 		if prefix == "" {
 			prefix = GatewaySessionKeyPrefix()
 		}
 		redisErr = RevokeSessionFull(ctx, m.rdb, prefix, sid, userID, jti)
+		if nodeSID != "" || nodeJTI != "" {
+			_ = revokeNodeSession(ctx, m.rdb, userID, nodeSID, nodeJTI)
+		}
 	}
 	if redisErr != nil {
 		return redisErr
 	}
 	return sotErr
+}
+
+// nodeSessionClaims returns the auth-service session id and jti embedded in the
+// gateway session's refresh token, if present. It must be called before the
+// gateway session blob is deleted.
+func (m *SessionManager) nodeSessionClaims(ctx context.Context, sid string) (string, string) {
+	if m == nil || m.store == nil || !IsValidSID(sid) {
+		return "", ""
+	}
+	sess, err := m.store.Get(ctx, sid)
+	if err != nil || sess == nil {
+		return "", ""
+	}
+	return extractSIDFromRefreshToken(sess.RefreshToken), extractJTIFromRefreshToken(sess.RefreshToken)
 }
 
 func (m *SessionManager) cookieMaxAgeSeconds() int {

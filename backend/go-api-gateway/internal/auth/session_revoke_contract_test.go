@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -67,7 +68,7 @@ func newContractManager(t *testing.T, mr *miniredis.Miniredis) *SessionManager {
 	secret := "test-secret-test-secret-test-secret-32"
 	return &SessionManager{
 		store:                &SessionStore{rdb: redisSessionKV{rdb: rdb}, keyPrefix: "mp:sess:", ttl: time.Hour},
-		devices:              NewAuthDeviceStore(rdb),
+		devices:              NewAuthDeviceStore(rdb, time.Hour),
 		rdb:                  rdb,
 		gatewaySessionPrefix: "mp:sess:",
 		jwtSecret:            secret,
@@ -245,7 +246,7 @@ func TestContractMultiAuthDeviceRegisterDoesNotEvictSibling(t *testing.T) {
 	defer mr.Close()
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	store := NewAuthDeviceStore(rdb)
+	store := NewAuthDeviceStore(rdb, time.Hour)
 	ctx := context.Background()
 	sid := "sid_12345678901234567890"
 	userID := int64(11)
@@ -292,6 +293,50 @@ func TestContractRevokeSessionFullClearsAllRedisLayers(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertSessionKeysAbsent(t, mr, sid, jti, userID, []string{devID})
+}
+
+// Logout must clean auth-service session keys addressed by the refresh token's
+// sid/jti claims, not only the gateway mp:sess (the ghost-session leak).
+func TestContractLogoutCleansNodeSessionKeys(t *testing.T) {
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mr.Close()
+
+	secret := "test-secret-test-secret-test-secret-32"
+	gatewaySID := "sid_node_sess_1234567890"
+	jti := "jti-gateway"
+	userID := int64(11)
+	nodeSID := "node-sid-abcdef"
+	nodeJTI := "node-jti-1234"
+
+	payload := map[string]any{"type": "refresh", "userId": userID, "sid": nodeSID, "jti": nodeJTI}
+	raw, _ := json.Marshal(payload)
+	refreshToken := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9." + base64.RawURLEncoding.EncodeToString(raw) + ".sig"
+
+	m := newContractManager(t, mr)
+	seedUnifiedSession(t, mr, secret, seededSession{SID: gatewaySID, JTI: jti, UserID: userID, Refresh: refreshToken, DeviceIDs: []string{"adev_n1_1234567890"}})
+	mr.Set(authSIDKey(nodeSID), nodeJTI)
+	mr.Set(authRefreshKey(nodeJTI), fmt.Sprintf(`{"userId":%d,"sid":"%s"}`, userID, nodeSID))
+	mr.Set(authSessionMetaKey(nodeSID), fmt.Sprintf(`{"userId":%d}`, userID))
+	mr.SAdd(authUserSidsKey(userID), nodeSID)
+
+	rec := httptest.NewRecorder()
+	m.handleLogout()(rec, httptestNewRequestWithCookie(http.MethodPost, "/api/auth/logout", gatewaySID))
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("logout = %d", rec.Code)
+	}
+
+	assertSessionKeysAbsent(t, mr, gatewaySID, jti, userID, []string{"adev_n1_1234567890"})
+	for _, k := range []string{authSIDKey(nodeSID), authRefreshKey(nodeJTI), authSessionMetaKey(nodeSID)} {
+		if mr.Exists(k) {
+			t.Fatalf("node session key still present: %s", k)
+		}
+	}
+	if ok, _ := mr.SIsMember(authUserSidsKey(userID), nodeSID); ok {
+		t.Fatalf("node sid still in auth:user_sids:%d", userID)
+	}
 }
 
 // PEND-SEC-011: logout must not leave mp:sess when security internal revoke is down.

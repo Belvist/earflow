@@ -198,7 +198,11 @@ func (m *SessionManager) handleRevokePubSubMessage(ctx context.Context, payload 
 	if prefix == "" {
 		prefix = GatewaySessionKeyPrefix()
 	}
+	nodeSID, nodeJTI := m.nodeSessionClaims(ctx, ev.SID)
 	_ = RevokeSessionFull(ctx, m.rdb, prefix, ev.SID, ev.UserID, "")
+	if nodeSID != "" || nodeJTI != "" {
+		_ = revokeNodeSession(ctx, m.rdb, ev.UserID, nodeSID, nodeJTI)
+	}
 }
 
 func (m *SessionManager) shouldSkipRevokeEvent(ev RevokeEvent) bool {

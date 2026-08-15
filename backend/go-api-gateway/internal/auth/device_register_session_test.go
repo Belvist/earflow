@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
@@ -25,7 +26,7 @@ func TestRevokeStaleSessionForAuthDevice_ReplacesOldSID(t *testing.T) {
 	mr.Set("mp:sess:"+oldSID, `{"user":{"id":42}}`)
 	mr.SAdd(authUserSidsKey(userID), oldSID, newSID)
 
-	devices := NewAuthDeviceStore(rdb)
+	devices := NewAuthDeviceStore(rdb, time.Hour)
 	rec := AuthDeviceRecord{
 		AuthDeviceID:  authDeviceID,
 		SID:           oldSID,
@@ -73,7 +74,7 @@ func TestRevokeStaleSessionForAuthDevice_SkipsSameSID(t *testing.T) {
 	userID := int64(7)
 
 	mr.Set(authSIDKey(sid), "jti-same")
-	devices := NewAuthDeviceStore(rdb)
+	devices := NewAuthDeviceStore(rdb, time.Hour)
 	_ = devices.Save(context.Background(), AuthDeviceRecord{
 		AuthDeviceID:  authDeviceID,
 		SID:           sid,
