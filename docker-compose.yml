@@ -290,7 +290,7 @@ services:
       SERVICE_KEY_AUDIO_FEATURES_WORKER: ${SERVICE_KEY_AUDIO_FEATURES_WORKER}
       SERVICE_KEY_EBAP_HLS_ADAPTER: ${SERVICE_KEY_EBAP_HLS_ADAPTER}
       JWT_EXPIRES_IN: 24h
-      ALLOWED_SERVICES: ${ALLOWED_SERVICES:-auth-service,upload-service,api-gateway,artist-api-gateway,track-processor,recommendations-service,audio-features-worker,ebap-hls-adapter}
+      ALLOWED_SERVICES: ${ALLOWED_SERVICES:-upload-service,api-gateway,artist-api-gateway,track-processor,recommendations-service,audio-features-worker,ebap-hls-adapter}
     depends_on:
       postgres:
         condition: service_healthy
@@ -539,48 +539,11 @@ services:
       retries: 3
       start_period: 15s
 
-  # Auth Service (INTERNAL ONLY - access via api-gateway)
-  auth-service:
-    build:
-      context: ./backend/auth-service
-      dockerfile: Dockerfile
-    container_name: music-auth-service
-    # Security: Internal service, no public ports
-    expose:
-      - "3001"
-    environment:
-      PORT: 3001
-      NODE_ENV: ${NODE_ENV}
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_ISSUER: ${JWT_ISSUER:-earflow-auth}
-      JWT_AUDIENCE: ${JWT_AUDIENCE:-earflow-api}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-365d}
-      ACCESS_JWT_EXPIRES_IN: ${ACCESS_JWT_EXPIRES_IN:-15m}
-      REFRESH_JWT_EXPIRES_IN: ${REFRESH_JWT_EXPIRES_IN:-365d}
-      DB_SERVICE_URL: http://database-service:3003
-      SERVICE_KEY_AUTH_SERVICE: ${SERVICE_KEY_AUTH_SERVICE}
-      REDIS_HOST: redis-auth
-      REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-      PROFILE_CACHE_TTL_SECONDS: ${PROFILE_CACHE_TTL_SECONDS:-60}
-    depends_on:
-      database-service:
-        condition: service_healthy
-    networks:
-      - music-network
-    restart: unless-stopped
-    healthcheck:
-      test: [ "CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})" ]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-      start_period: 10s
-
-  # auth-core (Go) — drop-in replacement for Node auth-service identity endpoints.
-  # AUTH_SERVICE_URL on api-gateway/artist-api-gateway flips to this service after
-  # e2e validation; Node auth-service stays as auth_legacy for MFA routes.
+  # ==========================================================================
+  # auth-core (Go) — production identity service (replaced Node auth-service).
+  # All listeners/backends point AUTH_SERVICE_URL here; MFA + tg2fa live in
+  # security-service (Go).
+  # ==========================================================================
   auth-core:
     build:
       context: ./backend/auth-core
@@ -637,7 +600,7 @@ services:
       PORT: 3002
       NODE_ENV: ${NODE_ENV}
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-https://earflow.ru}
-      AUTH_SERVICE_URL: http://auth-service:3001
+      AUTH_SERVICE_URL: http://auth-core:3001
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: ${DB_NAME}
@@ -675,7 +638,7 @@ services:
     depends_on:
       database-service:
         condition: service_healthy
-      auth-service:
+      auth-core:
         condition: service_healthy
       minio:
         condition: service_healthy
@@ -699,7 +662,7 @@ services:
     environment:
       PORT: 3040
       NODE_ENV: ${NODE_ENV}
-      AUTH_SERVICE_URL: http://auth-service:3001
+      AUTH_SERVICE_URL: http://auth-core:3001
       JWT_SECRET: ${JWT_SECRET}
       DB_HOST: postgres
       DB_PORT: 5432
@@ -722,7 +685,7 @@ services:
     depends_on:
       database-service:
         condition: service_healthy
-      auth-service:
+      auth-core:
         condition: service_healthy
     networks:
       - music-network
@@ -746,7 +709,8 @@ services:
       NODE_ENV: ${NODE_ENV}
       JWT_SECRET: ${JWT_SECRET}
       ARTIST_SERVICE_URL: http://artist-service:3040
-      AUTH_SERVICE_URL: http://auth-service:3001
+      AUTH_SERVICE_URL: http://auth-core:3001
+      SECURITY_SERVICE_URL: http://security-service:3074
       UPLOAD_SERVICE_URL: http://upload-service:3002
       ALLOWED_ORIGINS: https://artists.earflow.ru
       ARTIST_PORTAL_DISABLE_TRACK_UPLOAD_STEP_UP: ${ARTIST_PORTAL_DISABLE_TRACK_UPLOAD_STEP_UP:-false}
@@ -759,6 +723,10 @@ services:
       artist-service:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      auth-core:
+        condition: service_healthy
+      security-service:
         condition: service_healthy
     networks:
       - music-network
@@ -821,6 +789,12 @@ services:
       SECURITY_PBKDF_KEY_LENGTH: ${SECURITY_PBKDF_KEY_LENGTH:-64}
       SECURITY_ENC_PBKDF_ITERATIONS: ${SECURITY_ENC_PBKDF_ITERATIONS:-600000}
       SECURITY_ENC_KEY_LENGTH: ${SECURITY_ENC_KEY_LENGTH:-32}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      SECURITY_TG2FA_TTL_SECONDS: ${SECURITY_TG2FA_TTL_SECONDS:-300}
+      SECURITY_TG2FA_MAX_ATTEMPTS: ${SECURITY_TG2FA_MAX_ATTEMPTS:-5}
+      SECURITY_TG2FA_WINDOW_SECONDS: ${SECURITY_TG2FA_WINDOW_SECONDS:-60}
+      SECURITY_TG2FA_CODE_LENGTH: ${SECURITY_TG2FA_CODE_LENGTH:-6}
+      SECURITY_TG2FA_RESEND_COOLDOWN_SECONDS: ${SECURITY_TG2FA_RESEND_COOLDOWN_SECONDS:-30}
     depends_on:
       postgres:
         condition: service_healthy
@@ -891,7 +865,7 @@ services:
       OTEL_TRACES_SAMPLER: ${OTEL_TRACES_SAMPLER:-parentbased_traceidratio}
       OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-0.2}
 
-      AUTH_SERVICE_URL: http://auth-service:3001
+      AUTH_SERVICE_URL: http://auth-core:3001
       DATABASE_SERVICE_URL: http://database-service:3003
       ARTIST_PORTAL_SERVICE_URL: http://artist-portal-service:3085
       SECURITY_SERVICE_URL: http://security-service:3074
@@ -908,7 +882,7 @@ services:
       REDIS_RL_PASSWORD: ${REDIS_PASSWORD:-}
       SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-31536000}
     depends_on:
-      auth-service:
+      auth-core:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -1055,7 +1029,7 @@ services:
       RECO_RATE_LIMIT_USE_REDIS: "true"
 
       # Auth Service
-      AUTH_SERVICE_URL: http://auth-service:3001
+      AUTH_SERVICE_URL: http://auth-core:3001
       RECO_AUTH_TIMEOUT_MS: ${RECO_AUTH_TIMEOUT_MS:-2000}
 
       # Session Security (HMAC)
@@ -1075,7 +1049,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      auth-service:
+      auth-core:
         condition: service_healthy
       ranking-service:
         condition: service_healthy
@@ -1555,7 +1529,7 @@ services:
       HTTP_IDLE_TIMEOUT: 120s
       SHUTDOWN_TIMEOUT: 30s
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
-      AUTH_SERVICE_URL: http://auth-service:3001
+      AUTH_SERVICE_URL: http://auth-core:3001
       # SEC-005 Phase 8: распознаём opaque WS connect tickets (device-bound stream auth)
       # ACCEPT-двуxmode — принимает и opaque, и legacy JWT; ENFORCE отдельным gate.
       STREAM_TICKET_ACCEPT: ${STREAM_TICKET_ACCEPT:-1}
@@ -1568,7 +1542,7 @@ services:
         condition: service_healthy
       redis-auth:
         condition: service_healthy
-      auth-service:
+      auth-core:
         condition: service_healthy
     networks:
       - music-network
@@ -2182,8 +2156,7 @@ services:
       OTEL_TRACES_SAMPLER: ${OTEL_TRACES_SAMPLER:-parentbased_traceidratio}
       OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-0.2}
 
-      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:3001}
-      AUTH_LEGACY_SERVICE_URL: ${AUTH_LEGACY_SERVICE_URL:-http://auth-service:3001}
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-core:3001}
       UPLOAD_SERVICE_URL: http://upload-service:3002
       DATABASE_SERVICE_URL: http://database-service:3003
       RECOMMENDATIONS_SERVICE_URL: http://recommendations-service:3006
@@ -2216,7 +2189,7 @@ services:
       # для слабых сетей и пере-подключений; 120s — max безопасный.
       STREAM_TICKET_WS_TTL_SECONDS: ${STREAM_TICKET_WS_TTL_SECONDS:-120}
     depends_on:
-      auth-service:
+      auth-core:
         condition: service_healthy
       upload-service:
         condition: service_healthy

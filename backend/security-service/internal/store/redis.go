@@ -42,11 +42,11 @@ func (r *RedisClient) Client() *redis.Client {
 
 // --- key builders -----------------------------------------------------------
 
-func SIDKey(sid string) string             { return "auth:sid:" + sid }
-func RefreshKey(jti string) string         { return "auth:refresh:" + jti }
-func SessionMetaKey(sid string) string     { return "auth:session:meta:" + sid }
-func UserSidsKey(userID int64) string      { return fmt.Sprintf("auth:user_sids:%d", userID) }
-func StepUpKey(sid string) string          { return "auth:mfa_stepup:" + sid }
+func SIDKey(sid string) string         { return "auth:sid:" + sid }
+func RefreshKey(jti string) string     { return "auth:refresh:" + jti }
+func SessionMetaKey(sid string) string { return "auth:session:meta:" + sid }
+func UserSidsKey(userID int64) string  { return fmt.Sprintf("auth:user_sids:%d", userID) }
+func StepUpKey(sid string) string      { return "auth:mfa_stepup:" + sid }
 func PasswordAttemptsKey(userID int64) string {
 	return fmt.Sprintf("auth:password_attempts:%d", userID)
 }
@@ -55,6 +55,21 @@ func StrengthAttemptsKey(userID int64) string {
 }
 func MFAAttemptsKey(userID int64) string {
 	return fmt.Sprintf("auth:mfa_attempts:%d", userID)
+}
+
+// Tg2faKey holds the pending Telegram confirmation code for a user.
+func Tg2faKey(userID int64) string {
+	return fmt.Sprintf("auth:tg2fa:%d", userID)
+}
+
+// Tg2faAttemptsKey is the per-user rate limiter for code verification.
+func Tg2faAttemptsKey(userID int64) string {
+	return fmt.Sprintf("auth:tg2fa_attempts:%d", userID)
+}
+
+// Tg2faResendKey is the per-user cooldown between code resends.
+func Tg2faResendKey(userID int64) string {
+	return fmt.Sprintf("auth:tg2fa_resend:%d", userID)
 }
 
 // Ping verifies the connection. Useful for /health.

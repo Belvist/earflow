@@ -46,5 +46,5 @@ export DEVICE_SYNC_TEST_TRANSFERS="$TRANSFERS"
 export DEVICE_SYNC_TEST_CONCURRENCY="$CONCURRENCY"
 export DEVICE_SYNC_TEST_TIMEOUT="$TIMEOUT"
 
-docker compose up -d --build redis auth-service device-sync-service
+docker compose up -d --build redis auth-core device-sync-service
 docker compose --profile device-sync-test run --rm device-sync-stress

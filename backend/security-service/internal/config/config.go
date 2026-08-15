@@ -18,6 +18,7 @@ type Config struct {
 	JWT      JWTConfig
 	Crypto   CryptoConfig
 	Security SecurityConfig
+	Telegram TelegramConfig
 	Logging  LoggingConfig
 	// ServiceKeyGateway validates X-Service-Token on /internal/auth/* (gateway caller).
 	ServiceKeyGateway string
@@ -87,6 +88,17 @@ type LoggingConfig struct {
 	Level slog.Level
 }
 
+// TelegramConfig configures the confirmation-code delivery via a Telegram bot
+// (PEND-AUTH-002). When BotToken is empty the feature is disabled.
+type TelegramConfig struct {
+	BotToken            string
+	Tg2faTTL            time.Duration
+	Tg2faMaxAttempts    int
+	Tg2faAttemptWindow  time.Duration
+	Tg2faCodeLength     int
+	Tg2faResendCooldown time.Duration
+}
+
 func Load() (Config, error) {
 	cfg := Config{
 		HTTP: HTTPConfig{
@@ -142,6 +154,13 @@ func Load() (Config, error) {
 		Logging: LoggingConfig{
 			Level: parseLogLevel(getString("LOG_LEVEL", "info")),
 		},
+		Telegram: TelegramConfig{
+			Tg2faTTL:            getDurationSeconds("SECURITY_TG2FA_TTL_SECONDS", 300),
+			Tg2faMaxAttempts:    clampInt(getInt("SECURITY_TG2FA_MAX_ATTEMPTS", 5), 1, 50),
+			Tg2faAttemptWindow:  getDurationSeconds("SECURITY_TG2FA_WINDOW_SECONDS", 60),
+			Tg2faCodeLength:     clampInt(getInt("SECURITY_TG2FA_CODE_LENGTH", 6), 6, 12),
+			Tg2faResendCooldown: getDurationSeconds("SECURITY_TG2FA_RESEND_COOLDOWN_SECONDS", 30),
+		},
 	}
 
 	jwtSecret := strings.TrimSpace(os.Getenv("JWT_SECRET"))
@@ -168,6 +187,8 @@ func Load() (Config, error) {
 	}
 
 	cfg.ServiceKeyGateway = strings.TrimSpace(os.Getenv("SERVICE_KEY_API_GATEWAY"))
+
+	cfg.Telegram.BotToken = strings.TrimSpace(os.Getenv("TELEGRAM_BOT_TOKEN"))
 
 	return cfg, nil
 }

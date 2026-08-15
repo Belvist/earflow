@@ -233,6 +233,13 @@ Refresh-ротация (gateway `SessionAuthMiddleware`) не имеет пра�
 - **Red flag:** новый чувствительный POST в `MountRoutes` мимо CSRF-группы; добавленные эксклюды refresh/logout в middleware; `skipCsrf: true` на refresh/logout/device-register во фронте (`client.js` logout).
 - **Red flag:** CSRF-группа расширяется на pre-session маршруты без csrf-cookie (login/register) — сломает первый вход.
 
+### INV-SEC-025 (2026-08-15) — Node auth-service выведен из auth-стека; `/api/auth/2fa*` обслуживает только Go
+
+Identity-стек = `auth-core` (login/register/refresh/verify/profile) + `security-service` (MFA, tg2fa, password, sessions, devices). Node `auth-service` удалён из compose/k8s/зависимостей; `auth_legacy` upstream в gateway не существует. `TestRepositoryMfaRoutesTargetSecurity` фиксирует, что `/api/auth/2fa*` и `/api/auth/tg2fa*` резолвятся в `security`.
+
+- **Красный флаг:** возврат `AUTH_SERVICE_URL: http://auth-service:3001` в docker-compose/k8s/scripts; новый маршрут gateway с upstream `auth_legacy`; правка `lib/mfa` Node вместо security-service; `depends_on: auth-service` в compose.
+- **Красный флаг:** `ENCRYPTION_KEY`/`JWT_SECRET` меняются при деплое — умрут сессии и MFA-секреты существующих пользователей.
+
 ---
 
 ## Frontend

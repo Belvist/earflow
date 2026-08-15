@@ -61,16 +61,17 @@ func (p *Postgres) Ping(ctx context.Context) error {
 // User represents the subset of the users table needed by security-service.
 // Fields are pointers where NULL is expected to distinguish unset values.
 type User struct {
-	ID                int64
-	Username          string
-	Salt              string
-	PasswordHash      *string
-	MFAEnabled        bool
-	MFAEnabledAt      *time.Time
-	MFARecoveryCodes  *string
-	TelegramID        *int64
-	EmailEncrypted    *string
-	EmailCleartext    *string
+	ID                  int64
+	Username            string
+	Salt                string
+	PasswordHash        *string
+	MFAEnabled          bool
+	MFAEnabledAt        *time.Time
+	MFASecretEncrypted  *string
+	MFARecoveryCodes    *string
+	TelegramID          *int64
+	EmailEncrypted      *string
+	EmailCleartext      *string
 }
 
 // ErrUserNotFound is returned when the user row is missing.
@@ -86,6 +87,7 @@ func (p *Postgres) GetUserByID(ctx context.Context, id int64) (*User, error) {
 			password_hash,
 			COALESCE(mfa_enabled, FALSE),
 			mfa_enabled_at,
+			mfa_secret_encrypted,
 			mfa_recovery_codes,
 			telegram_id,
 			email_encrypted,
@@ -96,13 +98,14 @@ func (p *Postgres) GetUserByID(ctx context.Context, id int64) (*User, error) {
 	row := p.pool.QueryRow(ctx, q, id)
 
 	var (
-		u             User
-		pwHash        *string
-		recoveryCodes *string
-		telegramID    *int64
-		emailEnc      *string
-		emailClear    *string
-		mfaEnabledAt  *time.Time
+		u               User
+		pwHash          *string
+		mfaSecretEnc    *string
+		recoveryCodes   *string
+		telegramID      *int64
+		emailEnc        *string
+		emailClear      *string
+		mfaEnabledAt    *time.Time
 	)
 
 	if err := row.Scan(
@@ -112,6 +115,7 @@ func (p *Postgres) GetUserByID(ctx context.Context, id int64) (*User, error) {
 		&pwHash,
 		&u.MFAEnabled,
 		&mfaEnabledAt,
+		&mfaSecretEnc,
 		&recoveryCodes,
 		&telegramID,
 		&emailEnc,
@@ -125,6 +129,7 @@ func (p *Postgres) GetUserByID(ctx context.Context, id int64) (*User, error) {
 
 	u.PasswordHash = pwHash
 	u.MFAEnabledAt = mfaEnabledAt
+	u.MFASecretEncrypted = mfaSecretEnc
 	u.MFARecoveryCodes = recoveryCodes
 	u.TelegramID = telegramID
 	u.EmailEncrypted = emailEnc
@@ -170,6 +175,79 @@ func (p *Postgres) UpdateMFARecoveryCodes(ctx context.Context, userID int64, pay
 		return ErrUserNotFound
 	}
 	return nil
+}
+
+// UpdateUserParams holds optional MFA-related columns; only non-nil pointers
+// are written. MFAEnabledFalse / MFASecretNull / MFAEnabledAtNull clear columns.
+type UpdateUserParams struct {
+	MFAEnabled            *bool
+	MFAEnabledAt          *time.Time
+	MFAEnabledAtNull      bool
+	MFASecretEncrypted    *string
+	MFASecretNull         bool
+	MFARecoveryCodes      *string
+	MFARecoveryCodesNull  bool
+}
+
+// UpdateUser applies the provided MFA-field updates to a user row.
+func (p *Postgres) UpdateUser(ctx context.Context, id int64, params UpdateUserParams) error {
+	updates := []string{}
+	args := []any{}
+	i := 1
+
+	addField := func(col string, val any) {
+		updates = append(updates, fmt.Sprintf("%s = $%d", col, i))
+		args = append(args, val)
+		i++
+	}
+
+	if params.MFAEnabled != nil {
+		addField("mfa_enabled", *params.MFAEnabled)
+	}
+	if params.MFAEnabledAt != nil {
+		addField("mfa_enabled_at", *params.MFAEnabledAt)
+	}
+	if params.MFAEnabledAtNull {
+		addField("mfa_enabled_at", nil)
+	}
+	if params.MFASecretEncrypted != nil {
+		addField("mfa_secret_encrypted", *params.MFASecretEncrypted)
+	}
+	if params.MFASecretNull {
+		addField("mfa_secret_encrypted", nil)
+	}
+	if params.MFARecoveryCodes != nil {
+		addField("mfa_recovery_codes", *params.MFARecoveryCodes)
+	}
+	if params.MFARecoveryCodesNull {
+		addField("mfa_recovery_codes", nil)
+	}
+
+	if len(updates) == 0 {
+		return nil
+	}
+
+	args = append(args, id)
+	q := "UPDATE users SET " + joinUpdates(updates) + fmt.Sprintf(" WHERE id = $%d", i)
+	tag, err := p.pool.Exec(ctx, q, args...)
+	if err != nil {
+		return fmt.Errorf("update user: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrUserNotFound
+	}
+	return nil
+}
+
+func joinUpdates(cols []string) string {
+	out := ""
+	for idx, c := range cols {
+		if idx > 0 {
+			out += ", "
+		}
+		out += c
+	}
+	return out
 }
 
 // HasPassword returns whether the stored password_hash is present and non-empty.

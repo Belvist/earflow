@@ -125,7 +125,7 @@ if [[ "$FULL_E2E" == "1" ]]; then
   echo "Starting auth-e2e stack (STREAM_TICKET_ENABLED=1 from overlay)…"
 
   if auth_e2e_compose_up "$ROOT" \
-    postgres redis redis-auth database-service auth-service security-service \
+    postgres redis redis-auth database-service auth-core security-service \
     api-gateway frontend direct-stream-service ebap-hls-adapter auth-e2e-edge; then
     pass "auth-e2e compose up (incl. stream services for Phase 3 ACCEPT)"
   else

@@ -222,6 +222,14 @@ func (r *RedisClient) BumpStepUp(ctx context.Context, sid string, userID int64, 
 	return r.c.Set(ctx, StepUpKey(sid), payload, ttl).Err()
 }
 
+// DelStepUp clears the step-up marker for a sid.
+func (r *RedisClient) DelStepUp(ctx context.Context, sid string) error {
+	if sid == "" {
+		return nil
+	}
+	return r.c.Del(ctx, StepUpKey(sid)).Err()
+}
+
 // --- rate limiter ----------------------------------------------------------
 
 type RateLimitResult struct {

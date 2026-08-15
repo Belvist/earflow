@@ -8,7 +8,7 @@ const DEFAULT_SCALABLE_SERVICES = [
   'artist-api-gateway',
   'frontend',
   'artist-frontend',
-  'auth-service',
+  'auth-core',
   'database-service',
   'search-service',
   'artist-service',

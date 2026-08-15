@@ -136,12 +136,12 @@ EOF
 EOF
     
     echo "SERVICE_SECRET=$(cat "${SECRETS_DIR}/service_secret.txt")" >> "$env_file"
-    echo "ALLOWED_SERVICES=api-gateway,auth-service,upload-service,database-service,recommendations-service,track-processor,playlist-service,lyrics-service,party-state-service" >> "$env_file"
+    echo "ALLOWED_SERVICES=api-gateway,auth-core,upload-service,database-service,recommendations-service,track-processor,playlist-service,lyrics-service,party-state-service" >> "$env_file"
     echo "" >> "$env_file"
     
     cat >> "$env_file" << 'EOF'
 # Service URLs
-AUTH_SERVICE_URL=http://auth-service:3001
+AUTH_SERVICE_URL=http://auth-core:3001
 UPLOAD_SERVICE_URL=http://upload-service:3002
 DATABASE_SERVICE_URL=http://database-service:3003
 RECOMMENDATIONS_SERVICE_URL=http://recommendations-service:3006

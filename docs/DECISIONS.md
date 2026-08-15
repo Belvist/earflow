@@ -4,6 +4,25 @@
 
 ---
 
+## 2026-08-15 — Полный вывод Node auth-service: MFA на Go + tg2fa + флип всех сервисов на auth-core
+
+**Status:** accepted (go build/vet/test PASS по security-service и go-api-gateway; `docker compose config` OK)
+**Area:** auth | security | backend | infra
+**Related:** PEND-AUTH-001 (Phase 2), PEND-AUTH-002, INV-SEC-021, INV-SEC-003
+
+**Context:** После флипа listener API на `auth-core` (Go) Node `auth-service` оставался жив только ради MFA-роутов `/api/auth/2fa/*` (auth_legacy upstream) и пяти сервисов с захардкоженным `AUTH_SERVICE_URL=http://auth-service:3001`. Запрос пользователя: дописать всё на Go, убрать Node целиком из auth, добавить код подтверждения через `@earflowbot` с авто-удалением через 5 минут.
+
+**Decision:**
+1. **MFA (TOTP) портирован в Go** — `security-service`: `internal/mfatotp` (byte-совместимая TOTP/base32/otpauth-реализация, тесты на векторах Node), `recoverycodes.Consume` (constant-time), `cryptoutil.EncryptPayload` (идентичный формат `encryptData` Node), `store.UpdateUser` (mfa_* колонки), хендлеры `GET/POST /api/auth/2fa/{status,setup,enable,disable,step-up}` + `step-up/status`. Секреты 4-х prod-пользователей с `mfa_enabled=true` читаются тем же ключом/форматом — миграции не требуют.
+2. **Telegram-код (tg2fa)** — `internal/tgcode` (Bot API, CSPRNG код), Redis `auth:tg2fa:{userId}` TTL 5m, роуты `/api/auth/tg2fa/{status,send,verify}`; `verify` даёт step-up, удаляет сообщение в боте; `time.AfterFunc(TTL)` удаляет недочищенное сообщение; повторный `send` удаляет старое. Включается только при `TELEGRAM_BOT_TOKEN`.
+3. **Gateway:** `/api/auth/2fa/*` и `/api/auth/tg2fa/*` → `security` (score-based longest-prefix match, `class: unsafe + require_user`); `auth_legacy` upstream удалён из Go-кода и compose. Новый рег-тест `TestRepositoryMfaRoutesTargetSecurity` фиксирует запрет возврата на Node.
+4. **Флип зависимостей:** `AUTH_SERVICE_URL` → `http://auth-core:3001` в upload/artist/artist-portal/recommendations/device-sync/artist-api-gateway; `artist-portal-service` для `2fa/status` и `step-up/status` ходит в `SECURITY_SERVICE_URL=http://security-service:3074` (auth-core этих роутов не имеет).
+5. **Node auth-service удалён** из docker-compose.yml (+`AUTH_LEGACY_SERVICE_URL`), docker-compose.auth-e2e.yml, k8s/configmap.yaml и всех `up -d` списков в scripts. Директория `backend/auth-service` остаётся в репо до отдельного коммита-чистки (не блокирует деплой — сервис не собирается и не стартует).
+
+**Consequences:** auth-стек = auth-core (identity) + security-service (security hot path) + gateway — весь Go, без Node. JWT_SECRET/ENCRYPTION_KEY не менять. `TELEGRAM_BOT_TOKEN` в VPS .env уже есть — tg2fa активируется сразу после деплоя security-service. `ALLOWED_SERVICES` database-service больше не содержит `auth-service` (auth-core ходит в PG напрямую).
+
+---
+
 ## 2026-08-15 — H-4 + H-2: proof-access-token привязка к IP/TTL 60с; exp обязателен во всех JWT-валидаторах gateway
 
 **Status:** accepted (gateway `go vet` + `go test ./...` PASS; prod deploy + e2e зелёный)

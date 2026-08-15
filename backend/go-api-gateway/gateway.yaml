@@ -160,9 +160,20 @@ routes:
     match:
       type: prefix
       value: /api/auth/2fa
-    upstream: auth_legacy
+    upstream: security
     policies:
-      class: auth_only
+      class: unsafe
+      require_user: true
+      timeout: 10s
+
+  - id: auth_tg2fa
+    match:
+      type: prefix
+      value: /api/auth/tg2fa
+    upstream: security
+    policies:
+      class: unsafe
+      require_user: true
       timeout: 10s
 
   - id: auth_passthrough

@@ -3,6 +3,7 @@ package cryptoutil
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/rand"
 	"crypto/sha512"
 	"encoding/hex"
 	"errors"
@@ -23,6 +24,46 @@ type EncryptedPayload struct {
 // auth-service: pbkdf2(encryptionKeyBuffer, userSalt, iterations, 32, 'sha512').
 func DeriveAESKey(encryptionKey []byte, userSaltHex string, iterations, keyLength int) []byte {
 	return pbkdf2.Key(encryptionKey, []byte(userSaltHex), iterations, keyLength, sha512.New)
+}
+
+// EncryptPayload produces a payload byte-compatible with Node encryptData:
+// AES-256-GCM, 16-byte IV, 16-byte auth tag, hex ciphertext, version 2.
+func EncryptPayload(
+	encryptionKey []byte,
+	userSaltHex string,
+	plaintext []byte,
+	iterations, keyLength int,
+) (*EncryptedPayload, error) {
+	if encryptionKey == nil {
+		return nil, errors.New("encryption key missing")
+	}
+	key := DeriveAESKey(encryptionKey, userSaltHex, iterations, keyLength)
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	gcm, err := cipher.NewGCMWithNonceSize(block, 16)
+	if err != nil {
+		return nil, err
+	}
+
+	iv := make([]byte, gcm.NonceSize())
+	if _, err := rand.Read(iv); err != nil {
+		return nil, err
+	}
+
+	sealed := gcm.Seal(nil, iv, plaintext, nil)
+	tagStart := len(sealed) - gcm.Overhead()
+	ct := sealed[:tagStart]
+	tag := sealed[tagStart:]
+
+	return &EncryptedPayload{
+		V:         2,
+		Encrypted: hex.EncodeToString(ct),
+		IV:        hex.EncodeToString(iv),
+		AuthTag:   hex.EncodeToString(tag),
+	}, nil
 }
 
 // DecryptPayload decrypts a payload produced by Node auth-service.

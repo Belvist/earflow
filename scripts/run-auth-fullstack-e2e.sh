@@ -28,7 +28,7 @@ source "$ROOT/scripts/auth-e2e-ensure-origins.sh"
 auth_e2e_ensure_docker_origin
 
 COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.auth-e2e.yml)
-SERVICES=(postgres redis redis-auth database-service auth-service security-service api-gateway frontend auth-e2e-edge)
+SERVICES=(postgres redis redis-auth database-service auth-core security-service api-gateway frontend auth-e2e-edge)
 
 ARTIFACT_DIR="$ROOT/artifacts/auth-e2e"
 LOG_DIR="$ARTIFACT_DIR/logs"
@@ -72,7 +72,7 @@ PLAY_EXIT=$?
 
 echo "=== [5/6] Collect service logs ==="
 cd "$ROOT"
-for svc in api-gateway auth-service security-service frontend auth-e2e-edge; do
+for svc in api-gateway auth-core security-service frontend auth-e2e-edge; do
   "${COMPOSE[@]}" logs --no-color "$svc" > "$LOG_DIR/${svc}.log" 2>&1 || true
 done
 

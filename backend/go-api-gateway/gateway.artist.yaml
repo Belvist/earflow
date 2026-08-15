@@ -54,8 +54,7 @@ routes:
       timeout: 12s
 
   # Security operations handled by security-service (Go, hot-path optimized).
-  # Must be declared BEFORE auth_2fa so that `/api/auth/2fa/recovery` wins over
-  # the broader auth_2fa prefix via the longer-prefix rule.
+  # Longer-prefix rules win regardless of declaration order (score-based match).
   - id: auth_2fa_recovery
     match:
       type: prefix
@@ -70,8 +69,17 @@ routes:
     match:
       type: prefix
       value: /api/auth/2fa
-    upstream: auth
-    rewrite: auth_alias
+    upstream: security
+    policies:
+      class: unsafe
+      require_user: true
+      timeout: 10s
+
+  - id: auth_tg2fa
+    match:
+      type: prefix
+      value: /api/auth/tg2fa
+    upstream: security
     policies:
       class: unsafe
       require_user: true

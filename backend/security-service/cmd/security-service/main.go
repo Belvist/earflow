@@ -15,6 +15,7 @@ import (
 	"github.com/earflow/music-platform/security-service/internal/httpapi"
 	"github.com/earflow/music-platform/security-service/internal/store"
 	"github.com/earflow/music-platform/security-service/internal/store/authpg"
+	"github.com/earflow/music-platform/security-service/internal/tgcode"
 )
 
 func main() {
@@ -55,6 +56,12 @@ func main() {
 		Audience: cfg.JWT.Audience,
 	}
 
+	tgClient := tgcode.NewClient(cfg.Telegram.BotToken)
+	logger.Info("telegram code delivery",
+		slog.Bool("enabled", tgClient.Enabled()),
+		slog.Int("code_ttl_seconds", int(cfg.Telegram.Tg2faTTL.Seconds())),
+	)
+
 	pgMode := authpg.ParseMode()
 	authPG := authpg.NewStore(pg.Pool())
 	authSoT := &store.AuthSoT{PG: authPG, Mode: pgMode}
@@ -64,12 +71,13 @@ func main() {
 	)
 
 	srv := httpapi.NewServer(httpapi.Deps{
-		Config:   cfg,
-		Redis:    rd,
-		Postgres: pg,
-		AuthSoT:  authSoT,
-		Logger:   logger,
-		Verifier: verifier,
+		Config:         cfg,
+		Redis:          rd,
+		Postgres:       pg,
+		AuthSoT:        authSoT,
+		Logger:         logger,
+		Verifier:       verifier,
+		TelegramClient: tgClient,
 	})
 
 	go func() {

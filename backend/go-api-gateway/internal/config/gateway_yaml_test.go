@@ -80,6 +80,40 @@ func TestRepositoryUnsafeRoutesHaveExplicitTimeouts(t *testing.T) {
 	}
 }
 
+func TestRepositoryMfaRoutesTargetSecurity(t *testing.T) {
+	// The 2FA / tg2fa handlers live in security-service (Go). Once the Node
+	// auth-service is removed these prefixes must never resolve to auth_legacy.
+	for _, name := range []string{"gateway.yaml", "gateway.artist.yaml"} {
+		t.Run(name, func(t *testing.T) {
+			cfg, err := LoadGatewayYAML(filepath.Join("..", "..", name))
+			if err != nil {
+				t.Fatalf("LoadGatewayYAML(%s) returned error: %v", name, err)
+			}
+
+			byPrefix := map[string]string{}
+			for _, route := range cfg.Routes {
+				if route.Match.Type == "prefix" {
+					for _, v := range append([]string{route.Match.Value}, route.Match.Values...) {
+						if v != "" {
+							byPrefix[v] = route.Upstream
+						}
+					}
+				}
+			}
+
+			for _, p := range []string{"/api/auth/2fa", "/api/auth/tg2fa"} {
+				up, ok := byPrefix[p]
+				if !ok {
+					t.Fatalf("%s: no route prefix %q", name, p)
+				}
+				if up != "security" {
+					t.Fatalf("%s: prefix %q → upstream %q, want security", name, p, up)
+				}
+			}
+		})
+	}
+}
+
 func TestArtistPortalTrackUploadTimeoutBudget(t *testing.T) {
 	cfg, err := LoadGatewayYAML(filepath.Join("..", "..", "gateway.artist.yaml"))
 	if err != nil {

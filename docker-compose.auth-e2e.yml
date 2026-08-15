@@ -2,7 +2,7 @@
 #
 # Usage:
 #   docker compose -f docker-compose.yml -f docker-compose.auth-e2e.yml up -d \
-#     postgres redis redis-auth database-service auth-service security-service \
+#     postgres redis redis-auth database-service auth-core security-service \
 #     api-gateway frontend auth-e2e-edge
 #
 # See docs/AUTH_FULLSTACK_E2E_RUNBOOK.md
@@ -33,7 +33,7 @@ services:
     deploy:
       replicas: 1
     depends_on:
-      auth-service:
+      auth-core:
         condition: service_healthy
       security-service:
         condition: service_healthy

@@ -44,7 +44,7 @@ data:
   MINIO_BUCKET_COVERS: "music-covers"
   
   # Service URLs (K8s internal DNS - порты через Service)
-  AUTH_SERVICE_URL: "http://auth-service"
+  AUTH_SERVICE_URL: "http://auth-core"
   UPLOAD_SERVICE_URL: "http://upload-service"
   DATABASE_SERVICE_URL: "http://database-service"
   RECOMMENDATIONS_SERVICE_URL: "http://recommendations-service"

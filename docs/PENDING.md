@@ -34,20 +34,22 @@
 - Полный code-review pass (2026-08-13): register/telegram под `throttleAuthIP` (паритет Node `authLimiter`), grace 30m→6h (device-proof гейт на gateway позволяет), `truncateRunes` (кириллица не раскалывается), `bustCache` регистронезависимо. См. `DECISIONS.md` "auth-core полный code-review pass".
 
 **Phase 2 (после стабильного флипа):**
-- Opaque refresh-токены (свойства — только Redis), единый sid (gateway ↔ auth-core).
-- MFA (TOTP) на Go → полностью отключить Node auth-service и `auth_legacy`.
-- artist-api-gateway flip на auth-core; `k8s/configmap.yaml` `AUTH_SERVICE_URL: "http://auth-core"`; удаление Node auth-service из docker-compose и deployment.
+- Opaque refresh-токены (свойства — только Redis), единый sid (gateway ↔ auth-core). **OPEN** — единственная невыполненная позиция Phase 2.
+- ~~MFA (TOTP) на Go → полностью отключить Node auth-service и `auth_legacy`.~~ **DONE 2026-08-15** — TOTP/step-up/recovery портированы в Go `security-service`; Node `lib/mfa` удалён из маршрутов.
+- ~~artist-api-gateway flip на auth-core; `k8s/configmap.yaml` `AUTH_SERVICE_URL: "http://auth-core"`; удаление Node auth-service из docker-compose и deployment.~~ **DONE 2026-08-15** — все `AUTH_SERVICE_URL` → `auth-core`; Node `auth-service` удалён из compose/k8s/scripts.
 
 ---
 
 ### PEND-AUTH-002 — Telegram-код подтверждения (2FA/step-up через бота)
 
 **Priority:** medium
-**Status:** pending (user: «добавим потом»)
+**Status:** **backend DONE 2026-08-15** (user: «добавить, чтобы приходило на 5 минут и удалялось»)
 
-**Что задумано:** после стабильного флипа — код подтверждения через Telegram-бота (аналог Telegram login-code) для: вход на новом устройстве, step-up на критичные действия (revoke-others, смена email/password, delete). Текущий MFA (TOTP) живёт в `security-service` (Go) + Node `lib/mfa/httpRoutes.js`; Telegram-код — отдельный второй фактор, не заменяет PoP (см. `SECURITY_ROADMAP.md`).
+**Что задумано:** код подтверждения через Telegram-бота `@earflowbot` для step-up на критичные действия. Второй фактор; не заменяет PoP (см. `SECURITY_ROADMAP.md`).
 
-**Что сделать:** в `security-service` (или auth-core): выдача одноразового кода через бота по `telegram_id`, Redis `auth:tg2fa:{userId}` TTL ~5m, verify + короткоживущий step-up токен; gateway — маршруты `/api/auth/tg2fa/*`. UI: модалка ввода кода. Интеграция с Telegram Bot API `sendMessage`.
+**Сделано 2026-08-15 (Go, security-service):** `internal/tgcode` (Bot API `sendMessage`/`deleteMessage`, CSPRNG цифровой код), Redis `auth:tg2fa:{userId}` TTL 5m + `auth:tg2fa_attempts:*`/`auth:tg2fa_resend:*` rate-limit; роуты `GET /api/auth/tg2fa/status`, `POST /api/auth/tg2fa/send`, `POST /api/auth/tg2fa/verify` (constant-time compare; при успехе BumpStepUp) в `security-service`; gateway-маршруты `/api/auth/2fa/*`+`/api/auth/tg2fa/*` → `security`; `TELEGRAM_BOT_TOKEN` прокинут в security-service (compose). **Авто-удаление:** сообщение удаляется сразу при verify либо после истечения TTL (`time.AfterFunc(5m)`), а при повторном `send` удаляется предыдущее сообщение — коды не копятся.
+
+**Осталось:** UI-модалка ввода кода (фронт пока не вызывает tg2fa). Фича включается только при заданном `TELEGRAM_BOT_TOKEN`.
 
 ---
 

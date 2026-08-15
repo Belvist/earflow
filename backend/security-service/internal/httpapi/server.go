@@ -13,17 +13,27 @@ import (
 	"github.com/earflow/music-platform/security-service/internal/config"
 	"github.com/earflow/music-platform/security-service/internal/domain"
 	"github.com/earflow/music-platform/security-service/internal/store"
+	"github.com/earflow/music-platform/security-service/internal/tgcode"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
 
 type Deps struct {
-	Config   config.Config
-	Redis    *store.RedisClient
-	Postgres *store.Postgres
-	AuthSoT  *store.AuthSoT
-	Logger   *slog.Logger
-	Verifier authz.Verifier
+	Config         config.Config
+	Redis          *store.RedisClient
+	Postgres       *store.Postgres
+	AuthSoT        *store.AuthSoT
+	Logger         *slog.Logger
+	Verifier       authz.Verifier
+	TelegramClient *tgcode.Client
+	// Users lets handlers look up users without coupling to the concrete
+	// Postgres type (stubbable in tests). Defaults to Postgres.
+	Users UserLookup
+}
+
+// UserLookup abstracts user lookups for auth handlers.
+type UserLookup interface {
+	GetUserByID(ctx context.Context, userID int64) (*store.User, error)
 }
 
 func NewServer(d Deps) *http.Server {
@@ -60,7 +70,17 @@ func NewServer(d Deps) *http.Server {
 		r.Post("/api/auth/sessions/revoke-others", revokeOtherSessionsHandler(d))
 		r.Post("/api/auth/sessions/revoke-all", revokeAllSessionsHandler(d))
 
+		r.Get("/api/auth/2fa/status", mfaStatusHandler(d))
+		r.Post("/api/auth/2fa/setup", mfaSetupHandler(d))
+		r.Post("/api/auth/2fa/enable", mfaEnableHandler(d))
+		r.Post("/api/auth/2fa/disable", mfaDisableHandler(d))
+		r.Post("/api/auth/2fa/step-up", mfaStepUpHandler(d))
+		r.Get("/api/auth/2fa/step-up/status", mfaStepUpStatusHandler(d))
 		r.Post("/api/auth/2fa/recovery/regenerate", recoveryRegenerateHandler(d))
+
+		r.Get("/api/auth/tg2fa/status", tg2faStatusHandler(d))
+		r.Post("/api/auth/tg2fa/send", tg2faSendHandler(d))
+		r.Post("/api/auth/tg2fa/verify", tg2faVerifyHandler(d))
 	})
 
 	return &http.Server{

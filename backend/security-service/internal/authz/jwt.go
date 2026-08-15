@@ -47,7 +47,7 @@ func (v Verifier) Verify(authorizationHeader string) (Principal, error) {
 		return Principal{}, ErrUnauthorized
 	}
 
-	parser := jwt.NewParser(jwt.WithValidMethods([]string{"HS256"}))
+	parser := jwt.NewParser(jwt.WithValidMethods([]string{"HS256"}), jwt.WithExpirationRequired())
 	claims := jwt.MapClaims{}
 	_, err := parser.ParseWithClaims(token, claims, func(t *jwt.Token) (any, error) {
 		return v.Secret, nil

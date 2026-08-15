@@ -3,6 +3,7 @@ package recoverycodes
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -85,4 +86,51 @@ func MarshalHashes(hashes []string) (string, error) {
 		return "", err
 	}
 	return string(b), nil
+}
+
+// ConsumeResult reports the outcome of consuming a recovery code.
+type ConsumeResult struct {
+	OK         bool
+	NextHashes []string
+}
+
+// Consume matches a provided code against stored hashes in constant time and,
+// on success, returns the remaining hashes (the matched one removed). It
+// mirrors Node's tryConsumeRecoveryCode exactly.
+func Consume(salt, providedCode string, storedHashes []string) ConsumeResult {
+	code := strings.ToUpper(strings.TrimSpace(providedCode))
+	if code == "" {
+		return ConsumeResult{OK: false, NextHashes: append([]string(nil), storedHashes...)}
+	}
+	want := Hash(salt, code)
+	if want == "" {
+		return ConsumeResult{OK: false, NextHashes: append([]string(nil), storedHashes...)}
+	}
+
+	hashes := append([]string(nil), storedHashes...)
+	for i := range hashes {
+		h := strings.TrimSpace(hashes[i])
+		if h == "" {
+			continue
+		}
+		if constantTimeHexEqual(h, want) {
+			hashes = append(hashes[:i], hashes[i+1:]...)
+			return ConsumeResult{OK: true, NextHashes: hashes}
+		}
+	}
+	return ConsumeResult{OK: false, NextHashes: hashes}
+}
+
+// constantTimeHexEqual compares two hex-encoded digests in constant time,
+// mirroring Node's timingSafeEqualHex (decode to bytes, then timingSafeEqual).
+func constantTimeHexEqual(a, b string) bool {
+	da, errA := hex.DecodeString(strings.TrimSpace(a))
+	db, errB := hex.DecodeString(strings.TrimSpace(b))
+	if errA != nil || errB != nil {
+		return false
+	}
+	if len(da) != len(db) {
+		return false
+	}
+	return subtle.ConstantTimeCompare(da, db) == 1
 }

@@ -33,13 +33,8 @@ type RedisConfig struct {
 }
 
 type Upstreams struct {
-	Auth            []string
-	// AuthLegacy is the previous identity upstream (Node auth-service), kept
-	// reachable for endpoints still served by Node after the auth-core flip
-	// (currently the MFA routes /api/auth/2fa/*). Optional: empty disables the
-	// auth_legacy upstream entirely.
-	AuthLegacy      []string
-	Upload          []string
+	Auth   []string
+	Upload []string
 	Database        []string
 	Recommendations []string
 	Playlist        []string
@@ -304,14 +299,8 @@ func LoadFromEnv() (Config, error) {
 
 	instanceID := newInstanceID()
 
-	authLegacyDefault := os.Getenv("AUTH_SERVICE_URL")
-	if authLegacyDefault == "" {
-		authLegacyDefault = "http://auth-service:3001"
-	}
-
 	upstreams := Upstreams{
-		Auth:            splitCSVOrDefault(os.Getenv("AUTH_SERVICE_URL"), "http://auth-service:3001"),
-		AuthLegacy:      splitCSVOrDefault(os.Getenv("AUTH_LEGACY_SERVICE_URL"), authLegacyDefault),
+		Auth:            splitCSVOrDefault(os.Getenv("AUTH_SERVICE_URL"), "http://auth-core:3001"),
 		Upload:          splitCSVOrDefault(os.Getenv("UPLOAD_SERVICE_URL"), "http://upload-service:3002"),
 		Database:        splitCSVOrDefault(os.Getenv("DATABASE_SERVICE_URL"), "http://database-service:3003"),
 		Recommendations: splitCSVOrDefault(os.Getenv("RECOMMENDATIONS_SERVICE_URL"), "http://recommendations-service:3006"),

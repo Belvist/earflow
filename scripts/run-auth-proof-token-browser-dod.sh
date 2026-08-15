@@ -28,7 +28,7 @@ export AUTH_E2E_PROOF_TTL_MAX="${AUTH_E2E_PROOF_TTL_MAX:-95}"
 export AUTH_E2E_PROOF_TTL_WAIT_MS="${AUTH_E2E_PROOF_TTL_WAIT_MS:-32000}"
 
 COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.auth-e2e.yml)
-SERVICES=(postgres redis redis-auth database-service auth-service security-service api-gateway frontend auth-e2e-edge)
+SERVICES=(postgres redis redis-auth database-service auth-core security-service api-gateway frontend auth-e2e-edge)
 
 ARTIFACT_DIR="$ROOT/artifacts/auth-proof-token-dod"
 LOG_DIR="$ARTIFACT_DIR/logs"
@@ -99,7 +99,7 @@ PLAY_EXIT=$?
 
 echo "=== [6/7] Collect logs ==="
 cd "$ROOT"
-for svc in api-gateway auth-service security-service frontend auth-e2e-edge; do
+for svc in api-gateway auth-core security-service frontend auth-e2e-edge; do
   "${COMPOSE[@]}" logs --no-color "$svc" > "$LOG_DIR/${svc}.log" 2>&1 || true
 done
 

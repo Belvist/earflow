@@ -33,7 +33,7 @@ auth_e2e_compose_up() {
   local root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
   shift || true
   local services=(
-    postgres redis redis-auth database-service auth-service security-service
+    postgres redis redis-auth database-service auth-core security-service
     api-gateway frontend auth-e2e-edge
   )
   if [[ $# -gt 0 ]]; then

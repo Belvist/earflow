@@ -46,7 +46,8 @@ const UPLOAD_CONTEXT_HEADER = 'X-Earflow-Upload-Context';
 const UPLOAD_CONTEXT_ARTIST_PORTAL = 'artist-portal';
 
 const ARTIST_SERVICE_URL = String(process.env.ARTIST_SERVICE_URL || 'http://artist-service:3040').replace(/\/+$/, '');
-const AUTH_SERVICE_URL = String(process.env.AUTH_SERVICE_URL || 'http://auth-service:3001').replace(/\/+$/, '');
+const AUTH_SERVICE_URL = String(process.env.AUTH_SERVICE_URL || 'http://auth-core:3001').replace(/\/+$/, '');
+const SECURITY_SERVICE_URL = String(process.env.SECURITY_SERVICE_URL || 'http://security-service:3074').replace(/\/+$/, '');
 const UPLOAD_SERVICE_URL = String(process.env.UPLOAD_SERVICE_URL || 'http://upload-service:3002').replace(/\/+$/, '');
 const ARTIST_PORTAL_UPLOAD_TMP_DIR = String(process.env.ARTIST_PORTAL_UPLOAD_TMP_DIR || path.join(os.tmpdir(), 'earflow-artist-uploads')).trim();
 const allowedOrigins = String(process.env.ALLOWED_ORIGINS || 'https://artists.earflow.ru')
@@ -371,7 +372,7 @@ async function fetchArtistCard({ bearer, timeoutMs }) {
 }
 
 async function fetchMfaStatus({ bearer, timeoutMs }) {
-    const resp = await axios.get(`${AUTH_SERVICE_URL}/api/auth/2fa/status`, {
+    const resp = await axios.get(`${SECURITY_SERVICE_URL}/api/auth/2fa/status`, {
         headers: {
             Authorization: bearer,
         },
@@ -389,7 +390,7 @@ async function fetchMfaStatus({ bearer, timeoutMs }) {
 }
 
 async function fetchStepUpStatus({ bearer, timeoutMs }) {
-    const resp = await axios.get(`${AUTH_SERVICE_URL}/api/auth/2fa/step-up/status`, {
+    const resp = await axios.get(`${SECURITY_SERVICE_URL}/api/auth/2fa/step-up/status`, {
         headers: {
             Authorization: bearer,
         },

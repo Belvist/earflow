@@ -158,7 +158,7 @@ if [[ "${CAPACITY_SKIP_STACK:-0}" == "1" ]]; then
   "${COMPOSE[@]}" up -d --no-deps --force-recreate auth-e2e-edge
 else
   "${COMPOSE[@]}" up -d --scale "api-gateway=${GATEWAY_REPLICAS}" \
-    postgres redis redis-auth database-service auth-service security-service \
+    postgres redis redis-auth database-service auth-core security-service \
     api-gateway frontend auth-e2e-edge
 fi
 

@@ -22,7 +22,7 @@ log "build frontend with REACT_APP_STREAM_TICKET_MINT_ENABLED=1 (auth-e2e overla
 
 log "start auth-e2e stack (STREAM_TICKET_ENFORCE=1)"
 "${COMPOSE[@]}" up -d \
-  postgres redis redis-auth database-service auth-service security-service \
+  postgres redis redis-auth database-service auth-core security-service \
   api-gateway frontend direct-stream-service ebap-hls-adapter auth-e2e-edge
 
 bash "$ROOT/scripts/auth-e2e-wait-healthy.sh"
