@@ -277,13 +277,13 @@ async function listArtistTracks(artist, params = {}) {
     : '';
 
   const sql = libraryOnly
-    ? `SELECT s.id, s.title, s.artist, s.album, s.duration, s.genre, s.year, s.cover_path, s.has_ebap, ${playCountSql}, ${popularitySql}, s.created_at, s.updated_at
+    ? `SELECT s.id, s.public_id, s.title, s.artist, s.album, s.duration, s.genre, s.year, s.cover_path, s.has_ebap, ${playCountSql}, ${popularitySql}, s.created_at, s.updated_at
        FROM songs s
       WHERE ${accessWhere}${buildArtistMatchSql('s.artist', '$1')}${availabilityWhere}
       ${yearWhere}
       ORDER BY ${orderBy}
       LIMIT $3 OFFSET $4`
-    : `SELECT s.id, s.title, s.artist, s.album, s.duration, s.genre, s.year, s.cover_path, s.has_ebap, ${playCountSql}, ${popularitySql}, s.created_at, s.updated_at
+    : `SELECT s.id, s.public_id, s.title, s.artist, s.album, s.duration, s.genre, s.year, s.cover_path, s.has_ebap, ${playCountSql}, ${popularitySql}, s.created_at, s.updated_at
        FROM songs s
       WHERE ${buildArtistMatchSql('s.artist', '$1')}${availabilityWhere}
       ${yearWhere}

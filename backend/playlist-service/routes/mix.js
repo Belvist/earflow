@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../lib/database');
 const { signPayload, verifyToken } = require('../lib/shareTokens');
-const { normalizeCoverPathForClient } = require('./playlistNormalize');
+const { normalizeCoverPathForClient, normalizeSongForClient } = require('./playlistNormalize');
 
 const SHARE_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -142,6 +142,7 @@ router.get('/:token', async (req, res, next) => {
 
         const first = songs[0];
         const coverUrl = first && first.cover_path ? normalizeCoverPathForClient(first.cover_path) : null;
+        const normalizedTracks = songs.map(normalizeSongForClient);
 
         res.json({
             id: `mix_${userId}_${payload.iat || Date.now()}`,
@@ -149,8 +150,8 @@ router.get('/:token', async (req, res, next) => {
             title: payload.title || 'Микстейп',
             description: payload.description || '',
             coverUrl,
-            tracks: songs,
-            trackCount: songs.length,
+            tracks: normalizedTracks,
+            trackCount: normalizedTracks.length,
             shareToken: token,
         });
     } catch (error) {

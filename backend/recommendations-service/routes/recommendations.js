@@ -689,7 +689,7 @@ router.get('/mood-tracks/:mood', apiLimiter, async (req, res, next) => {
     }
 
     const result = await query(`
-      SELECT s.id, s.title, s.artist, s.album, s.duration, s.genre, s.cover_path,
+      SELECT s.id, s.public_id, s.title, s.artist, s.album, s.duration, s.genre, s.cover_path,
              sm.confidence AS mood_confidence
       FROM song_moods sm
       JOIN songs s ON s.id = sm.song_id

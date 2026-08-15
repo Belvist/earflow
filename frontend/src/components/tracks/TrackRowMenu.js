@@ -5,7 +5,7 @@ import { FaEllipsisV, FaLink, FaShareAlt } from 'react-icons/fa';
 import { HiOutlineRadio } from 'react-icons/hi2';
 import apiClient from '../../api/client';
 import { usePlayer } from '../../context/PlayerContext';
-import { getCanonicalOrigin } from '../../utils/seo';
+import { buildTrackShareUrl, resolveTrackShareUrl } from '../../utils/trackRoute';
 
 const Trigger = styled.span`
   flex-shrink: 0;
@@ -105,17 +105,12 @@ const MenuItem = styled.button`
 const MENU_WIDTH = 210;
 const PAD = 8;
 
-function buildTrackShareUrl(track) {
-  const id = track && (track.public_id || track.id);
-  if (!id) return null;
-  return `${getCanonicalOrigin()}/track/${encodeURIComponent(id)}`;
-}
-
 export default function TrackRowMenu({ track, extraItems }) {
   const player = usePlayer();
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
   const [radioLoading, setRadioLoading] = useState(false);
+  const [shareLoading, setShareLoading] = useState(false);
   const triggerRef = useRef(null);
   const menuRef = useRef(null);
 
@@ -184,7 +179,11 @@ export default function TrackRowMenu({ track, extraItems }) {
   }, [track, radioLoading, player, close]);
 
   const shareTrack = useCallback(async () => {
-    const url = buildTrackShareUrl(track);
+    if (shareLoading) return;
+    setShareLoading(true);
+    let url = buildTrackShareUrl(track);
+    if (!url) url = await resolveTrackShareUrl(apiClient, track);
+    setShareLoading(false);
     if (!url) return;
     const title = track?.title || 'Трек';
     close();
@@ -200,10 +199,14 @@ export default function TrackRowMenu({ track, extraItems }) {
     } catch {
       window.prompt('Скопируйте ссылку:', url);
     }
-  }, [track, close]);
+  }, [track, close, shareLoading]);
 
   const copyTrackLink = useCallback(async () => {
-    const url = buildTrackShareUrl(track);
+    if (shareLoading) return;
+    setShareLoading(true);
+    let url = buildTrackShareUrl(track);
+    if (!url) url = await resolveTrackShareUrl(apiClient, track);
+    setShareLoading(false);
     if (!url) return;
     close();
     try {
@@ -211,7 +214,9 @@ export default function TrackRowMenu({ track, extraItems }) {
     } catch {
       window.prompt('Скопируйте ссылку:', url);
     }
-  }, [track, close]);
+  }, [track, close, shareLoading]);
+
+  const shareDisabled = shareLoading || !track;
 
   const handleTriggerKeyDown = useCallback((e) => {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -240,11 +245,11 @@ export default function TrackRowMenu({ track, extraItems }) {
             <HiOutlineRadio size={16} />
             {radioLoading ? 'Загрузка…' : 'Радио по треку'}
           </MenuItem>
-          <MenuItem type="button" role="menuitem" onClick={shareTrack}>
+          <MenuItem type="button" role="menuitem" onClick={shareTrack} disabled={shareDisabled}>
             <FaShareAlt size={13} />
             Поделиться треком
           </MenuItem>
-          <MenuItem type="button" role="menuitem" onClick={copyTrackLink}>
+          <MenuItem type="button" role="menuitem" onClick={copyTrackLink} disabled={shareDisabled}>
             <FaLink size={13} />
             Скопировать ссылку
           </MenuItem>

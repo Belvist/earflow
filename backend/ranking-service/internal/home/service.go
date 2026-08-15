@@ -312,6 +312,7 @@ WITH plays_30d AS (
      GROUP BY song_id
 ), base AS (
     SELECT s.id,
+           s.public_id,
            s.title,
            s.artist,
            s.album,
@@ -362,7 +363,7 @@ SELECT *
 	out := make([]candidate, 0, limit)
 	for rows.Next() {
 		var c candidate
-		var album, genre, cover pgtype.Text
+		var album, genre, cover, publicID pgtype.Text
 		var duration, year pgtype.Int4
 		var releaseDate pgtype.Date
 		var createdAt time.Time
@@ -371,13 +372,14 @@ SELECT *
 		var disliked bool
 		var sourceScore float64
 		err := rows.Scan(
-			&c.ID, &c.Title, &c.Artist, &album, &duration, &genre, &year, &cover, &c.HasEBAP, &releaseDate, &createdAt,
+			&c.ID, &publicID, &c.Title, &c.Artist, &album, &duration, &genre, &year, &cover, &c.HasEBAP, &releaseDate, &createdAt,
 			&c.Popularity, &c.PlayCount, &c.Plays30d, &tempo, &energy, &c.UserPlayCount, &c.UserSkipCount,
 			&c.TotalPlayTime, &c.Liked, &lastPlayed, &c.LikeEvent, &disliked, &sourceScore,
 		)
 		if err != nil {
 			return nil, err
 		}
+		c.PublicID = cleanPublicID(cleanTextPtr(publicID))
 		c.Album = cleanTextPtr(album)
 		c.Genre = cleanTextPtr(genre)
 		c.Duration = int4Ptr(duration)
@@ -1026,6 +1028,25 @@ func cleanTextPtr(v pgtype.Text) *string {
 		return nil
 	}
 	return &s
+}
+
+// canonicalPublicID keeps only the opaque 16-hex song id (web route currency);
+// anything else is dropped so share/resolve paths never emit numeric ids.
+func cleanPublicID(s *string) *string {
+	if s == nil {
+		return nil
+	}
+	v := strings.ToLower(strings.TrimSpace(*s))
+	if len(v) != 16 {
+		return nil
+	}
+	for i := 0; i < len(v); i++ {
+		c := v[i]
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+			return nil
+		}
+	}
+	return &v
 }
 
 func int4Ptr(v pgtype.Int4) *int {

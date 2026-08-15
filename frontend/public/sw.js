@@ -1,4 +1,4 @@
-const SW_VERSION = 'v3.3.4-ios-nav-no-cache-v20';
+const SW_VERSION = 'v3.4.0-track-slug-links-v21';
 const STATIC_CACHE = `static-${SW_VERSION}`;
 
 const OFFLINE_FALLBACK_URL = '/offline.html';

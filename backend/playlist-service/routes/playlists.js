@@ -347,10 +347,11 @@ router.get('/:id/tracks', async (req, res, next) => {
         const tracks = await db.getPlaylistTracks(playlistId, { limit, offset });
 
         const filteredTracks = filterTracksForUser(tracks, userId, req.user.isAdmin === true);
+        const normalizedTracks = filteredTracks.map(normalizeSongForClient);
 
         res.json({
-            tracks: filteredTracks,
-            pagination: { limit, offset, count: filteredTracks.length }
+            tracks: normalizedTracks,
+            pagination: { limit, offset, count: normalizedTracks.length }
         });
     } catch (error) {
         next(error);

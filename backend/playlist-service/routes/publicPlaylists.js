@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../lib/database');
-const { normalizePlaylistForClient } = require('./playlistNormalize');
+const { normalizePlaylistForClient, normalizeSongForClient } = require('./playlistNormalize');
 const { optionalAuth } = require('../middleware/auth');
 
 const LIBRARY_USER_ID = (() => {
@@ -75,6 +75,7 @@ router.get('/:slug', optionalAuth, async (req, res, next) => {
         const viewerId = req.user && req.user.id ? parsePositiveInt(req.user.id) : null;
         const viewerIsAdmin = req.user && req.user.isAdmin === true;
         const filteredTracks = filterTracksForViewer(tracks, viewerId, viewerIsAdmin);
+        const normalizedTracks = filteredTracks.map(normalizeSongForClient);
 
         const normalized = normalizePlaylistForClient(playlist);
 
@@ -84,7 +85,7 @@ router.get('/:slug', optionalAuth, async (req, res, next) => {
 
         res.json({
             ...normalized,
-            tracks: filteredTracks,
+            tracks: normalizedTracks,
             isOwner,
         });
     } catch (error) {

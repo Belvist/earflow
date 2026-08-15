@@ -15,6 +15,7 @@ import { AddToPlaylistMenu, CreatePlaylistModal } from './Playlist/index';
 import { usePlaylistActions } from './hooks/usePlaylistActions';
 import { useSeekableProgress } from './hooks/useSeekableProgress';
 import { resolveArtistPath } from '../utils/artistRoute';
+import { buildTrackShareUrl, resolveTrackShareUrl } from '../utils/trackRoute';
 import { LyricsView } from './Lyrics';
 import useBodyScrollLock from '../hooks/useBodyScrollLock';
 import useAuth from '../hooks/useAuth';
@@ -743,14 +744,19 @@ const MobilePlayerModalComponent = ({
                       Добавить в плейлист
                     </MoreMenuItem>
                     <MoreMenuItem
-                      onClick={() => {
+                      onClick={async () => {
                         // Поделиться треком
-                        if (navigator.share && currentTrack) {
-                          navigator.share({
-                            title: currentTrack.title,
-                            text: `${currentTrack.title} - ${currentTrack.artist}`,
-                            url: window.location.href
-                          }).catch(() => { });
+                        const trackToShare = currentTrack;
+                        if (navigator.share && trackToShare) {
+                          let shareUrl = buildTrackShareUrl(trackToShare);
+                          if (!shareUrl) shareUrl = await resolveTrackShareUrl(apiClient, trackToShare);
+                          if (shareUrl) {
+                            navigator.share({
+                              title: trackToShare.title,
+                              text: `${trackToShare.title} - ${trackToShare.artist}`,
+                              url: shareUrl
+                            }).catch(() => { });
+                          }
                         }
                         setShowMoreMenu(false);
                       }}

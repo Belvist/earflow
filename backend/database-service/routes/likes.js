@@ -8,13 +8,13 @@ router.get('/', async (req, res) => {
     if (!userId) return res.status(400).json({ error: 'userId required' });
 
     const result = await db.query(
-      `SELECT s.id, s.uploader_id as user_id, s.title, s.artist, s.album, s.duration,
-              s.file_path, s.file_size, s.mime_type, s.cover_path, s.created_at, s.updated_at
+      `SELECT s.id, s.public_id, s.uploader_id as user_id, s.title, s.artist, s.album, s.duration,
+              s.genre, s.year, s.cover_path, s.created_at, s.updated_at
        FROM likes l
        JOIN songs s ON s.id = l.song_id
        WHERE l.user_id = $1
        ORDER BY l.created_at DESC`,
-      [userId]
+       [userId]
     );
     res.json(result.rows);
   } catch (e) {

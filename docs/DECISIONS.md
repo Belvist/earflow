@@ -4,6 +4,48 @@
 
 ---
 
+## 2026-08-16 — Canonical трек-ссылки: /track/{public_id}-{slug} + public_id во всех трек-DTO
+
+**Status:** accepted (frontend 45 suites/278 PASS; Go build/vet/test PASS ranking+search; ios swiftc -parse PASS)
+**Area:** backend | frontend | iOS | security | SEO
+**Related:** `docs/DECISIONS.md` 2026-08-13 "Numeric track ID никогда не канонический", nginx `^/track/([0-9]+)$` 301
+
+**Context:** Пользователь: «Трек не найден… ссылки не правильные/небезопасные, должно быть как у альбомов, а не /song/id». Share-ссылка трека фолбэчилась на numeric `track.id`, т.к. (а) списковые song-DTO (`/api/songs`, альбомные/артист-треки, playlist/mix/queue, home-rails Go, reco-гидратация, search-index) не отдавали `public_id`; (б) `TrackPage` принимал только чистые 16-hex — любая slug-форма давала «Трек не найден». Поверх: `GET /api/likes|dislikes` и playlist-tracks/mix отдавали сырые `file_path/file_size/mime_type` в клиент — утечка внутренних путей.
+
+**Decision:**
+1. **Единственный публичный маршрут трека** — `/track/{16-hex public_id}-{slug}` (паттерн альбомов `/album/{pid}-{slug}`). Builder во фронте `frontend/src/utils/trackRoute.js` (`buildTrackRoutePath`/`buildTrackShareUrl`/`resolveTrackShareUrl`/`parseTrackRouteParam`); iOS-зеркало `ios-app/Earflow/Core/Models/TrackPublicRoute.swift` (+ `AppConfiguration.publicWebOrigin` — share всегда на `https://earflow.ru`, не API-host, + `CatalogService.resolveTrackPublicId`) — сделано в рабочем дереве, закоммитится с iOS-веткой работы (не блок для web). Numeric в ссылках больше не генерируется нигде (web).
+2. **`public_id` добавлен в DTO всех источников треков:** database-service (`/api/songs` list/compact, `/api/songs/radio`, `/api/likes`, `/api/dislikes`), artist-service (album + artist tracks), playlist-service (`normalizeSongForClient`), Go ranking home-rails, reco `fetchTracksByIds`, search-index trackDoc.
+3. **TrackPage** парсит `{public_id}-{slug}` и legacy numeric; после загрузки канонизирует URL + canonical на slug-форму (replace-navigate). `App.js` meta для `/track` показывает slug, не hex.
+4. **Утечки закрыты:** likes/dislikes больше не отдают `file_path/file_size/mime_type`; playlist `GET /:id/tracks`, public `/:slug`, mix — треки через `normalizeSongForClient` (whitelist).
+5. **Resolve-fallback** (web `resolveTrackShareUrl`, iOS `CatalogService.resolveTrackPublicId`): если у объекта нет `public_id` (старая очередь/снапшот), добор через authenticated `GET /api/songs/:id`; результат — всё равно slug-ссылка, numeric никогда.
+
+**Consequences:** старые bare-numeric/`/track/{public_id}` без slug продолжают работать (nginx 301 + client canonicalize), но canonical теперь slug-форма; боты переиндексируются. Search index требует reindex для появления `public_id` в docs (backfill при старте indexer).
+
+**Чтобы не повторилось:** любой новый трек-эндпоинт обязан отдавать `public_id`; share/копия ссылки — только через builder, никогда `track.id`; whitelist-normalizer нового сервиса пропускать `public_id`; red flag — `/track/{numeric}` или `/song/` в diff и URL-сборка без `slugifyForRoute`.
+
+---
+
+## 2026-08-16 — Earflow Auth: приложение подтверждения входа для всей экосистемы (pivot TOTP → challenge-signature)
+
+**Status:** accepted (go test auth-core/gateway PASS; приложение — unit tests, manual e2e на VPS — PEND-SEC-APPLOGIN-001)
+**Area:** auth | security | backend | frontend | iOS
+**Related:** `docs/AUTH_APP_LOGIN.md` (протокол v1 + security model), PEND-SEC-APPLOGIN-001, PEND-SEC-007 (подтверждение входов — родственная область)
+
+**Context:** Запрос владельца: вместо универсального TOTP-приложения (бывший `earflow-authenticator`, аналог Google Authenticator) сделать **своё** приложение подтверждения входа, работающее только для сервисов экосистемы (project_id: earflow, music, будущие). Пользователь входит на сайте → QR/вызов в приложение → Face ID → приложение подписывает challenge → сайт пускает. SMS и email-коды для этого потока не нужны; 6-значные коды принципиально не основа — только криптографическая подпись.
+
+**Decision:**
+1. **Пивот приложения** `earflow-authenticator/` → **Earflow Auth**: TOTP/Base32/OTPAuth-ядро удалено; ключ — ECDSA P-256 в Secure Enclave (fallback Keychain на симуляторе, честная пометка), ACL `biometryCurrentSet` (подпись = Face ID, без passcode fallback), AES-GCM vault + lock + privacy cover сохранены.
+2. **Протокол v1** (полностью в `docs/AUTH_APP_LOGIN.md`): pairing из уже залогиненной сессии браузера (`/api/auth/app/pair/*`, QR `earflowauth://pair`); login-подтверждение без пароля (`/api/auth/app-login/start|confirm`, QR `earflowauth://approve`, poll `status`); canonical message `v1\nearflow.app-{login|pair}\n{id}\n{ts/challenge}`, SHA-256 + ECDSA P-256 (DER и P1363), SPKI base64url — совместимо с web PoP-ключами; challenge 256-bit, TTL 120s, one-shot GETDEL.
+3. **Ownership:** challenge/ключи/verify — `auth-core` (Go; таблица `auth_app_keys`, миграция `db-migrations/migrations/000004_auth_app_keys.sql`); выдача `{token,refreshToken,user}` — `Service.newExchange`; cookie/session на approved poll — **gateway** локально (хвост `handleAuthExchange`), остальное — passthrough `auth_passthrough` (`class: auth_only`).
+4. **Мульти-проектность:** `AUTH_APP_PROJECT_IDS` allowlist (default `earflow`), `project_id` пишется в ключи и challenges; скоупинг по проектам в v1 не вводится.
+5. **QR на фронте:** `qrcode.react` в `frontend/`; QR-вход в модалке auth + секция привязки приложения в Настройки → Безопасность (revoke оттуда же).
+
+**Consequences:** появился пароль-less путь входа, полностью зависимый от телефона (recovery — пароль/Telegram/2FA остаются); приложение становится единственным «вторым фактором» для всех проектов — компрометация телефона+биометрии = доступ ко всей экосистеме (revoke в браузере). Challenge-poll не раскрывает данных до approve; токены одноразовые. Push-уведомления «заявка на вход» сознательно НЕ в v1 (только QR-скан) — PEND-SEC-APPLOGIN-002.
+
+**Чтобы не повторилось:** не возвращать TOTP в это приложение; не делать confirm универсальным (WebAuthn/passkey — отдельная дорога, PEND-SEC-006); challenge one-shot (GETDEL) — никогда не оставлять approve-repeatable; не вводить proof-token в этот поток (SEC-013 scope).
+
+---
+
 ## 2026-08-15 — Полный вывод Node auth-service: MFA на Go + tg2fa + флип всех сервисов на auth-core
 
 **Status:** accepted (go build/vet/test PASS по security-service и go-api-gateway; `docker compose config` OK)

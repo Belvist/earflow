@@ -195,7 +195,7 @@ router.get('/', requireService(['api-gateway']), async (req, res) => {
     params.push(offset);
 
     const result = await db.query(
-      `SELECT id, uploader_id as user_id, title, artist, album, duration, genre, year,
+      `SELECT id, public_id, uploader_id as user_id, title, artist, album, duration, genre, year,
                cover_path, ${availabilityField}, ${ebapField}, created_at, updated_at
           FROM songs
           ${where}
@@ -473,7 +473,7 @@ router.get('/radio', requireService(['api-gateway']), radioLimiter, async (req, 
           ${hasIsAvailable ? 'AND is_available = true' : ''}
         LIMIT 5
       )
-      SELECT s.id, s.uploader_id AS user_id, s.title, s.artist, s.album,
+      SELECT s.id, s.public_id, s.uploader_id AS user_id, s.title, s.artist, s.album,
              s.duration, s.genre, s.year, s.cover_path, s.created_at, s.updated_at
       FROM songs s
       INNER JOIN artist_genres ag ON LOWER(TRIM(s.genre)) = ag.g

@@ -525,9 +525,17 @@ function computePageMeta(pathname, isAuthHost) {
       return { title: 'Плейлист — Earflow', description: 'Плейлист в Earflow', robots: 'index,follow' };
     },
     track: (p) => {
-      // route param: "numericId[-slug]". Не показываем id в title —
-      // TrackPage перезапишет title реальным названием трека после загрузки.
-      return { title: 'Трек — Earflow', description: 'Слушать трек онлайн на Earflow', robots: 'index,follow' };
+      // route param: "publicId[-slug]" (legacy numeric — см. DECISIONS 2026-08-13).
+      // 16-hex public_id в title не показываем — TrackPage перезапишет title
+      // реальным названием трека после загрузки.
+      const raw = p[1] ? decodeURIComponent(p[1]) : '';
+      const m = /^[0-9a-f]{16}(?:-(.*))?$/i.exec(raw);
+      const slug = m && m[1] ? m[1].replace(/-/g, ' ').trim() : '';
+      return {
+        title: slug ? `${slug} — Earflow` : 'Трек — Earflow',
+        description: slug ? `Слушать ${slug} онлайн на Earflow` : 'Слушать трек онлайн на Earflow',
+        robots: 'index,follow',
+      };
     },
     artist: (p) => {
       // route param: "publicId[-slug]" или имя. В SEO title никогда не показываем

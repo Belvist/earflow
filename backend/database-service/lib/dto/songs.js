@@ -28,6 +28,11 @@ function normalizeHasEbap(v) {
     return v === true || v === 1 || v === '1' || (typeof v === 'string' && v.trim().toLowerCase() === 'true');
 }
 
+function publicIdOf(song) {
+    const raw = safeString(song.public_id || song.publicId).trim().toLowerCase();
+    return /^[0-9a-f]{16}$/.test(raw) ? raw : null;
+}
+
 function toSongListCompactDto(song) {
     if (!song || typeof song !== 'object') return null;
 
@@ -38,6 +43,7 @@ function toSongListCompactDto(song) {
 
     return {
         id,
+        public_id: publicIdOf(song),
         title: safeString(song.title).trim(),
         artist: safeString(song.artist).trim(),
         album: safeString(song.album).trim(),

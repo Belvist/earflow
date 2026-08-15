@@ -22,6 +22,11 @@ function normalizeCoverPathForClient(rawCoverPath) {
     return `/covers/${filename}`;
 }
 
+function publicSongId(song) {
+    const raw = String(song.public_id || song.publicId || '').trim().toLowerCase();
+    return /^[0-9a-f]{16}$/.test(raw) ? raw : null;
+}
+
 function normalizeSongForClient(song) {
     if (!song || typeof song !== 'object') return song;
 
@@ -29,6 +34,7 @@ function normalizeSongForClient(song) {
     // Оставляем только то, что нужно для UI.
     return {
         id: song.id,
+        public_id: publicSongId(song),
         title: song.title,
         artist: song.artist,
         album: song.album,

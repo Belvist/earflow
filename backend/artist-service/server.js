@@ -186,8 +186,11 @@ function normalizeSongForClient(song) {
     const popularityRaw = song.popularity;
     const playCount = Number.isFinite(Number(playCountRaw)) ? Number(playCountRaw) : 0;
     const popularity = Number.isFinite(Number(popularityRaw)) ? Number(popularityRaw) : 0;
+    const publicIdRaw = String(song.public_id || song.publicId || '').trim().toLowerCase();
+    const publicId = /^[0-9a-f]{16}$/.test(publicIdRaw) ? publicIdRaw : null;
     return {
         id: song.id,
+        public_id: publicId,
         title: song.title,
         artist: song.artist,
         album: song.album,

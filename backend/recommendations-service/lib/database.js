@@ -955,6 +955,7 @@ async function fetchTracksByIds(ids) {
   let result = await query(
     `SELECT 
        s.id,
+       s.public_id,
        s.title,
        s.artist,
        s.album,
@@ -971,49 +972,51 @@ async function fetchTracksByIds(ids) {
        sf.energy,
        sf.valence,
        sf.danceability
-     FROM songs s
-     LEFT JOIN song_features sf ON s.id = sf.song_id
-     WHERE s.id = ANY($1::int[])
-       AND COALESCE(s.is_available, true) = true`,
-    [validIds]
-  );
+      FROM songs s
+      LEFT JOIN song_features sf ON s.id = sf.song_id
+      WHERE s.id = ANY($1::int[])
+        AND COALESCE(s.is_available, true) = true`,
+     [validIds]
+   );
 
-  if ((result.rows || []).length === 0) {
-    result = await query(
-      `SELECT 
-         s.id,
-         s.title,
-         s.artist,
-         s.album,
-         s.genre,
-         s.duration,
-         s.year,
-         COALESCE(s.cover_path, s.cover) AS cover_path,
-         COALESCE(s.audio_url, s.file_path) AS audio_url,
-         s.file_path,
-         COALESCE(s.popularity, 0) AS popularity,
-         COALESCE(s.play_count, 0) AS play_count,
-         COALESCE(s.has_ebap, false) AS has_ebap,
-         sf.tempo,
-         sf.energy,
-         sf.valence,
-         sf.danceability
-       FROM songs s
-       LEFT JOIN song_features sf ON s.id = sf.song_id
-       WHERE s.id = ANY($1::int[])
-         AND (
-           NULLIF(s.audio_url, '') IS NOT NULL
-           OR NULLIF(s.file_path, '') IS NOT NULL
-         )`,
-      [validIds]
-    );
-  }
+   if ((result.rows || []).length === 0) {
+     result = await query(
+       `SELECT 
+          s.id,
+          s.public_id,
+          s.title,
+          s.artist,
+          s.album,
+          s.genre,
+          s.duration,
+          s.year,
+          COALESCE(s.cover_path, s.cover) AS cover_path,
+          COALESCE(s.audio_url, s.file_path) AS audio_url,
+          s.file_path,
+          COALESCE(s.popularity, 0) AS popularity,
+          COALESCE(s.play_count, 0) AS play_count,
+          COALESCE(s.has_ebap, false) AS has_ebap,
+          sf.tempo,
+          sf.energy,
+          sf.valence,
+          sf.danceability
+        FROM songs s
+        LEFT JOIN song_features sf ON s.id = sf.song_id
+        WHERE s.id = ANY($1::int[])
+          AND (
+            NULLIF(s.audio_url, '') IS NOT NULL
+            OR NULLIF(s.file_path, '') IS NOT NULL
+          )`,
+       [validIds]
+     );
+   }
 
   logPerformance('fetch-tracks-by-ids', Date.now() - startTime, { count: validIds.length });
 
   // Нормализация данных для фронтенда
   const normalizedRows = result.rows.map((row) => ({
     id: row.id,
+    public_id: row.public_id ? String(row.public_id).toLowerCase() : null,
     title: row.title,
     artist: row.artist,
     album: row.album,

@@ -44,6 +44,7 @@ type Playlist struct {
 
 type Track struct {
 	ID        int     `json:"id"`
+	PublicID  *string `json:"public_id,omitempty"`
 	Title     string  `json:"title"`
 	Artist    string  `json:"artist"`
 	Album     *string `json:"album"`

@@ -287,6 +287,7 @@ func (i *Indexer) processSong(ctx context.Context, j job) error {
 
 type trackDoc struct {
 	ID             int64   `json:"id"`
+	PublicID       *string `json:"public_id,omitempty"`
 	Title          string  `json:"title"`
 	Artist         string  `json:"artist"`
 	Album          string  `json:"album"`
@@ -312,6 +313,7 @@ type trackDoc struct {
 func (i *Indexer) fetchSong(ctx context.Context, id int64) (trackDoc, error) {
 	q := `
 SELECT id,
+       public_id,
        title,
        artist,
        COALESCE(album, '') AS album,
@@ -332,7 +334,7 @@ SELECT id,
 	var genre *string
 	var year *int
 	var cover *string
-	if err := i.db.QueryRow(ctx, q, id).Scan(&d.ID, &d.Title, &d.Artist, &d.Album, &duration, &genre, &year, &cover, &d.HasEbap, &d.PlayCount, &d.Popularity); err != nil {
+	if err := i.db.QueryRow(ctx, q, id).Scan(&d.ID, &d.PublicID, &d.Title, &d.Artist, &d.Album, &duration, &genre, &year, &cover, &d.HasEbap, &d.PlayCount, &d.Popularity); err != nil {
 		return trackDoc{}, err
 	}
 	d.Duration = duration
