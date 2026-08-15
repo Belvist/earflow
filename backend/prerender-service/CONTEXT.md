@@ -19,7 +19,7 @@ Headless Chromium-рендер публичных страниц для поис
 
 ## Owns (что хранит)
 
-In-memory LRU `pageCache` (max 100 страниц, TTL 60s). Ничего персистентного.
+In-memory LRU `pageCache` (max 100 страниц, TTL 1h, stale-while-revalidate). Ничего персистентного.
 
 ## Ключевые переменные
 
@@ -27,9 +27,11 @@ In-memory LRU `pageCache` (max 100 страниц, TTL 60s). Ничего пер
 |---|---|---|
 | `PORT` | `3100` | HTTP listen |
 | `PRERENDER_ALLOWED_HOSTS` | `frontend:3004` | Whitelist origin (SSRF защита) |
-| `PRERENDER_NAV_TIMEOUT_MS` | `5000` | Таймаут `page.goto` (domcontentloaded) |
-| `PRERENDER_SETTLE_MS` | `2500` | Ждать React mount после DOM ready |
-| `PRERENDER_PAGE_CACHE_TTL_MS` | `60000` | TTL in-memory кэша |
+| `PRERENDER_NAV_TIMEOUT_MS` | `8000` | Таймаут `page.goto` (domcontentloaded) |
+| `PRERENDER_SETTLE_MS` | `700` | Фикс. ожидание после React mount (`waitForFunction(h1)` уже ждёт контент) |
+| `PRERENDER_CONTENT_TITLE_TIMEOUT_MS` | `6000` | Ожидание H1/контента на SPA-страницах |
+| `PRERENDER_PAGE_CACHE_TTL_MS` | `3600000` | TTL in-memory кэша (1h) |
+| `PRERENDER_MAX_CONCURRENT` | `1` | Один context за раз; очередь → 503 → nginx отдаёт SPA |
 
 ## Безопасность (INV-SEO-001)
 

@@ -17,6 +17,9 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
     PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 
+# Диагностика: последний шаг перед включением. Если падает — смотреть ВЫВОД версий/api
+RUN /usr/bin/chromium --version && /usr/bin/chromium --help 2>/dev/null | head -3
+
 COPY server.js ./
 
 FROM node:22.21.1-slim AS production

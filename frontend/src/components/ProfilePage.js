@@ -3,6 +3,15 @@ import styled, { keyframes } from "styled-components";
 import { AnimatePresence, motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import {
+  trackRowStyles,
+  TrackRowNumber,
+  TrackRowCover,
+  TrackRowInfo,
+  TrackRowTitle,
+  TrackRowSubtitle,
+  TrackRowActionButton,
+} from "./tracks/trackRowStyles";
+import {
   FaCog,
   FaHeart,
   FaMusic,
@@ -821,7 +830,7 @@ const ProfilePage = () => {
               ) : (
                 <PlaylistsGrid>
                   {playlists.map((playlist) => (
-                    <PlaylistCard key={playlist.id}>
+                    <PlaylistCard key={playlist.id} $menuOpen={playlistMenuOpen === playlist.id}>
                       <PlaylistCover
                         onClick={() => navigate(`/playlist/${playlist.id}`)}
                       >
@@ -938,16 +947,16 @@ const ProfilePage = () => {
                     }
                     onClick={() => playTrack(list, song)}
                   >
-                    <TrackNum>{i + 1}</TrackNum>
-                    <TrackCover>
+                    <TrackRowNumber>{i + 1}</TrackRowNumber>
+                    <TrackRowCover>
                       <img
                         src={apiClient.getCoverUrl(song)}
                         alt=""
                         onError={(e) => (e.target.style.display = "none")}
                       />
-                    </TrackCover>
-                    <TrackMeta>
-                      <TrackName>
+                    </TrackRowCover>
+                    <TrackRowInfo>
+                      <TrackRowTitle>
                         {song.title || "Без названия"}
                         {activeTab === "liked" && (
                           <span
@@ -956,8 +965,8 @@ const ProfilePage = () => {
                             <OfflineTrackBadge trackId={song.id} compact />
                           </span>
                         )}
-                      </TrackName>
-                      <TrackArtist role="link" tabIndex={0}>
+                      </TrackRowTitle>
+                      <TrackArtistLink role="link" tabIndex={0}>
                         <ArtistLinks
                           value={song.artist}
                           onNavigate={(name) => {
@@ -968,8 +977,8 @@ const ProfilePage = () => {
                               .catch(() => { });
                           }}
                         />
-                      </TrackArtist>
-                    </TrackMeta>
+                      </TrackArtistLink>
+                    </TrackRowInfo>
                     <TrackBtn
                       type="button"
                       $kind={activeTab === "hidden" ? "hidden" : "liked"}
@@ -1884,117 +1893,14 @@ const Tracks = styled.div`
 `;
 
 const Track = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px;
-  margin: 0 -8px;
-  border-radius: 10px;
-  background: ${(p) => (p.$active ? "rgba(255,255,255,0.08)" : "transparent")};
+  ${trackRowStyles}
+`;
+
+const TrackArtistLink = styled(TrackRowSubtitle)`
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  transition: background 0.15s ease;
-
-  &:active {
-    background: rgba(255, 255, 255, 0.1);
-  }
-
-  @media (min-width: 768px) {
-    gap: 12px;
-    padding: 10px;
-    margin: 0 -10px;
-    &:hover {
-      background: rgba(255, 255, 255, 0.05);
-    }
-  }
 `;
 
-const TrackNum = styled.div`
-  width: 18px;
-  text-align: center;
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.35);
-  flex-shrink: 0;
-
-  @media (min-width: 768px) {
-    width: 24px;
-    font-size: 12px;
-  }
-`;
-
-const TrackCover = styled.div`
-  width: 40px;
-  height: 50px;
-  border-radius: 5px;
-  background: rgba(255, 255, 255, 0.05);
-  overflow: hidden;
-  flex-shrink: 0;
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  @media (min-width: 768px) {
-    width: 48px;
-    height: 60px;
-    border-radius: 6px;
-  }
-`;
-
-const TrackMeta = styled.div`
-  flex: 1;
-  min-width: 0;
-`;
-
-const TrackName = styled.div`
-  color: #fff;
-  font-size: 12px;
-  font-weight: 400;
-  white-space: nowrap;
-
-  @media (min-width: 768px) {
-    font-size: 13px;
-  }
-  overflow: hidden;
-  text-overflow: ellipsis;
-`;
-
-const TrackArtist = styled.div`
-  color: rgba(255, 255, 255, 0.45);
-  font-size: 11px;
-  font-weight: 300;
-  margin-top: 2px;
-`;
-
-const TrackBtn = styled.button`
-  width: 34px;
-  height: 34px;
-  min-width: 34px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.03);
-  border: none;
-  color: ${(p) => (p.$kind === "liked" ? "#fff" : "rgba(255,255,255,0.72)")};
-  font-size: 14px;
-  padding: 0;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition:
-    background 0.15s ease,
-    transform 0.15s ease,
-    color 0.15s ease;
-  -webkit-tap-highlight-color: transparent;
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.08);
-  }
-
-  &:active {
-    transform: scale(0.94);
-  }
-`;
+const TrackBtn = styled(TrackRowActionButton)``;
 
 // Modal — settings (responsive: mobile sheet / desktop centered dialog)
 const Overlay = styled.div`
@@ -2525,6 +2431,7 @@ const PlaylistsGrid = styled.div`
 
 const PlaylistCard = styled.div`
   position: relative;
+  z-index: ${(p) => (p.$menuOpen ? 60 : "auto")};
   display: flex;
   flex-direction: column;
   gap: 8px;

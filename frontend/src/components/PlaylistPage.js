@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import styled, { keyframes } from 'styled-components';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Reorder, useDragControls } from 'framer-motion';
@@ -16,6 +17,20 @@ import BrandLink from './BrandLink';
 import { useSearch } from '../search/useSearch';
 import { GESTURE_SURFACE } from '../gestures/gestureContracts';
 import { useGestureArbiter } from '../gestures/GestureArbiterProvider';
+import { heroOverlayBackground } from './tracks/heroStyles';
+import {
+    trackRowStyles,
+    TrackRowNumber,
+    TrackRowIndicator,
+    TrackRowPlayingBars,
+    TrackRowCover,
+    TrackRowInfo,
+    TrackRowTitle,
+    TrackRowSubtitle,
+    TrackRowDuration,
+    TrackRowActionButton,
+    formatTrackDuration,
+} from './tracks/trackRowStyles';
 
 const Page = styled.div`
   min-height: 0;
@@ -34,7 +49,6 @@ const Hero = styled.div`
   width: 100%;
   overflow: hidden;
   background: var(--ef-surface-main, #0d0d0d);
-  z-index: 0;
 `;
 
 const HeroLayer = styled.div`
@@ -90,10 +104,7 @@ const HeroOverlay = styled.div`
   right: 0;
   top: 0;
   height: 100%;
-  background:
-    radial-gradient(1300px 460px at 50% 12%, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.70) 68%, rgba(0,0,0,0.98) 100%),
-    linear-gradient(180deg, rgba(0,0,0,0.06) 0%, rgba(0,0,0,0.34) 58%, rgba(0,0,0,0.78) 78%, rgba(0,0,0,1) 100%),
-    linear-gradient(90deg, rgba(0,0,0,0.42) 0%, rgba(0,0,0,0) 24%, rgba(0,0,0,0) 76%, rgba(0,0,0,0.42) 100%);
+  ${heroOverlayBackground}
 `;
 
 const BackButton = styled.button`
@@ -411,10 +422,11 @@ const MoreButton = styled(SecondaryButton)`
 `;
 
 const ActionsMenu = styled.div`
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
+  position: fixed;
   min-width: 190px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
   padding: 8px;
   display: flex;
   flex-direction: column;
@@ -425,7 +437,7 @@ const ActionsMenu = styled.div`
   box-shadow: 0 18px 42px rgba(0, 0, 0, 0.42);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
-  z-index: 10;
+  z-index: 1200;
 
   ${SecondaryButton},
   ${DangerButton} {
@@ -433,12 +445,6 @@ const ActionsMenu = styled.div`
     justify-content: flex-start;
     height: 40px;
     padding: 0 12px;
-  }
-
-  @media (max-width: 640px) {
-    right: auto;
-    left: 50%;
-    transform: translateX(-50%);
   }
 `;
 
@@ -454,103 +460,13 @@ const TrackList = styled(Reorder.Group)`
 
 const ListSection = styled(Content)`
   z-index: 2;
-  padding-top: 10px;
-  background: var(--ef-surface-main, #0d0d0d);
-
-  &::before {
-    content: '';
-    position: absolute;
-    left: 50%;
-    top: -92px;
-    width: 100vw;
-    height: 120px;
-    transform: translateX(-50%);
-    background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.82) 58%, rgba(0,0,0,1) 100%);
-    pointer-events: none;
-    z-index: -1;
-  }
+  padding-top: 20px;
+  background: transparent;
 `;
 
 const TrackRow = styled(Reorder.Item)`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 48px;
-  padding: 8px 10px;
-  font-family: inherit;
-  border-radius: 0;
-  cursor: pointer;
-
-  @media (min-width: 641px) {
-    gap: 12px;
-    padding: 12px;
-  }
-  transition: background 0.2s;
-  width: 100%;
-  border: none;
-  text-align: left;
-  background: ${p => (p.$active ? 'rgba(255,255,255,0.12)' : 'transparent')};
-  color: #fff;
-  -webkit-tap-highlight-color: transparent;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
+  ${trackRowStyles}
   list-style: none;
-
-  &:hover {
-    background: rgba(255,255,255,0.05);
-  }
-
-  &:active {
-    background: rgba(255,255,255,0.10);
-  }
-`;
-
-const Indicator = styled.div`
-  width: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: rgba(255,255,255,0.85);
-`;
-
-const TrackNum = styled.div`
-  width: 20px;
-  text-align: right;
-  font-size: 12px;
-  color: rgba(255,255,255,0.4);
-
-  @media (min-width: 641px) {
-    width: 24px;
-    font-size: 14px;
-  }
-`;
-
-const PlayingBars = styled.div`
-  width: 18px;
-  height: 14px;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 2px;
-
-  span {
-    width: 3px;
-    height: 100%;
-    border-radius: 2px;
-    background: rgba(255, 255, 255, 0.92);
-    transform-origin: bottom;
-    animation: playlistBars 0.85s ease-in-out infinite;
-  }
-
-  span:nth-child(2) { animation-delay: 0.12s; }
-  span:nth-child(3) { animation-delay: 0.24s; }
-
-  @keyframes playlistBars {
-    0% { transform: scaleY(0.35); opacity: 0.55; }
-    50% { transform: scaleY(1); opacity: 1; }
-    100% { transform: scaleY(0.35); opacity: 0.55; }
-  }
 `;
 
 const DragHandle = styled.div`
@@ -568,80 +484,8 @@ const DragHandle = styled.div`
   -webkit-touch-callout: none;
 `;
 
-const TrackCover = styled.div`
-  width: 38px;
-  height: 48px;
-  border-radius: 8px;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.06);
-
-  @media (min-width: 641px) {
-    width: 44px;
-    height: 56px;
-    border-radius: 10px;
-  }
-
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-  }
-`;
-
-const TrackInfo = styled.div`
-  min-width: 0;
-  flex: 1;
-`;
-
-const TrackTitle = styled.div`
-  font-size: 12px;
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-
-  @media (min-width: 641px) {
-    font-size: 14px;
-  }
-  text-overflow: ellipsis;
-`;
-
-const TrackArtist = styled.div`
-  margin-top: 2px;
-  font-size: 10px;
-  font-weight: 300;
-  color: rgba(255, 255, 255, 0.5);
-
-  @media (min-width: 641px) {
-    font-size: 11px;
-  }
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-`;
-
-const TrackArtistLink = styled(TrackArtist)`
+const TrackArtistLink = styled(TrackRowSubtitle)`
   cursor: pointer;
-`;
-
-const TrackActions = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-`;
-
-const IconButton = styled.button`
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.06);
-  color: #fff;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 `;
 
 const PlaylistTrackRow = ({
@@ -743,21 +587,21 @@ const PlaylistTrackRow = ({
             ) : null}
 
             {isActive ? (
-                <Indicator>
+                <TrackRowIndicator>
                     {isPlaying ? (
-                        <PlayingBars aria-label="Играет">
+                        <TrackRowPlayingBars aria-label="Играет">
                             <span />
                             <span />
                             <span />
-                        </PlayingBars>
+                        </TrackRowPlayingBars>
                     ) : (
                         <FaPlay size={10} aria-label="Выбрано" />
                     )}
-                </Indicator>
+                </TrackRowIndicator>
             ) : (
-                <TrackNum>{index + 1}</TrackNum>
+                <TrackRowNumber>{index + 1}</TrackRowNumber>
             )}
-            <TrackCover>
+            <TrackRowCover>
                 <img
                     src={apiClient.getCoverUrl(track)}
                     alt=""
@@ -765,9 +609,9 @@ const PlaylistTrackRow = ({
                         e.currentTarget.style.display = 'none';
                     }}
                 />
-            </TrackCover>
-            <TrackInfo>
-                <TrackTitle title={track.title || ''}>{track.title || 'Без названия'}</TrackTitle>
+            </TrackRowCover>
+            <TrackRowInfo>
+                <TrackRowTitle title={track.title || ''}>{track.title || 'Без названия'}</TrackRowTitle>
                 <TrackArtistLink
                     title={track.artist || ''}
                     role="link"
@@ -784,21 +628,21 @@ const PlaylistTrackRow = ({
                         }}
                     />
                 </TrackArtistLink>
-            </TrackInfo>
-            <TrackActions>
-                {isOwner ? (
-                    <IconButton
-                        type="button"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onRemoveTrack(track.id);
-                        }}
-                        title="Удалить"
-                    >
-                        <FaTimes />
-                    </IconButton>
-                ) : null}
-            </TrackActions>
+            </TrackRowInfo>
+            <TrackRowDuration>{formatTrackDuration(track.duration)}</TrackRowDuration>
+            {isOwner ? (
+                <TrackRowActionButton
+                    type="button"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onRemoveTrack(track.id);
+                    }}
+                    title="Удалить"
+                    aria-label="Удалить"
+                >
+                    <FaTimes />
+                </TrackRowActionButton>
+            ) : null}
         </TrackRow>
     );
 };
@@ -984,7 +828,9 @@ export default function PlaylistPage({ playlistIdentifier }) {
     const [tracks, setTracks] = useState([]);
     const [isOwner, setIsOwner] = useState(false);
     const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
+    const [actionsMenuPos, setActionsMenuPos] = useState(null);
     const actionsMenuRef = useRef(null);
+    const actionsAnchorRef = useRef(null);
 
     const playlistIdFromData = useMemo(() => {
         const id = playlist && typeof playlist === 'object' ? playlist.id : null;
@@ -1196,12 +1042,25 @@ export default function PlaylistPage({ playlistIdentifier }) {
 
     useEffect(() => {
         if (!actionsMenuOpen) return undefined;
+        const close = () => {
+            setActionsMenuOpen(false);
+            setActionsMenuPos(null);
+        };
         const onDocPointerDown = (e) => {
             if (actionsMenuRef.current && actionsMenuRef.current.contains(e.target)) return;
-            setActionsMenuOpen(false);
+            if (actionsAnchorRef.current && actionsAnchorRef.current.contains(e.target)) return;
+            close();
         };
         document.addEventListener('pointerdown', onDocPointerDown);
-        return () => document.removeEventListener('pointerdown', onDocPointerDown);
+        window.addEventListener('resize', close);
+        window.addEventListener('orientationchange', close);
+        window.addEventListener('scroll', close, { capture: true, passive: true });
+        return () => {
+            document.removeEventListener('pointerdown', onDocPointerDown);
+            window.removeEventListener('resize', close);
+            window.removeEventListener('orientationchange', close);
+            window.removeEventListener('scroll', close, { capture: true });
+        };
     }, [actionsMenuOpen]);
 
     const addVirtualToProfile = useCallback(async () => {
@@ -1664,35 +1523,47 @@ export default function PlaylistPage({ playlistIdentifier }) {
                                 <Actions>
                                     <PlayButton type="button" onClick={handlePlayAll}><FaPlay />Слушать</PlayButton>
                                     {(resolvedShareSlug || playlist?.share_slug || virtualPlaylist || canEdit) ? (
-                                        <ActionsOverflow ref={actionsMenuRef}>
+                                        <ActionsOverflow ref={actionsAnchorRef}>
                                             <MoreButton
                                                 type="button"
                                                 aria-haspopup="menu"
                                                 aria-expanded={actionsMenuOpen}
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    setActionsMenuOpen((prev) => !prev);
+                                                    if (actionsMenuOpen) {
+                                                        setActionsMenuOpen(false);
+                                                        setActionsMenuPos(null);
+                                                        return;
+                                                    }
+                                                    const rect = e.currentTarget.getBoundingClientRect();
+                                                    const menuWidth = 190;
+                                                    const pad = 8;
+                                                    const left = Math.max(pad, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - pad));
+                                                    const top = rect.bottom + pad;
+                                                    setActionsMenuPos({ left, top });
+                                                    setActionsMenuOpen(true);
                                                 }}
                                                 title="Ещё"
                                             >
                                                 <FaEllipsisH />
                                             </MoreButton>
-                                            {actionsMenuOpen ? (
-                                                <ActionsMenu role="menu">
+                                            {actionsMenuOpen && actionsMenuPos ? createPortal(
+                                                <ActionsMenu ref={actionsMenuRef} role="menu" style={{ left: actionsMenuPos.left, top: actionsMenuPos.top }}>
                                                     {resolvedShareSlug || playlist?.share_slug ? (
-                                                        <SecondaryButton type="button" role="menuitem" onClick={() => { setActionsMenuOpen(false); handleCopyLink(); }}><FaLink />Ссылка</SecondaryButton>
+                                                        <SecondaryButton type="button" role="menuitem" onClick={() => { setActionsMenuOpen(false); setActionsMenuPos(null); handleCopyLink(); }}><FaLink />Ссылка</SecondaryButton>
                                                     ) : null}
                                                     {virtualPlaylist ? (
-                                                        <SecondaryButton type="button" role="menuitem" onClick={() => { setActionsMenuOpen(false); addVirtualToProfile(); }}><FaPlus />Добавить</SecondaryButton>
+                                                        <SecondaryButton type="button" role="menuitem" onClick={() => { setActionsMenuOpen(false); setActionsMenuPos(null); addVirtualToProfile(); }}><FaPlus />Добавить</SecondaryButton>
                                                     ) : null}
                                                     {canEdit ? (
                                                         <>
-                                                            <SecondaryButton type="button" role="menuitem" onClick={() => { setActionsMenuOpen(false); toggleEditPanel(); }}><FaEdit />Изменить</SecondaryButton>
-                                                            <SecondaryButton type="button" role="menuitem" onClick={() => { setActionsMenuOpen(false); toggleAddPanel(); }}><FaPlus />Добавить</SecondaryButton>
-                                                            <DangerButton type="button" role="menuitem" onClick={() => { setActionsMenuOpen(false); handleDelete(); }}><FaTrash />Удалить</DangerButton>
+                                                            <SecondaryButton type="button" role="menuitem" onClick={() => { setActionsMenuOpen(false); setActionsMenuPos(null); toggleEditPanel(); }}><FaEdit />Изменить</SecondaryButton>
+                                                            <SecondaryButton type="button" role="menuitem" onClick={() => { setActionsMenuOpen(false); setActionsMenuPos(null); toggleAddPanel(); }}><FaPlus />Добавить</SecondaryButton>
+                                                            <DangerButton type="button" role="menuitem" onClick={() => { setActionsMenuOpen(false); setActionsMenuPos(null); handleDelete(); }}><FaTrash />Удалить</DangerButton>
                                                         </>
                                                     ) : null}
-                                                </ActionsMenu>
+                                                </ActionsMenu>,
+                                                document.body
                                             ) : null}
                                         </ActionsOverflow>
                                     ) : null}
@@ -1744,12 +1615,12 @@ export default function PlaylistPage({ playlistIdentifier }) {
                                                         background: 'rgba(255,255,255,0.04)'
                                                     }}
                                                 >
-                                                    <TrackCover>
+                                                    <TrackRowCover>
                                                         <img src={apiClient.getCoverUrl(s)} alt="" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                                                    </TrackCover>
+                                                    </TrackRowCover>
                                                     <div style={{ minWidth: 0 }}>
-                                                        <TrackTitle title={s.title || ''}>{s.title || 'Без названия'}</TrackTitle>
-                                                        <TrackArtist title={s.artist || ''}>{s.artist || 'Неизвестный'}</TrackArtist>
+                                                        <TrackRowTitle title={s.title || ''}>{s.title || 'Без названия'}</TrackRowTitle>
+                                                        <TrackRowSubtitle title={s.artist || ''}>{s.artist || 'Неизвестный'}</TrackRowSubtitle>
                                                     </div>
                                                     <SmallButton
                                                         type="button"

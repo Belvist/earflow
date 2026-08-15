@@ -13,6 +13,19 @@ import ArtistLinks from './ArtistLinks';
 import asyncMapLimit from '../utils/asyncMapLimit';
 import { resolveArtistPath } from '../utils/artistRoute';
 import { getCanonicalOrigin, setPageMeta } from '../utils/seo';
+import {
+  trackRowStyles,
+  TrackRowNumber,
+  TrackRowIndicator,
+  TrackRowPlayingBars,
+  TrackRowCover,
+  TrackRowInfo,
+  TrackRowTitle,
+  TrackRowSubtitle,
+  TrackRowDuration,
+  formatTrackDuration,
+} from './tracks/trackRowStyles';
+import { heroOverlayBackground } from './tracks/heroStyles';
 
 const Page = styled.div`
   min-height: 0;
@@ -75,10 +88,7 @@ const HeroOverlay = styled.div`
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background:
-    radial-gradient(1300px 460px at 50% 12%, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.70) 68%, rgba(0,0,0,0.98) 100%),
-    linear-gradient(180deg, rgba(0,0,0,0.06) 0%, rgba(0,0,0,0.34) 58%, rgba(0,0,0,0.78) 78%, rgba(0,0,0,1) 100%),
-    linear-gradient(90deg, rgba(0,0,0,0.42) 0%, rgba(0,0,0,0) 24%, rgba(0,0,0,0) 76%, rgba(0,0,0,0.42) 100%);
+  ${heroOverlayBackground}
 `;
 
 const Content = styled.div`
@@ -355,133 +365,13 @@ const TrackList = styled.div`
 
 const ListSection = styled(Content)`
   z-index: 2;
-  padding-top: 10px;
-  background: var(--ef-surface-main, #0d0d0d);
-
-  &::before {
-    content: '';
-    position: absolute;
-    left: 50%;
-    top: -92px;
-    width: 100vw;
-    height: 120px;
-    transform: translateX(-50%);
-    background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.82) 58%, rgba(0,0,0,1) 100%);
-    pointer-events: none;
-    z-index: -1;
-  }
+  padding-top: 20px;
+  background: transparent;
 `;
 
 const TrackRow = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 48px;
-  padding: 8px 10px;
-  font-family: inherit;
-  border-radius: 0;
-  cursor: pointer;
-  transition: background 0.2s;
-  width: 100%;
-  border: none;
-  text-align: left;
-  background: ${p => (p.$active ? 'rgba(255,255,255,0.12)' : 'transparent')};
-  color: #fff;
-  -webkit-tap-highlight-color: transparent;
-
-  @media (min-width: 641px) {
-    gap: 16px;
-    padding: 12px;
-  }
-  
-  &:hover {
-    background: rgba(255,255,255,0.05);
-  }
-  
-  &:active {
-    background: rgba(255,255,255,0.10);
-  }
+  ${trackRowStyles}
 `;
-
-const TrackNum = styled.div`
-  width: 20px;
-  text-align: right;
-  font-size: 12px;
-  color: rgba(255,255,255,0.4);
-
-  @media (min-width: 641px) {
-    width: 24px;
-    font-size: 14px;
-  }
-`;
-
-const Indicator = styled.div`
-  width: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: rgba(255, 255, 255, 0.85);
-`;
-
-const bars = keyframes`
-  0% { transform: scaleY(0.35); opacity: 0.55; }
-  50% { transform: scaleY(1); opacity: 1; }
-  100% { transform: scaleY(0.35); opacity: 0.55; }
-`;
-
-const PlayingBars = styled.div`
-  width: 18px;
-  height: 14px;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 2px;
-  span {
-    width: 3px;
-    height: 100%;
-    border-radius: 2px;
-    background: rgba(255, 255, 255, 0.9);
-    transform-origin: bottom;
-    animation: ${bars} 0.85s ease-in-out infinite;
-  }
-  span:nth-child(2) { animation-delay: 0.12s; }
-  span:nth-child(3) { animation-delay: 0.24s; }
-`;
-
-const TrackInfo = styled.div`
-  flex: 1;
-  min-width: 0;
-`;
-
-const TrackName = styled.div`
-  font-size: 12px;
-  font-weight: 500;
-  margin-bottom: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-
-  @media (min-width: 641px) {
-    font-size: 14px;
-  }
-`;
-
-const TrackDuration = styled.div`
-  font-size: 11px;
-  color: rgba(255,255,255,0.4);
-  margin-left: auto;
-
-  @media (min-width: 641px) {
-    font-size: 13px;
-  }
-`;
-
-const formatDuration = (s) => {
-  if (!s) return '0:00';
-  const m = Math.floor(s / 60);
-  const sec = Math.floor(s % 60);
-  return `${m}:${sec.toString().padStart(2, '0')}`;
-};
 
 export default function AlbumPage() {
   const { artist: artistParam, albumName: albumNameParam, albumPublicId } = useParams();
@@ -776,24 +666,30 @@ export default function AlbumPage() {
                   onClick={() => player.playFromList(tracks, track.id, displayAlbumName)}
                 >
                   {isActive ? (
-                    <Indicator>
+                    <TrackRowIndicator>
                       {isPlaying ? (
-                        <PlayingBars aria-label="Играет">
+                        <TrackRowPlayingBars aria-label="Играет">
                           <span />
                           <span />
                           <span />
-                        </PlayingBars>
+                        </TrackRowPlayingBars>
                       ) : (
                         <FaPlay size={10} aria-label="Выбрано" />
                       )}
-                    </Indicator>
+                    </TrackRowIndicator>
                   ) : (
-                    <TrackNum>{i + 1}</TrackNum>
+                    <TrackRowNumber>{i + 1}</TrackRowNumber>
                   )}
-                  <TrackInfo>
-                    <TrackName>{track.title}</TrackName>
-                  </TrackInfo>
-                  <TrackDuration>{formatDuration(track.duration)}</TrackDuration>
+                  <TrackRowCover>
+                    <CachedCoverImage src={apiClient.getCoverUrl(track)} alt="" />
+                  </TrackRowCover>
+                  <TrackRowInfo>
+                    <TrackRowTitle title={track.title}>{track.title || 'Без названия'}</TrackRowTitle>
+                    {(track.artist || track.album) && (
+                      <TrackRowSubtitle>{[track.artist, track.album].filter(Boolean).join(' — ')}</TrackRowSubtitle>
+                    )}
+                  </TrackRowInfo>
+                  <TrackRowDuration>{formatTrackDuration(track.duration)}</TrackRowDuration>
                 </TrackRow>
               );
             })}

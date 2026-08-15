@@ -1,9 +1,19 @@
 import React, { useMemo } from 'react';
-import styled, { keyframes } from 'styled-components';
+import styled from 'styled-components';
 import { FaPlay, FaChevronLeft } from 'react-icons/fa';
 import apiClient from '../api/client';
 import { usePlayer } from '../context/PlayerContext';
 import CachedCoverImage from './CachedCoverImage';
+import {
+  trackRowStyles,
+  TrackRowNumber,
+  TrackRowIndicator,
+  TrackRowPlayingBars,
+  TrackRowCover,
+  TrackRowInfo,
+  TrackRowTitle,
+  TrackRowSubtitle,
+} from './tracks/trackRowStyles';
 
 const Section = styled.section`
   padding: 22px 16px 0;
@@ -67,138 +77,8 @@ const Tracks = styled.div`
   gap: 10px;
 `;
 
-const Indicator = styled.div`
-  width: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-
-  @media (min-width: 768px) {
-    width: 24px;
-  }
-`;
-
-const bars = keyframes`
-  0% { transform: scaleY(0.35); opacity: 0.55; }
-  50% { transform: scaleY(1); opacity: 1; }
-  100% { transform: scaleY(0.35); opacity: 0.55; }
-`;
-
-const PlayingBars = styled.div`
-  width: 18px;
-  height: 14px;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 2px;
-
-  span {
-    width: 3px;
-    height: 100%;
-    border-radius: 2px;
-    background: rgba(255, 255, 255, 0.92);
-    transform-origin: bottom;
-    animation: ${bars} 0.85s ease-in-out infinite;
-  }
-
-  span:nth-child(2) { animation-delay: 0.12s; }
-  span:nth-child(3) { animation-delay: 0.24s; }
-`;
-
 const TrackRow = styled.button`
-  width: 100%;
-  text-align: left;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px;
-  margin: 0 -8px;
-  border-radius: 10px;
-  border: none;
-  font-family: 'Unbounded', sans-serif;
-  background: ${p => p.$active ? 'rgba(255,255,255,0.08)' : 'transparent'};
-  color: #fff;
-  cursor: pointer;
-  transition: background 0.15s ease;
-  -webkit-tap-highlight-color: transparent;
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.05);
-  }
-
-  &:active {
-    background: rgba(255, 255, 255, 0.1);
-  }
-
-  @media (min-width: 768px) {
-    gap: 12px;
-    padding: 10px;
-    margin: 0 -10px;
-  }
-`;
-
-const TrackNum = styled.div`
-  width: 18px;
-  text-align: center;
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.35);
-  flex-shrink: 0;
-
-  @media (min-width: 768px) {
-    width: 24px;
-    font-size: 12px;
-  }
-`;
-
-const TrackCover = styled.div`
-  width: 40px;
-  height: 50px;
-  border-radius: 5px;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.05);
-  flex-shrink: 0;
-
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-  }
-
-  @media (min-width: 768px) {
-    width: 48px;
-    height: 60px;
-    border-radius: 6px;
-  }
-`;
-
-const TrackInfo = styled.div`
-  flex: 1;
-  min-width: 0;
-`;
-
-const TrackTitle = styled.div`
-  font-size: 12px;
-  font-weight: 400;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: #fff;
-
-  @media (min-width: 768px) {
-    font-size: 13px;
-  }
-`;
-
-const TrackMeta = styled.div`
-  margin-top: 2px;
-  font-size: 11px;
-  font-weight: 300;
-  color: rgba(255, 255, 255, 0.45);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  ${trackRowStyles}
 `;
 
 const TrackBadge = styled.div`
@@ -339,30 +219,30 @@ export default function ArtistTracksSection({
             return (
               <TrackRow key={t.id} onClick={() => onPlayTrack(t.id)} $active={isActive}>
                 {isActive ? (
-                  <Indicator>
+                  <TrackRowIndicator>
                     {isPlaying ? (
-                      <PlayingBars aria-label="Играет">
+                      <TrackRowPlayingBars aria-label="Играет">
                         <span />
                         <span />
                         <span />
-                      </PlayingBars>
+                      </TrackRowPlayingBars>
                     ) : (
                       <FaPlay size={10} aria-label="Выбрано" />
                     )}
-                  </Indicator>
+                  </TrackRowIndicator>
                 ) : (
-                  <TrackNum>{index + 1}</TrackNum>
+                  <TrackRowNumber>{index + 1}</TrackRowNumber>
                 )}
-                <TrackCover>
+                <TrackRowCover>
                   <CachedCoverImage src={apiClient.getCoverUrl(t)} alt="" />
-                </TrackCover>
-                <TrackInfo>
-                  <TrackTitle title={safeText(t.title)}>{safeText(t.title) || 'Без названия'}</TrackTitle>
-                  <TrackMeta title={safeText(t.album)}>
+                </TrackRowCover>
+                <TrackRowInfo>
+                  <TrackRowTitle title={safeText(t.title)}>{safeText(t.title) || 'Без названия'}</TrackRowTitle>
+                  <TrackRowSubtitle title={safeText(t.album)}>
                     {safeText(t.album) || artistName}
                     {getYearValue(t) ? ` • ${getYearValue(t)}` : ''}
-                  </TrackMeta>
-                </TrackInfo>
+                  </TrackRowSubtitle>
+                </TrackRowInfo>
                 <TrackBadge>
                   {!isActive && <FaPlay size={10} />}
                 </TrackBadge>
