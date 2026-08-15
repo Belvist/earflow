@@ -3,8 +3,10 @@ package auth
 import (
 	"bytes"
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -404,7 +406,12 @@ func (m *SessionManager) SessionAuthMiddleware() func(http.Handler) http.Handler
 					if len(sess.User) == 0 && len(rotated.User) > 0 {
 						sess.User = rotated.User
 					}
-					_ = m.store.Set(r.Context(), sid, *sess)
+					// L-3: do not swallow the Redis write error silently — after
+					// rotation the upstream token is already burned, so a failed
+					// local write is an observable incident, not noise.
+					if err := m.store.Set(r.Context(), sid, *sess); err != nil {
+						slog.Warn("auth session store write failed after refresh rotation", "err", err)
+					}
 
 					csrf, err := GenerateCSRFToken(sid, m.jwtSecret)
 					if err == nil {
@@ -666,7 +673,10 @@ func (m *SessionManager) enforceCSRF(w http.ResponseWriter, r *http.Request) boo
 		writeJSON(w, http.StatusForbidden, apiError{Error: csrfBlockedMessage, Code: "CSRF_MISSING"})
 		return false
 	}
-	if csrfHeader != csrfPrimary && csrfHeader != csrfAlt {
+	// L-17: constant-time compare for the double-submit cookie/header match.
+	primaryMatch := csrfPrimary != "" && subtle.ConstantTimeCompare([]byte(csrfHeader), []byte(csrfPrimary)) == 1
+	altMatch := csrfAlt != "" && subtle.ConstantTimeCompare([]byte(csrfHeader), []byte(csrfAlt)) == 1
+	if !primaryMatch && !altMatch {
 		writeJSON(w, http.StatusForbidden, apiError{Error: csrfBlockedMessage, Code: "CSRF_MISSING"})
 		return false
 	}
@@ -723,9 +733,14 @@ func (m *SessionManager) verifyIssuerAudience(claims jwt.MapClaims) bool {
 	if strings.TrimSpace(m.jwtIssuer) == "" && strings.TrimSpace(m.jwtAudience) == "" {
 		return true
 	}
-	iss, _ := claims["iss"].(string)
-	if strings.TrimSpace(iss) != m.jwtIssuer {
-		return false
+	// L-20: issuer is enforced only when configured. Previously an empty issuer
+	// with a non-empty audience forced every token to carry an empty `iss`,
+	// rejecting legitimate issuer-tagged tokens.
+	if strings.TrimSpace(m.jwtIssuer) != "" {
+		iss, _ := claims["iss"].(string)
+		if strings.TrimSpace(iss) != m.jwtIssuer {
+			return false
+		}
 	}
 	if strings.TrimSpace(m.jwtAudience) == "" {
 		return true

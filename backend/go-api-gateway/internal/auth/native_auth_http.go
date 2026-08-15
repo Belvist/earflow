@@ -171,6 +171,15 @@ func (m *SessionManager) handleNativeFinalize() http.HandlerFunc {
 			writeMethodNotAllowedJSON(w)
 			return
 		}
+		// L-18: finalize mints a PKCE code bound to the current session cookie.
+		// Cross-site top-level GETs from an attacker origin (luring the victim
+		// into completing a code exchange for the attacker's challenge) must not
+		// mint codes. Same-origin navigations (login return_to flow) keep
+		// working: enforceOrigin accepts same-site fetches / allowed Referer
+		// when the browser omits Origin on the redirect.
+		if !m.EnforceOrigin(w, r) {
+			return
+		}
 		q := r.URL.Query()
 		redirectURI := strings.TrimSpace(q.Get("redirect_uri"))
 		state := strings.TrimSpace(q.Get("state"))

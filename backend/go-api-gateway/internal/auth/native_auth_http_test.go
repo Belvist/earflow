@@ -74,6 +74,10 @@ func TestNativeFinalizeMintsCodeAndRedirects(t *testing.T) {
 	}.Encode()
 
 	req := httptest.NewRequest(http.MethodGet, target, nil)
+	// Real login return_to flow: navigates from auth.earflow.ru; browsers drop
+	// Origin on top-level navigation and send Referer instead.
+	req.Header.Set("Referer", "https://auth.earflow.ru/login")
+	req.Header.Set("Sec-Fetch-Site", "same-site")
 	ctx := context.WithValue(req.Context(), ctxSID, sid)
 	ctx = context.WithValue(ctx, ctxUserID, "42")
 	req = req.WithContext(ctx)
@@ -112,6 +116,10 @@ func TestNativeFinalizeNoSessionRedirectsLoginRequired(t *testing.T) {
 		"code_challenge": {challenge},
 	}.Encode()
 	req := httptest.NewRequest(http.MethodGet, target, nil)
+	// Real login return_to flow: navigates from auth.earflow.ru; browsers drop
+	// Origin on top-level navigation and send Referer instead.
+	req.Header.Set("Referer", "https://auth.earflow.ru/login")
+	req.Header.Set("Sec-Fetch-Site", "same-site")
 	w := httptest.NewRecorder()
 	m.handleNativeFinalize()(w, req)
 
@@ -138,6 +146,10 @@ func TestNativeFinalizeBadRedirectReturns400(t *testing.T) {
 		"code_challenge": {challenge},
 	}.Encode()
 	req := httptest.NewRequest(http.MethodGet, target, nil)
+	// Real login return_to flow: navigates from auth.earflow.ru; browsers drop
+	// Origin on top-level navigation and send Referer instead.
+	req.Header.Set("Referer", "https://auth.earflow.ru/login")
+	req.Header.Set("Sec-Fetch-Site", "same-site")
 	ctx := context.WithValue(req.Context(), ctxSID, "sid_12345678901234567890")
 	req = req.WithContext(ctx)
 	w := httptest.NewRecorder()
@@ -296,5 +308,47 @@ func TestNativeExchangeBadOriginRejected(t *testing.T) {
 
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want 403 for bad origin", w.Code)
+	}
+}
+
+func TestNativeFinalizeCrossSiteTopLevelNavigationRejected(t *testing.T) {
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mr.Close()
+
+	sid := "sid_12345678901234567890"
+	authDeviceID := "adev_1234567890123456789"
+	_, pub := generateTestECDSAKeyPair(t)
+	m := newProofTestManager(t, mr, sid, authDeviceID, pub, 42)
+	m.allowedOrigins = map[string]struct{}{"https://earflow.ru": {}, "https://auth.earflow.ru": {}}
+
+	_, challenge := makePKCEPairTest()
+	target := "/api/auth/native/finalize?" + url.Values{
+		"redirect_uri":          {defaultNativeRedirectURI},
+		"state":                 {"st-123"},
+		"code_challenge":        {challenge},
+		"code_challenge_method": {"S256"},
+	}.Encode()
+
+	// Cross-origin top-level navigation carries no Origin and no allowed Referer.
+	req := httptest.NewRequest(http.MethodGet, target, nil)
+	ctx := context.WithValue(req.Context(), ctxSID, sid)
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+	m.handleNativeFinalize()(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("cross-site top-level navigation = %d, want 403", w.Code)
+	}
+
+	// Same for a foreign Origin header.
+	req2 := httptest.NewRequest(http.MethodGet, target, nil)
+	req2.Header.Set("Origin", "https://evil.example")
+	req2 = req2.WithContext(context.WithValue(context.Background(), ctxSID, sid))
+	w2 := httptest.NewRecorder()
+	m.handleNativeFinalize()(w2, req2)
+	if w2.Code != http.StatusForbidden {
+		t.Fatalf("evil-origin navigation = %d, want 403", w2.Code)
 	}
 }

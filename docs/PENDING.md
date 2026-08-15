@@ -126,19 +126,19 @@
 7. **M-1 Per-email локдаун = DoS + энумерация** (`server.js:668-701`): 5 промахов на любой email → 15м блокировка аккаунта (атакующий замораживает жертву), 429 `Retry-After` раскрывает существование почты.
 8. **M-2 `pbkdf2Sync` 600k на event-loop** (`server.js:901-904`, login и decrypt) — блокирует ВСЕ запросы Node; в связке с IP-спуфингом — CPU-DoS. Вынести в worker-thread/piscina (в auth-core уже обещано, см. CONTEXT-ложь про пул).
 9. ~~**M-3 Проброс upstream-ошибок как есть**~~ **закрыто в live-стеке (подтверждено в коде)**: на live-пути (auth-core) оба кейса возвращают индентичный ответ — нет юзера и неверный пароль → одинаково `401 INVALID_CREDENTIALS`, идентичная запись `login_fail`, burnDecoy + константная проверка хеша (`service.go:186-206`). Gateway-функция `copyUpstreamError` просто перекидывает JSON auth-core, различий для клиента нет. Node-путь (MFA) для логина не используется. В гейтвее менять нечего.
-10. **M-4 Эпоха proof может быть пустой** (`proof_epoch_cache.go:100-114`): после рестарта gateway отозванный токен валиден до ~2.5 мин.
-11. **M-5 Неограниченные in-memory карты** (`proof_epoch_cache.go:8-11`, `revoke_subscriber.go:16-24` sync.Map без evict) + sweep `SMembers`+per-sid GET каждые 30с на общий Redis (`revoke_subscriber.go:119-164`) — рост памяти/нагрузка. Нужен evict/TTL.
+10. ~~**M-4 Эпоха proof может быть пустой после рестарта**~~ **ЗАКРЫТО 2026-08-15 (коммит `00c130b`)**: sweep теперь синхронизируется НЕМЕДЛЕННО при старте (до первого тика ~30с окно закрыто) + бампит proof-epoch floor при догонке (паритет с live pub/sub handler). Тест `h_m4_m5_test.go`.
+11. ~~**M-5 Неограниченные in-memory карты**~~ **ЗАКРЫТО 2026-08-15 (коммит `00c130b`)**: epoch-полы несут timestamp и сбрасываются, если не трогались >24ч (защищают только токены до bump'а, те живут ≤TTL токена). Revoke-марки старше 1ч сбрасываются (сессию уже удал RevokeSessionFull; sweep перезасеивает). GC каждые ~5м. Sweep `SMembers`+GET раз в 30с остаётся как есть — это documented trade-off (`revoke_subscriber.go:74-83`), при >10k сессий переход на delta-protocol.
 12. **M-6 Native exchange делит web-SID** (`native_auth_http.go:313-361`): приложение получает ту же сессию, что браузерная вкладка; отзыв одной убивает обе. Продуктовое решение.
 13. **M-7 Гонка при регистрации** (`server.js:980-1007`): GET→null→POST без upsert; `idx_users_email_hash` спасает от дублей, но параллельный регистр → 500. Upsert/обработка 23505.
 14. **M-8 `resolveIsAdminFromDb` fallback** (`server.js:278-293`): при сбое БД `isAdmin` из кэша/токена — риск эскалации admin при частичном сбое.
 
 **LOW / hardening:**
 15. `/api/auth/refresh` не под authLimiter (только globalLimiter, который для end-user скипается — remoteAddress = docker IP, `server.js:155-189`).
-16. **L-3** `session_manager.go:407` молчаливо глотает ошибки Redis после ротации (audit-пробел).
-17. CSRF-cookie/header сравнение не constant-time (`session_manager.go:674`, double-submit — не критично).
-18. `handleNativeFinalize` без Origin-проверки (`native_auth_http.go:168`).
+16. ~~**L-3** `session_manager.go:407` молчаливо глотает ошибки Redis после ротации~~ **ЗАКРЫТО 2026-08-15**: ошибка логируется (`slog.Warn`) — после ротации upstream-токен уже сожжён, ошибка записи наблюдаема.
+17. ~~CSRF-cookie/header сравнение не constant-time (`session_manager.go:674`)~~ **ЗАКРЫТО 2026-08-15**: `subtle.ConstantTimeCompare` для double-submit match (HMAC-сигнатура уже проверялась `hmac.Equal`).
+18. ~~`handleNativeFinalize` без Origin-проверки~~ **ЗАКРЫТО 2026-08-15**: `EnforceOrigin` добавлен в finalize — блокирует cross-site top-level навигацию (lure атакующего на mint кода под свой challenge); same-site navigation login-return flow проходит (Referer/Sec-Fetch-Site). Тест `TestNativeFinalizeCrossSiteTopLevelNavigationRejected`.
 19. ~~Мёртвый `CSRFProtectionMiddleware`~~ — **ЗАКРЫТО вместе с H-3** (смонтирован в `MountRoutes`, эксклюды удалены).
-20. `verifyIssuerAudience` ловушка при пустом issuer (`session_manager.go:724-758`, сейчас недостижимо).
+20. ~~`verifyIssuerAudience` ловушка при пустом issuer~~ **ЗАКРЫТО 2026-08-15**: issuer проверяется только если настроен (audience-only конфигурация больше не реджектит issuer-тэгнутые токены). Тест `l20_issuer_test.go`.
 21. jti/sid из refresh парсятся unverified для del-ключей Redis (`jti_extract.go:28-39`) — ключи строятся из claims без подписи (не-эксплуатируемо, т.к. только del).
 
 **Сканеры (не auth-код):**
