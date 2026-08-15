@@ -697,7 +697,10 @@ func (m *SessionManager) verifyAccess(token string) (bool, jwt.MapClaims) {
 	if clean == "" {
 		return false, nil
 	}
-	parser := jwt.NewParser(jwt.WithValidMethods([]string{"HS256"}))
+	// H-2: exp is REQUIRED. All live issuers set it (auth-core
+	// RegisteredClaims.ExpiresAt, Node expiresIn); an access token without exp
+	// must never validate even if signed.
+	parser := jwt.NewParser(jwt.WithValidMethods([]string{"HS256"}), jwt.WithExpirationRequired())
 	claims := jwt.MapClaims{}
 	_, err := parser.ParseWithClaims(clean, claims, func(t *jwt.Token) (any, error) {
 		return []byte(m.jwtSecret), nil

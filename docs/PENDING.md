@@ -94,7 +94,7 @@
 ### PEND-AUTH-005 — Полный security-аудит auth 2026-08-15 (прод: Node auth-service + Go gateway)
 
 **Priority:** high
-**Status:** open (C-1 исправлен 2026-08-15; остальное — по приоритету)
+**Status:** open (C-1, H-1, H-2, H-3, H-4 исправлены 2026-08-15; остальное — по приоритету)
 **Related:** PEND-AUTH-001 (auth-core flip), PEND-AUTH-004
 
 **Context:** Аудит «от и до» живого прода (Node `auth-service`, Go gateway `internal/auth`, auth-core, nginx, rate-limits). Прямых однокнопочных обходов нет — PoP (ECDSA proof) компенсирует слабые места. Ниже — findings по приоритету. C-1 подтверждён эмпирически: Express `trust proxy: 1` берёт **последний** XFF (nginx дописывает реальный IP в конец `$proxy_add_x_forwarded_for`) → `req.ip` и authLimiter в проде НЕ спуфятся через XFF; но гейтвей доверял XFF[0] (атакующему) для SoT-меты и форвардил сырой XFF upstream (defense-in-depth) — это исправлено.
@@ -115,17 +115,17 @@
 7. **H-5c timing-oracle** — `burnDecoy` активен: `AUTH_DECOY_SALT` = 64-hex на проде (иначе burn не работает). Закрыто.
 8. **H-5a grace 6h** — НАМЕРЕННОЕ решение (CONTEXT): старый украденный refresh бесполезен без device-ключа, а grace защищает легитимные мультитаб-гонки. НЕ баг; при желании ужать → `AUTH_GRACE_TTL_SECONDS`.
 
-**HIGH — не исправлены, на ревью человеку:**
+**HIGH — все закрыты 2026-08-15 (H-1/2/3/4) или подтверждены не-багами (H-5); ниже — история:**
 2. ~~**H-1 Ротация refresh ДО PoP-проверки**~~ **ИСПРАВЛЕНО 2026-08-15**: порядок middleware на gateway перевёрнут — `DeviceProofMiddleware` НАРУЖУ, `SessionAuthMiddleware` внутри (`internal/app/server.go:121-128`). Ротация в `SessionAuthMiddleware` теперь достигается только после валидного device-proof; украденный cookie без device-ключа → 401 (proof) без ротации/сжигания refresh жертвы. Для этого `deviceProofRequiredForRequest` теперь резолвит sid из cookie (а не только из `ctxSID`, который ставит SessionAuth), чтобы PoP был принудительно включён на всех `/api`-путях под флипом. Regression-тесты `h1_rotation_order_test.go` (ротация НЕ вызывается без proof; с валидным proof — вызывается). Коммит ниже. **Инвариант:** PoP нельзя ослаблять; см. `INV-SEC-023`.
-3. **H-2 Access-токен без требования `exp`** (`session_manager.go:700-721`): `jwt.NewParser(WithValidMethods)` без `WithExpirationRequired`/`WithLeeway`; Node всегда ставит `exp`, но defense-in-depth требует принудительно.
-4. **H-3 CSRF на чувствительных локальных POST**: прод `SameSite=none` + cookie на `.earflow.ru`; `/api/auth/refresh`, `/logout`, `/proof/token`, `/stream-ticket`, `/native/exchange`, `2fa/*` защищены только Origin (кроме device/register и proxied unsafe). Полный CSRF-чек — только `reverse_proxy.go:158`. Единственный барьер от browser-CSRF — PoP. Включить double-submit CSRF на локальные auth-POST.
-5. **H-4 Proof-access-token — переиспользуемый bearer 90–120с** (`proof_access_token.go`): HS256, один секрет, без nonce/привязки/одноразовости; действует на все не-sensitive маршруты включая stream-ticket mint. Украденный токен (XSS/лог/кэш) = действие от имени устройства на окне. Рассмотреть: привязка к IP/path, сокращение TTL, ротация.
+3. ~~**H-2 Access-токен без требования `exp`**~~ **ЗАКРЫТО 2026-08-15**: `jwt.WithExpirationRequired()` добавлен в оба парсера gateway — `verifyAccess` (`session_manager.go`) и `validateProofAccessToken` (`proof_access_token.go`). Токен без `exp` (даже валидно подписанный) теперь не проходит никогда. Все live-эмиттеры уже ставили `exp` (auth-core `RegisteredClaims.ExpiresAt`, Node `expiresIn`) — изменение чистая страховка. Regression-тесты `h2_exp_test.go` (no-exp отклонён, expired отклонён, proof-token без exp → 401).
+4. ~~**H-3 CSRF на чувствительных локальных POST**~~ **ЗАКРЫТО 2026-08-15 (коммит `a880ba0`):** полный double-submit CSRF (Origin + cookie/header match + HMAC) смонтирован на chi-группу `/api/auth/refresh`, `/logout`, `/proof/token`, `/stream-ticket` И `/device/register` (bind атакующим своего device-ключа к сессии жертвы = обход PoP — высокоценная CSRF-цель). Pre-session (login/register/telegram/csrf) исключены — у них ещё нет csrf-cookie. Native-потоки не браузерные (нет CSRF-поверхности) — остаются на EnforceOrigin. Фронт logout теперь шлёт `X-CSRF-Token` (убран `skipCsrf`). Regression-тесты `h3_csrf_test.go`.
+5. ~~**H-4 Proof-access-token — переиспользуемый bearer**~~ **ЗАКРЫТО 2026-08-15 (частично, по рекомендации аудита):** (1) токен теперь привязан к IP клиента в момент выдачи (claim `ip`; use с другого адреса → 401) — утечка/реплей из другой сети не работает; (2) TTL 90с → 60с. Одноразовость (nonce/GetDel) сознательно НЕ введена: это perf-фича hot-path (capacity-pass p95 6.18ms при 500 RPS, кэш токена на фронте ~60с) — одноразовый токен требовал бы Redis-чек на каждый hot-запрос. Остаток риска: reuse украденного токена в течение ≤60с с того же IP (требует XSS/доступ к устройству). Тесты: `proof_access_token_test.go` (IP-привязка, legacy-токены без привязки, TTL).
 6. **H-5 auth-core (Go, НЕ live):** grace-окно 6ч (против 30м в Node, `auth-core/internal/authn/refresh.go:56-66`) — украденный старый refresh отдаёт валидную пару до 6ч; `server.go:79-106` X-Real-IP/XFF-спуфинг IP-троттлинга; тайминг-оракул учётки (`service.go:186-209`); неотзываемые access + кэш профиля 600с аутентифицирует удалённых (`profile.go:31-40`). **Чинить до/вместе с флипом PEND-AUTH-001.**
 
 **MEDIUM — на ревью человеку:**
 7. **M-1 Per-email локдаун = DoS + энумерация** (`server.js:668-701`): 5 промахов на любой email → 15м блокировка аккаунта (атакующий замораживает жертву), 429 `Retry-After` раскрывает существование почты.
 8. **M-2 `pbkdf2Sync` 600k на event-loop** (`server.js:901-904`, login и decrypt) — блокирует ВСЕ запросы Node; в связке с IP-спуфингом — CPU-DoS. Вынести в worker-thread/piscina (в auth-core уже обещано, см. CONTEXT-ложь про пул).
-9. **M-3 Проброс upstream-ошибок как есть** (`http_routes.go:456-468`): различия «нет юзера/неверный пароль» доходят до клиента (энумерация).
+9. ~~**M-3 Проброс upstream-ошибок как есть**~~ **закрыто в live-стеке (подтверждено в коде)**: на live-пути (auth-core) оба кейса возвращают индентичный ответ — нет юзера и неверный пароль → одинаково `401 INVALID_CREDENTIALS`, идентичная запись `login_fail`, burnDecoy + константная проверка хеша (`service.go:186-206`). Gateway-функция `copyUpstreamError` просто перекидывает JSON auth-core, различий для клиента нет. Node-путь (MFA) для логина не используется. В гейтвее менять нечего.
 10. **M-4 Эпоха proof может быть пустой** (`proof_epoch_cache.go:100-114`): после рестарта gateway отозванный токен валиден до ~2.5 мин.
 11. **M-5 Неограниченные in-memory карты** (`proof_epoch_cache.go:8-11`, `revoke_subscriber.go:16-24` sync.Map без evict) + sweep `SMembers`+per-sid GET каждые 30с на общий Redis (`revoke_subscriber.go:119-164`) — рост памяти/нагрузка. Нужен evict/TTL.
 12. **M-6 Native exchange делит web-SID** (`native_auth_http.go:313-361`): приложение получает ту же сессию, что браузерная вкладка; отзыв одной убивает обе. Продуктовое решение.
@@ -137,7 +137,7 @@
 16. **L-3** `session_manager.go:407` молчаливо глотает ошибки Redis после ротации (audit-пробел).
 17. CSRF-cookie/header сравнение не constant-time (`session_manager.go:674`, double-submit — не критично).
 18. `handleNativeFinalize` без Origin-проверки (`native_auth_http.go:168`).
-19. Мёртвый `CSRFProtectionMiddleware` (`session_manager.go:544`, нигде не смонтирован) — удалить или смонтировать.
+19. ~~Мёртвый `CSRFProtectionMiddleware`~~ — **ЗАКРЫТО вместе с H-3** (смонтирован в `MountRoutes`, эксклюды удалены).
 20. `verifyIssuerAudience` ловушка при пустом issuer (`session_manager.go:724-758`, сейчас недостижимо).
 21. jti/sid из refresh парсятся unverified для del-ключей Redis (`jti_extract.go:28-39`) — ключи строятся из claims без подписи (не-эксплуатируемо, т.к. только del).
 

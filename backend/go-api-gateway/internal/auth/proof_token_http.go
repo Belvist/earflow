@@ -42,7 +42,7 @@ func (m *SessionManager) handleProofToken() http.HandlerFunc {
 			return
 		}
 
-		token, exp, err := m.issueProofAccessToken(sid, authDeviceID, epochs)
+		token, exp, err := m.issueProofAccessToken(sid, authDeviceID, epochs, clientIPFromRequest(r))
 		if err != nil {
 			writeServiceUnavailableJSON(w, http.StatusServiceUnavailable)
 			return

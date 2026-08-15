@@ -27,7 +27,7 @@ func TestProofAccessTokenHotPathSkipsNonce(t *testing.T) {
 	manager := newProofTestManager(t, mr, sid, authDeviceID, pub, 9)
 	manager.proofEpochs = newProofEpochCache()
 
-	token, _, err := manager.issueProofAccessToken(sid, authDeviceID, ProofEpochLookup{})
+	token, _, err := manager.issueProofAccessToken(sid, authDeviceID, ProofEpochLookup{}, "")
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestProofAccessTokenRejectedAfterEpochBump(t *testing.T) {
 	manager := newProofTestManager(t, mr, sid, authDeviceID, pub, 9)
 	manager.proofEpochs = newProofEpochCache()
 
-	token, _, err := manager.issueProofAccessToken(sid, authDeviceID, ProofEpochLookup{SessionEpoch: 1})
+	token, _, err := manager.issueProofAccessToken(sid, authDeviceID, ProofEpochLookup{SessionEpoch: 1}, "")
 	if err != nil {
 		t.Fatalf("issue: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestSensitivePathRequiresFullProofEvenWithToken(t *testing.T) {
 	manager := newProofTestManager(t, mr, sid, authDeviceID, pub, 9)
 	manager.proofEpochs = newProofEpochCache()
 
-	token, _, err := manager.issueProofAccessToken(sid, authDeviceID, ProofEpochLookup{})
+	token, _, err := manager.issueProofAccessToken(sid, authDeviceID, ProofEpochLookup{}, "")
 	if err != nil {
 		t.Fatalf("issue: %v", err)
 	}
@@ -178,5 +178,72 @@ func TestProofTokenHandlerIssuesToken(t *testing.T) {
 	}
 	if body.Token == "" || body.ExpiresIn <= 0 {
 		t.Fatalf("bad response: %+v", body)
+	}
+}
+
+func serveWithToken(manager *SessionManager, token, remoteAddr string) int {
+	req := httptest.NewRequest(http.MethodGet, "/api/profile", nil)
+	req.RemoteAddr = remoteAddr
+	req.AddCookie(&http.Cookie{Name: "mp_sid", Value: "sid_12345678901234567890"})
+	req.Header.Set(headerAuthDeviceID, "adev_1234567890123456789")
+	req.Header.Set(headerProofAccessToken, token)
+	w := httptest.NewRecorder()
+	manager.SessionAuthMiddleware()(manager.DeviceProofMiddleware()(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))).ServeHTTP(w, req)
+	return w.Code
+}
+
+// TestProofAccessTokenBoundToClientIP: H-4 — a token minted from one client
+// address is rejected when replayed from another (leaked-token window).
+func TestProofAccessTokenBoundToClientIP(t *testing.T) {
+	t.Setenv(envProofAccessTokenEnabled, "1")
+	t.Setenv(envProofAccessTokenTTL, "")
+
+	mr, _ := miniredis.Run()
+	defer mr.Close()
+	sid := "sid_12345678901234567890"
+	authDeviceID := "adev_1234567890123456789"
+	_, pub := generateTestECDSAKeyPair(t)
+	manager := newProofTestManager(t, mr, sid, authDeviceID, pub, 9)
+	manager.proofEpochs = newProofEpochCache()
+
+	token, _, err := manager.issueProofAccessToken(sid, authDeviceID, ProofEpochLookup{}, "203.0.113.7")
+	if err != nil {
+		t.Fatalf("issue: %v", err)
+	}
+	if got := serveWithToken(manager, token, "203.0.113.7:55001"); got != http.StatusOK {
+		t.Fatalf("same-ip use = %d, want 200", got)
+	}
+	if got := serveWithToken(manager, token, "198.51.100.9:55002"); got != http.StatusUnauthorized {
+		t.Fatalf("different-ip use = %d, want 401", got)
+	}
+}
+
+// TestProofAccessTokenLegacyUnboundAccepted: tokens minted before IP binding
+// (no "ip" claim; live ≤90s after rollout) keep working from any address.
+func TestProofAccessTokenLegacyUnboundAccepted(t *testing.T) {
+	t.Setenv(envProofAccessTokenEnabled, "1")
+
+	mr, _ := miniredis.Run()
+	defer mr.Close()
+	sid := "sid_12345678901234567890"
+	authDeviceID := "adev_1234567890123456789"
+	_, pub := generateTestECDSAKeyPair(t)
+	manager := newProofTestManager(t, mr, sid, authDeviceID, pub, 9)
+	manager.proofEpochs = newProofEpochCache()
+
+	token, _, err := manager.issueProofAccessToken(sid, authDeviceID, ProofEpochLookup{}, "")
+	if err != nil {
+		t.Fatalf("issue: %v", err)
+	}
+	if got := serveWithToken(manager, token, "203.0.113.77:55003"); got != http.StatusOK {
+		t.Fatalf("legacy-token use = %d, want 200", got)
+	}
+}
+
+// TestProofAccessTokenTTLDefault60s: H-4 shrinks the reuse window 90s → 60s.
+func TestProofAccessTokenTTLDefault(t *testing.T) {
+	t.Setenv(envProofAccessTokenTTL, "")
+	if got := proofAccessTokenTTL(); got != 60*time.Second {
+		t.Fatalf("default TTL = %s, want 60s", got)
 	}
 }

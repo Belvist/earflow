@@ -4,6 +4,45 @@
 
 ---
 
+## 2026-08-15 — H-4 + H-2: proof-access-token привязка к IP/TTL 60с; exp обязателен во всех JWT-валидаторах gateway
+
+**Status:** accepted (gateway `go vet` + `go test ./...` PASS; prod deploy + e2e зелёный)
+**Area:** auth | security | backend (gateway)
+**Related:** PEND-AUTH-005, INV-SEC-024, capacity-pass 2026 (SEC-013)
+
+**Context:** После закрытия H-3 остались два HIGH: (1) proof-access-token — stateless HS256 bearer на 90–120с, переиспользуемый, без привязки/одноразовости; утечка (XSS/лог) = действие от имени устройства в окне; (2) access-токен валидировался без требования `exp`.
+
+**Decision:**
+1. **H-4 (частично, по рекомендации аудита):** токен теперь привязан к IP клиента при минте (claim `ip` = доверенный `clientIPFromRequest`) и валидируется на тот же IP при использовании (`net.IP.Equal`, IPv4-mapped safe). TTL 90с → 60с default. **Одноразовость/nonce сознательно не введены**: proof-token — perf-фича hot-path (capacity-pass: p95 6.18ms @ 500 RPS; фронт кэшит токен на ~55с). Одноразовость потребовала бы Redis-чек на каждый hot-запрос — потеря смысла. Legacy-токены без claim (≤90с после деплоя) принимаются без привязки.
+2. **H-2:** `jwt.WithExpirationRequired()` в обоих валидаторах gateway — `verifyAccess` (session_manager.go) и `validateProofAccessToken`. Все live-эмиттеры (auth-core `RegisteredClaims.ExpiresAt`, Node `expiresIn`) всегда ставили `exp` — это чистый defense-in-depth.
+3. **M-3 проверен и подтверждён не-багом на live-стеке**: auth-core возвращает идентичный 401 `INVALID_CREDENTIALS` для «нет юзера»/«неверный пароль»/legacy-hash-miss + burnDecoy + константная хеш-проверка (`service.go:186-206`) — различий для энумерации нет.
+
+**Consequences:** утечка proof-token бесполезна из другой сети/с другого IP; окно reuse на том же IP ≤60с (атака требует XSS или доступа к устройству); CGNAT/смена IP (мобильные сети) → один 401 + авто-рекавери фронта (`deviceProofRecovery.js`: invalidate binding → re-register → новый минт с текущим IP). Тесты: H-2 `h2_exp_test.go`, H-4 IP-привязка/legacy/TTL в `proof_access_token_test.go`. Весь HIGH-уровень аудита закрыт.
+
+**Чтобы не повторилось:** proof-token остаётся stateless bearer — не добавлять в него чувствительные операции (sensitive-пути уже всегда на full PoP); при любом расширении его полномочий — пересмотреть одноразовость. `WithExpirationRequired` — обязательный параметр любого нового JWT-парсера в gateway.
+
+---
+
+## 2026-08-15 — H-3: double-submit CSRF на чувствительные локальные auth-POST
+
+**Status:** accepted (gateway `go vet` + `go test ./...` PASS; prod deploy + e2e зелёные)
+**Area:** auth | security | backend (gateway, frontend)
+**Related:** PEND-AUTH-005, INV-SEC-021
+
+**Context:** Прод `SameSite=none` + cookie на `.earflow.ru`; локальные auth-POST (`/api/auth/refresh`, `/logout`, `/proof/token`, `/stream-ticket`, `/device/register`) защищались только EnforceOrigin. Полная CSRF-защита существовала лишь в проксированных unsafe-маршрутах (`reverse_proxy.go`). Единственным барьером от browser-CSRF был PoP.
+
+**Decision:**
+1. `CSRFProtectionMiddleware` (ранее мёртвый, с эксклюдами `/api/auth/refresh` и `/logout`) смонтирован на chi-группу: `/api/auth/refresh`, `/logout`, `/proof/token`, `/stream-ticket` И `/device/register` (привязка чужого device-ключа к сессии жертвы — обход всего PoP-механизма). Эксклюды удалены.
+2. Pre-session маршруты (login/register/telegram/csrf) НЕ проходят через группу: csrf-cookie ещё нет. Native-потоки — не браузерные (нет CSRF-поверхности), остаются на EnforceOrigin.
+3. Фронт logout: убран `skipCsrf: true` → шлёт `X-CSRF-Token` (остальные `skipCsrf` — pre-session/public GET, не в группе).
+4. Тесты: `h3_csrf_test.go` (no-token 403 `CSRF_MISSING`, forged-token 403, GET bypass). Prod e2e подтвердил happy-path (refresh/logout с верным токеном — 204/403-replay как раньше).
+
+**Consequences:** CSRF-атака теперь требует знания csrf-cookie (недостижимо с другого origin) + valid Origin + HMAC-токена; без device-ключа и без csrf-cookie ничего из чувствительных POST не пройдёт. Frontend refresh-поток имеет встроенный `csrfRetryOn403` (ротация csrf-cookie при expired-access refresh → один 403 + ретрай с новым токеном). Остаток аудита: H-2 (exp), H-4 (proof-token bearer), M-* (PEND-AUTH-005).
+
+**Чтобы не повторилось:** новый чувствительный POST в `MountRoutes` — сразу в CSRF-группу (или явно обосновать исключение); не возвращать эксклюды refresh/logout.
+
+---
+
 ## 2026-08-15 — Auth-аудит на live Go-стеке: C-1 XFF, H-1 PoP-до-ротации, auth-core гонка регистраций
 
 **Status:** accepted (gateway/security-service/auth-core build + `go test ./...` PASS; prod e2e зелёный через auth-core; SoT IP верифицирован)
@@ -18,7 +57,7 @@
 3. **auth-core:** миграция `007_users_email_hash_unique.sql` (UNIQUE `users.email_hash`) закрывает гонку регистраций одного email (`CreateUser` уже мапил 23505→EMAIL_TAKEN, но индекса не было). `PROFILE_CACHE_TTL_SECONDS` default 600→60 (кэш не инвалидируется при удалении/демоции юзера). CONTEXT исправлен: пула горутин PBKDF2 нет; путь миграции поправлен.
 4. **Grace 6h auth-core** (`AUTH_GRACE_TTL_SECONDS`) — сознательное решение (CONTEXT): украденный refresh бесполезен без device-ключа, grace защищает мультитаб-гонки. Не менялся.
 
-**Consequences:** SoT-мета сессий теперь хранит реальный IP клиента; украденные cookie не ротируют refresh; регистрации не гонятся на UNIQUE; кэш профиля возвращает устаревшие данные максимум 60с. Остаются H-2 (exp access), H-3 (CSRF), H-4 (proof-token bearer), M-* (см. PEND-AUTH-005).
+**Consequences:** SoT-мета сессий теперь хранит реальный IP клиента; украденные cookie не ротируют refresh; регистрации не гонятся на UNIQUE; кэш профиля возвращает устаревшие данные максимум 60с. Остаются H-2 (exp access), H-4 (proof-token bearer), M-* (см. PEND-AUTH-005). H-3 (CSRF) закрыт той же датой, см. запись выше.
 
 **Чтобы не повторилось:** PoP-требование и порядок DeviceProof→SessionAuth — контракт (`INV-SEC-023`), не менять без аудита. Trusted-client-IP — единственный X-Real-IP/последний XFF. Любая миграция auth-схемы — через `database-service/database/migrations/` с применением на проде.
 

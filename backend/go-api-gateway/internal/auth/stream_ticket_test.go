@@ -40,7 +40,7 @@ func TestStreamTicketDisabledReturns404(t *testing.T) {
 	manager.proofEpochs = newProofEpochCache()
 	manager.allowedOrigins = map[string]struct{}{"https://earflow.ru": {}}
 
-	token, _, err := manager.issueProofAccessToken(sid, authDeviceID, ProofEpochLookup{})
+	token, _, err := manager.issueProofAccessToken(sid, authDeviceID, ProofEpochLookup{}, "")
 	if err != nil {
 		t.Fatalf("issue proof token: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestStreamTicketMediaWithProofAccessToken(t *testing.T) {
 
 	manager.proofEpochs.remember(sid, authDeviceID, 2, 3)
 
-	token, _, err := manager.issueProofAccessToken(sid, authDeviceID, ProofEpochLookup{SessionEpoch: 2, DeviceEpoch: 3})
+	token, _, err := manager.issueProofAccessToken(sid, authDeviceID, ProofEpochLookup{SessionEpoch: 2, DeviceEpoch: 3}, "")
 	if err != nil {
 		t.Fatalf("issue proof token: %v", err)
 	}
@@ -127,7 +127,7 @@ func TestStreamTicketStreamSessionJWT(t *testing.T) {
 	manager.proofEpochs = newProofEpochCache()
 	manager.allowedOrigins = map[string]struct{}{"https://earflow.ru": {}}
 
-	token, _, _ := manager.issueProofAccessToken(sid, authDeviceID, ProofEpochLookup{SessionEpoch: 1})
+	token, _, _ := manager.issueProofAccessToken(sid, authDeviceID, ProofEpochLookup{SessionEpoch: 1}, "")
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/stream-ticket", bytes.NewReader(streamTicketMintBody("stream_session", "sess1", "track1", "")))
 	req.AddCookie(&http.Cookie{Name: "mp_sid", Value: sid})
 	req.Header.Set("Origin", "https://earflow.ru")
@@ -170,7 +170,7 @@ func TestStreamTicketWSRequiresFullProof(t *testing.T) {
 	manager.proofEpochs = newProofEpochCache()
 	manager.allowedOrigins = map[string]struct{}{"https://earflow.ru": {}}
 
-	token, _, _ := manager.issueProofAccessToken(sid, authDeviceID, ProofEpochLookup{})
+	token, _, _ := manager.issueProofAccessToken(sid, authDeviceID, ProofEpochLookup{}, "")
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/stream-ticket", bytes.NewReader(streamTicketMintBody("ws", "", "", "dev1")))
 	req.AddCookie(&http.Cookie{Name: "mp_sid", Value: sid})
 	req.Header.Set("Origin", "https://earflow.ru")

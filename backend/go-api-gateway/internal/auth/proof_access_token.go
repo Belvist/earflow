@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -15,9 +16,10 @@ import (
 const (
 	headerProofAccessToken     = "X-Auth-Proof-Access-Token"
 	proofAccessTokenType       = "proof_access"
+	claimProofAccessTokenIP    = "ip"
 	envProofAccessTokenEnabled = "PROOF_ACCESS_TOKEN_ENABLED"
 	envProofAccessTokenTTL     = "PROOF_ACCESS_TOKEN_TTL_SECONDS"
-	defaultProofAccessTokenTTL = 90 * time.Second
+	defaultProofAccessTokenTTL = 60 * time.Second
 )
 
 type proofAccessTokenResponse struct {
@@ -98,7 +100,7 @@ func (m *SessionManager) lookupProofEpochs(ctx context.Context, sid, authDeviceI
 	return ProofEpochLookup{}, errors.New("epoch lookup unavailable")
 }
 
-func (m *SessionManager) issueProofAccessToken(sid, authDeviceID string, epochs ProofEpochLookup) (string, time.Time, error) {
+func (m *SessionManager) issueProofAccessToken(sid, authDeviceID string, epochs ProofEpochLookup, clientIP string) (string, time.Time, error) {
 	if m == nil {
 		return "", time.Time{}, errors.New("session manager unavailable")
 	}
@@ -113,6 +115,12 @@ func (m *SessionManager) issueProofAccessToken(sid, authDeviceID string, epochs 
 		"deviceEpoch":  epochs.DeviceEpoch,
 		"iat":          now.Unix(),
 		"exp":          exp.Unix(),
+	}
+	// H-4: bind the token to the client IP observed at mint time. A leaked
+	// token replayed from another address is rejected (see
+	// validateProofAccessToken). Empty IP → no binding (legacy/dev fallback).
+	if ip := net.ParseIP(strings.TrimSpace(clientIP)); ip != nil {
+		claims[claimProofAccessTokenIP] = ip.String()
 	}
 	if iss := strings.TrimSpace(m.jwtIssuer); iss != "" {
 		claims["iss"] = iss
@@ -144,7 +152,10 @@ func (m *SessionManager) validateProofAccessToken(r *http.Request, sid string) e
 		return errDeviceProofRequired
 	}
 
-	parser := jwt.NewParser(jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
+	parser := jwt.NewParser(
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+		jwt.WithExpirationRequired(), // H-2: exp must be present
+	)
 	mapClaims := jwt.MapClaims{}
 	_, err := parser.ParseWithClaims(raw, mapClaims, func(t *jwt.Token) (any, error) {
 		return []byte(m.jwtSecret), nil
@@ -165,6 +176,16 @@ func (m *SessionManager) validateProofAccessToken(r *http.Request, sid string) e
 	}
 	if !m.verifyIssuerAudience(mapClaims) {
 		return errDeviceProofInvalid
+	}
+	// H-4: reject replays from a different client address. Tokens minted
+	// before IP binding existed (≤90s after deploy) carry no claim → skip.
+	if boundIP, ok := mapClaims[claimProofAccessTokenIP].(string); ok {
+		if parsedBound := net.ParseIP(boundIP); parsedBound != nil {
+			reqIP := net.ParseIP(strings.TrimSpace(clientIPFromRequest(r)))
+			if reqIP == nil || !reqIP.Equal(parsedBound) {
+				return errDeviceProofInvalid
+			}
+		}
 	}
 	sessionEpoch := int64Claim(mapClaims["sessionEpoch"])
 	deviceEpoch := int64Claim(mapClaims["deviceEpoch"])

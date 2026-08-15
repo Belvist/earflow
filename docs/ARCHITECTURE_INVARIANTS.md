@@ -226,6 +226,13 @@ Refresh-ротация (gateway `SessionAuthMiddleware`) не имеет пра�
 - **Red flag:** `deviceProofRequiredForRequest` без резолва sid из cookie (только `ctxSID`) — под флипом PoP перестанет применяться к не-sensitive `/api`-путям.
 - **Red flag:** PoP-требование смягчено/сделано условным в проде без аудита.
 
+### INV-SEC-024 (2026-08-15) — Чувствительные локальные auth-POST под double-submit CSRF
+
+Локальные auth-POST в `MountRoutes` (refresh, logout, proof/token, stream-ticket, device/register) проходят `CSRFProtectionMiddleware` (Origin + cookie/header match + HMAC). Прод `SameSite=none` — CSRF-cookie не защищает сама, только Origin. Pre-session (login/register/telegram/csrf) и native-потоки исключены (нет csrf-поверхности).
+
+- **Red flag:** новый чувствительный POST в `MountRoutes` мимо CSRF-группы; добавленные эксклюды refresh/logout в middleware; `skipCsrf: true` на refresh/logout/device-register во фронте (`client.js` logout).
+- **Red flag:** CSRF-группа расширяется на pre-session маршруты без csrf-cookie (login/register) — сломает первый вход.
+
 ---
 
 ## Frontend
