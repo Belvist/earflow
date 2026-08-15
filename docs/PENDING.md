@@ -91,6 +91,54 @@
 
 ---
 
+### PEND-AUTH-005 — Полный security-аудит auth 2026-08-15 (прод: Node auth-service + Go gateway)
+
+**Priority:** high
+**Status:** open (C-1 исправлен 2026-08-15; остальное — по приоритету)
+**Related:** PEND-AUTH-001 (auth-core flip), PEND-AUTH-004
+
+**Context:** Аудит «от и до» живого прода (Node `auth-service`, Go gateway `internal/auth`, auth-core, nginx, rate-limits). Прямых однокнопочных обходов нет — PoP (ECDSA proof) компенсирует слабые места. Ниже — findings по приоритету. C-1 подтверждён эмпирически: Express `trust proxy: 1` берёт **последний** XFF (nginx дописывает реальный IP в конец `$proxy_add_x_forwarded_for`) → `req.ip` и authLimiter в проде НЕ спуфятся через XFF; но гейтвей доверял XFF[0] (атакующему) для SoT-меты и форвардил сырой XFF upstream (defense-in-depth) — это исправлено.
+
+**Исправлено 2026-08-15 (C-1):**
+1. **XFF-spoofing в гейтвее:** `clientIPFromRequest` теперь доверяет только `X-Real-IP` (nginx-authoritative) → последний XFF → RemoteAddr (НЕ первый XFF); `copyClientMetadataHeaders` переписывает `X-Forwarded-For`/`X-Real-IP` в одно доверенное значение перед форвардом upstream (отбрасывает инъекцию атакующего); gateway-лимитер также берёт последний XFF. Т.е. SoT/session-meta IP и upstream-rate-limit больше не отравляются клиентским XFF. Коммит `b1d???` + тесты `client_ip_trust_test.go`. nginx продолжает ставить `X-Real-IP $remote_addr`.
+
+**HIGH — не исправлены, на ревью человеку:**
+2. **H-1 Ротация refresh ДО PoP-проверки** (`session_manager.go:360-362`): мидлварь ротирует refresh по одному украденному `mp_sid`, потом PoP → 401, но ротация уже сожгла токен жертвы (churn/DoS сессии). При `ALLOW_COOKIE_AUTH_WITHOUT_PROOF=1` — полный takeover по cookie. **Инвариант:** PoP нельзя ослаблять. Фикс: не ротировать до успешной PoP-проверки (двинуть rotate после device-proof).
+3. **H-2 Access-токен без требования `exp`** (`session_manager.go:700-721`): `jwt.NewParser(WithValidMethods)` без `WithExpirationRequired`/`WithLeeway`; Node всегда ставит `exp`, но defense-in-depth требует принудительно.
+4. **H-3 CSRF на чувствительных локальных POST**: прод `SameSite=none` + cookie на `.earflow.ru`; `/api/auth/refresh`, `/logout`, `/proof/token`, `/stream-ticket`, `/native/exchange`, `2fa/*` защищены только Origin (кроме device/register и proxied unsafe). Полный CSRF-чек — только `reverse_proxy.go:158`. Единственный барьер от browser-CSRF — PoP. Включить double-submit CSRF на локальные auth-POST.
+5. **H-4 Proof-access-token — переиспользуемый bearer 90–120с** (`proof_access_token.go`): HS256, один секрет, без nonce/привязки/одноразовости; действует на все не-sensitive маршруты включая stream-ticket mint. Украденный токен (XSS/лог/кэш) = действие от имени устройства на окне. Рассмотреть: привязка к IP/path, сокращение TTL, ротация.
+6. **H-5 auth-core (Go, НЕ live):** grace-окно 6ч (против 30м в Node, `auth-core/internal/authn/refresh.go:56-66`) — украденный старый refresh отдаёт валидную пару до 6ч; `server.go:79-106` X-Real-IP/XFF-спуфинг IP-троттлинга; тайминг-оракул учётки (`service.go:186-209`); неотзываемые access + кэш профиля 600с аутентифицирует удалённых (`profile.go:31-40`). **Чинить до/вместе с флипом PEND-AUTH-001.**
+
+**MEDIUM — на ревью человеку:**
+7. **M-1 Per-email локдаун = DoS + энумерация** (`server.js:668-701`): 5 промахов на любой email → 15м блокировка аккаунта (атакующий замораживает жертву), 429 `Retry-After` раскрывает существование почты.
+8. **M-2 `pbkdf2Sync` 600k на event-loop** (`server.js:901-904`, login и decrypt) — блокирует ВСЕ запросы Node; в связке с IP-спуфингом — CPU-DoS. Вынести в worker-thread/piscina (в auth-core уже обещано, см. CONTEXT-ложь про пул).
+9. **M-3 Проброс upstream-ошибок как есть** (`http_routes.go:456-468`): различия «нет юзера/неверный пароль» доходят до клиента (энумерация).
+10. **M-4 Эпоха proof может быть пустой** (`proof_epoch_cache.go:100-114`): после рестарта gateway отозванный токен валиден до ~2.5 мин.
+11. **M-5 Неограниченные in-memory карты** (`proof_epoch_cache.go:8-11`, `revoke_subscriber.go:16-24` sync.Map без evict) + sweep `SMembers`+per-sid GET каждые 30с на общий Redis (`revoke_subscriber.go:119-164`) — рост памяти/нагрузка. Нужен evict/TTL.
+12. **M-6 Native exchange делит web-SID** (`native_auth_http.go:313-361`): приложение получает ту же сессию, что браузерная вкладка; отзыв одной убивает обе. Продуктовое решение.
+13. **M-7 Гонка при регистрации** (`server.js:980-1007`): GET→null→POST без upsert; `idx_users_email_hash` спасает от дублей, но параллельный регистр → 500. Upsert/обработка 23505.
+14. **M-8 `resolveIsAdminFromDb` fallback** (`server.js:278-293`): при сбое БД `isAdmin` из кэша/токена — риск эскалации admin при частичном сбое.
+
+**LOW / hardening:**
+15. `/api/auth/refresh` не под authLimiter (только globalLimiter, который для end-user скипается — remoteAddress = docker IP, `server.js:155-189`).
+16. **L-3** `session_manager.go:407` молчаливо глотает ошибки Redis после ротации (audit-пробел).
+17. CSRF-cookie/header сравнение не constant-time (`session_manager.go:674`, double-submit — не критично).
+18. `handleNativeFinalize` без Origin-проверки (`native_auth_http.go:168`).
+19. Мёртвый `CSRFProtectionMiddleware` (`session_manager.go:544`, нигде не смонтирован) — удалить или смонтировать.
+20. `verifyIssuerAudience` ловушка при пустом issuer (`session_manager.go:724-758`, сейчас недостижимо).
+21. jti/sid из refresh парсятся unverified для del-ключей Redis (`jti_extract.go:28-39`) — ключи строятся из claims без подписи (не-эксплуатируемо, т.к. только del).
+
+**Сканеры (не auth-код):**
+22. `security-scan.js`: frontend 2 critical / 30 high, database-service 6 high, recommendations-service 9 high — npm deps, отдельная работа.
+
+**Архитектура (см. PEND-AUTH-001):**
+23. **Два auth-стека в проде:** Node (рабочий) + Go `auth-core` (запущен Up 23h, не подключён — drift-риск, `INV-ARCH-001`). Либо флип `AUTH_SERVICE_URL=http://auth-core:3001` после e2e, либо убрать auth-core из compose.
+24. Дублирование rotate/verify между `SessionAuthMiddleware` и `handleRefresh` (разная `LastCookieRefreshAt`).
+25. `copyClientMetadataHeaders` форвардил клиентские `X-Forwarded-Proto/Host` как доверенные (Proto/Host оставлены, риск низкий).
+26. auth-core CONTEXT врёт про «пул горутин» для PBKDF2 — кода пула нет. Поправить CONTEXT.
+
+---
+
 ### PEND-IOS-006 — Search: artist/album detail navigation (iOS)
 
 **Priority:** low

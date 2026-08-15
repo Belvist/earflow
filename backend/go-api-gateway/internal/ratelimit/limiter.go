@@ -210,11 +210,11 @@ func (l *Limiter) clientIP(r *http.Request) string {
 
 	if xff := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); xff != "" {
 		parts := strings.Split(xff, ",")
-		if len(parts) > 0 {
-			first := strings.TrimSpace(parts[0])
-			if net.ParseIP(first) != nil {
-				return first
-			}
+		// nginx appends the real client address as the last entry; the first
+		// entry is client-controlled and must never be trusted.
+		last := strings.TrimSpace(parts[len(parts)-1])
+		if net.ParseIP(last) != nil {
+			return last
 		}
 	}
 

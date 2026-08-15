@@ -439,18 +439,27 @@ func writeJSONResponse(w http.ResponseWriter, status int, raw any) {
 	_ = json.NewEncoder(w).Encode(normalizeErrorResponsePayload(raw))
 }
 
+// clientIPFromRequest returns the real client IP as seen by the trusted front
+// proxy (nginx). The gateway NEVER trusts the first X-Forwarded-For entry — a
+// client can inject arbitrary values there. nginx unconditionally overwrites
+// X-Real-IP with $remote_addr and appends $remote_addr as the last
+// X-Forwarded-For entry, so those are the only trustworthy sources.
 func clientIPFromRequest(r *http.Request) string {
+	if xri := strings.TrimSpace(r.Header.Get("X-Real-IP")); xri != "" {
+		if i := strings.Index(xri, ","); i > 0 {
+			return strings.TrimSpace(xri[:i])
+		}
+		return xri
+	}
 	if xff := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); xff != "" {
-		if i := strings.Index(xff, ","); i > 0 {
-			return strings.TrimSpace(xff[:i])
+		if i := strings.LastIndex(xff, ","); i >= 0 {
+			if last := strings.TrimSpace(xff[i+1:]); last != "" {
+				return last
+			}
 		}
 		return xff
 	}
-	host := strings.TrimSpace(r.RemoteAddr)
-	if i := strings.LastIndex(host, ":"); i > 0 {
-		return host[:i]
-	}
-	return host
+	return remoteIPOnly(r.RemoteAddr)
 }
 
 func copyUpstreamError(w http.ResponseWriter, resp *http.Response) {
@@ -496,20 +505,16 @@ func copyClientMetadataHeaders(dst *http.Request, src *http.Request) {
 		dst.Header.Set("User-Agent", ua)
 	}
 
-	xff := strings.TrimSpace(src.Header.Get("X-Forwarded-For"))
-	if xff == "" {
-		xff = remoteIPOnly(src.RemoteAddr)
-	}
-	if xff != "" {
-		dst.Header.Set("X-Forwarded-For", xff)
-	}
-
-	xri := strings.TrimSpace(src.Header.Get("X-Real-IP"))
-	if xri == "" {
-		xri = firstForwardedIP(xff)
-	}
-	if xri != "" {
-		dst.Header.Set("X-Real-IP", xri)
+	// Never forward client-supplied X-Forwarded-For / X-Real-IP: rewrite them to
+	// the single trusted client IP resolved from the front proxy. Otherwise an
+	// attacker's injected XFF values reach upstreams (rate limiters, session
+	// metadata, analytics) unchanged.
+	if ip := clientIPFromRequest(src); ip != "" {
+		dst.Header.Set("X-Forwarded-For", ip)
+		dst.Header.Set("X-Real-IP", ip)
+	} else {
+		dst.Header.Del("X-Forwarded-For")
+		dst.Header.Del("X-Real-IP")
 	}
 
 	proto := strings.TrimSpace(src.Header.Get("X-Forwarded-Proto"))
@@ -540,18 +545,6 @@ func remoteIPOnly(remoteAddr string) string {
 		return strings.TrimSpace(host)
 	}
 	return remoteAddr
-}
-
-func firstForwardedIP(xff string) string {
-	xff = strings.TrimSpace(xff)
-	if xff == "" {
-		return ""
-	}
-	parts := strings.Split(xff, ",")
-	if len(parts) == 0 {
-		return ""
-	}
-	return strings.TrimSpace(parts[0])
 }
 
 func (m *SessionManager) fetchUpstreamAuthExchange(w http.ResponseWriter, source *http.Request, upstreamPath string, body []byte) (authTokenResponse, bool) {
