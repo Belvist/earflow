@@ -181,6 +181,10 @@ func passwordChangeHandler(d Deps) http.HandlerFunc {
 			d.Config.Security.PbkdfIterations,
 			d.Config.Security.PbkdfKeyLength,
 		)
+		if hasPassword && cryptoutil.ConstantTimeHexEquals(newHash, *user.PasswordHash) {
+			writeError(w, http.StatusBadRequest, "NEW_PASSWORD_SAME", "New password must differ from the current one")
+			return
+		}
 		if err := d.Postgres.UpdatePasswordHash(r.Context(), principal.UserID, newHash); err != nil {
 			d.Logger.Error("password-change: update failed", "err", err)
 			writeError(w, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Service temporarily unavailable")

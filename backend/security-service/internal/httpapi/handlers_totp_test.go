@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -124,6 +125,24 @@ func TestMfaSecretEncryptRoundTrip(t *testing.T) {
 	}
 	if parsed.SecretBase32 != "JBSWY3DPEHPK3PXP" {
 		t.Errorf("round-trip secret = %q", parsed.SecretBase32)
+	}
+}
+
+func TestMfaSetupRateLimited(t *testing.T) {
+	d := testDeps(t)
+	// Pre-fill the per-user MFA counter at the max so the next attempt is blocked
+	// before the handler ever touches Postgres (nil in tests).
+	if err := d.Redis.Client().Set(context.Background(), store.MFAAttemptsKey(7), "5", 0).Err(); err != nil {
+		t.Fatal(err)
+	}
+	w := httptest.NewRecorder()
+	r := authedRequest(t, http.MethodPost, "/api/auth/2fa/setup", 7, "sid_12345678901234567890", nil)
+	mfaSetupHandler(d)(w, r)
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "RATE_LIMITED") {
+		t.Fatalf("expected RATE_LIMITED code, got %s", w.Body.String())
 	}
 }
 

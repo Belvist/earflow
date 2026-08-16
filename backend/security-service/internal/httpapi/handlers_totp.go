@@ -78,6 +78,20 @@ func mfaSetupHandler(d Deps) http.HandlerFunc {
 			return
 		}
 
+		rl, err := d.Redis.IncrRateLimit(
+			r.Context(),
+			store.MFAAttemptsKey(principal.UserID),
+			d.Config.Security.PasswordMaxAttempts,
+			d.Config.Security.PasswordAttemptWindow,
+		)
+		if err != nil {
+			d.Logger.Warn("mfa-setup: rate-limit failed", "err", err)
+		}
+		if rl.Blocked {
+			writeRetry(w, rl.RetryAfterSecs, "Too many MFA setup attempts")
+			return
+		}
+
 		user, err := d.Postgres.GetUserByID(r.Context(), principal.UserID)
 		if err != nil {
 			if err == store.ErrUserNotFound {

@@ -57,6 +57,11 @@ func MFAAttemptsKey(userID int64) string {
 	return fmt.Sprintf("auth:mfa_attempts:%d", userID)
 }
 
+// SessionActionsKey is the per-user rate limiter for session revoke operations.
+func SessionActionsKey(userID int64) string {
+	return fmt.Sprintf("auth:session_actions:%d", userID)
+}
+
 // Tg2faKey holds the pending Telegram confirmation code for a user.
 func Tg2faKey(userID int64) string {
 	return fmt.Sprintf("auth:tg2fa:%d", userID)

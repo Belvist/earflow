@@ -16,6 +16,7 @@ import StepUpModal from './StepUpModal';
 import { useStepUpRunner } from '../../hooks/useStepUpRunner';
 import { runSensitiveSessionAction } from './activeSessionsStepUp';
 import PasswordChangeSection from './PasswordChangeSection';
+import MfaSettingsSection from './MfaSettingsSection';
 import TelegramUnlinkSection from './TelegramUnlinkSection';
 import {
   groupSessionsByDevice,
@@ -344,6 +345,8 @@ export default function SecuritySettingsSection() {
           </DangerCard>
         ) : null}
       </Section>
+
+      <MfaSettingsSection />
 
       <Section>
         <SectionTitle>Аккаунт</SectionTitle>

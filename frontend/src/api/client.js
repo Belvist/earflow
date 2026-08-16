@@ -1029,6 +1029,39 @@ class ApiClient {
     return await this.request('/api/auth/security/overview', { method: 'GET' });
   }
 
+  async getMfaStatus() {
+    return await this.request('/api/auth/2fa/status', { method: 'GET' });
+  }
+
+  async mfaSetup() {
+    return await this.request('/api/auth/2fa/setup', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  }
+
+  async mfaEnable({ token }) {
+    return await this.request('/api/auth/2fa/enable', {
+      method: 'POST',
+      body: JSON.stringify({ token: String(token || '') }),
+    });
+  }
+
+  async mfaDisable({ token, recoveryCode }) {
+    const payload = token ? { token: String(token) } : { recoveryCode: String(recoveryCode || '') };
+    return await this.request('/api/auth/2fa/disable', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async mfaRegenerateRecovery() {
+    return await this.request('/api/auth/2fa/recovery/regenerate', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  }
+
   async unlinkTelegram() {
     return await this.request('/api/auth/telegram/unlink', {
       method: 'POST',

@@ -150,6 +150,26 @@ func (d Deps) collectDecoratedSessions(r *http.Request, principal authz.Principa
 
 const freshLoginProtectionWindow = 24 * time.Hour
 
+// sensitiveActionRateLimited applies a per-user rate limit to destructive
+// account actions (session revoke, telegram unlink, ...). Returns true when
+// the request may proceed.
+func (d Deps) sensitiveActionRateLimited(w http.ResponseWriter, r *http.Request, principal authz.Principal, label string) bool {
+	rl, err := d.Redis.IncrRateLimit(
+		r.Context(),
+		store.SessionActionsKey(principal.UserID),
+		d.Config.Security.PasswordMaxAttempts,
+		d.Config.Security.PasswordAttemptWindow,
+	)
+	if err != nil {
+		d.Logger.Warn("sensitive-action: rate-limit failed", "err", err, "action", label)
+	}
+	if rl.Blocked {
+		writeRetry(w, rl.RetryAfterSecs, "Too many attempts")
+		return false
+	}
+	return true
+}
+
 func (d Deps) sessionCreatedAt(r *http.Request, sid string) (time.Time, bool) {
 	sid = strings.TrimSpace(sid)
 	if sid == "" {

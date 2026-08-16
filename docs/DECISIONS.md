@@ -4,6 +4,26 @@
 
 ---
 
+## 2026-08-16 — Security review: профиль → раздел «Безопасность» (rate limits + MFA UX в listener)
+
+**Status:** accepted (Go build/vet/test PASS + регресс-тесты rate-limit; frontend 45 suites/278 PASS + build)
+**Area:** backend | security | frontend
+**Related:** `docs/SECURITY_ROADMAP.md`, DECISIONS 2026-08-15 "Полный вывод Node auth-service", PEND-SEC-004
+
+**Context:** Пользователь: «раздел безопасности в настройках профиля запутанный и небезопасный — исправить грамотно и прогнать через уязвимости». Аудит выявил: (1) `security-service` хендлеры `2fa/setup`, `sessions/revoke|revoke-others|revoke-all`, `telegram/unlink` — без rate limit (setup без ограничения = перезапись pending TOTP-секрета → DoS MFA setup; revoke/unlink — многократные деструктивные действия); (2) `password/change` не отклонял новый пароль, равный текущему; (3) listener-SPA вообще не имел UI управления 2FA (только step-up), полный MFA был только в artist-portal — обычный пользователь не мог включить 2FA.
+
+**Decision:**
+1. **Rate limits (Go):** `2fa/setup` → `MFAAttemptsKey` (5/60s); `sessions/revoke|others|all` и `telegram/unlink` → новый `SessionActionsKey` (5/60s) через общий хелпер `sensitiveActionRateLimited`. Все — до обращения к БД.
+2. **`password/change`:** отклонение `NEW_PASSWORD_SAME`, когда хэш нового пароля совпадает с текущим (constant-time сравнение).
+3. **Listener UI:** новый `Settings/MfaSettingsSection.js` — полный MFA-менеджмент (status, setup→QR+secret, enable с TOTP, disable с TOTP/recovery, regenerate + показ recovery-кодов, копирование/скачивание) на тех же роутах `/api/auth/2fa/*`, что artist. Встроен в «Безопасность» (ProfilePage sessions-вкладка) между «Активными входами» и «Приложением Earflow Auth». Новые методы `client.js`: `getMfaStatus/mfaSetup/mfaEnable/mfaDisable/mfaRegenerateRecovery`.
+4. **Структура раздела:** «Активные входы» → «Двухфакторная аутентификация» → «Приложение Earflow Auth» → «Аккаунт» (пароль/Telegram).
+
+**Consequences:** на каждый чувствительный эндпоинт аккаунта теперь действует rate limit; pending MFA secret нельзя перезаписать спамом; 2FA включается из web-профиля. Rate limit общий для revoke/unlink (5/60s) — пользователь с шаблоном «массово дёргать кнопки» может упереться, окно короткое. Recovery-коды не кэшируются на клиенте между рендерами (показываются один раз после enable/regenerate).
+
+**Чтобы не повторилось:** любой новый деструктивный auth-эндпоинт обязан идти через `sensitiveActionRateLimited`; listener и artist должны иметь паритетный MFA-UI; red flag — auth-хендлер с записью в БД без `IncrRateLimit`.
+
+---
+
 ## 2026-08-16 — Canonical трек-ссылки: /track/{public_id}-{slug} + public_id во всех трек-DTO
 
 **Status:** accepted (frontend 45 suites/278 PASS; Go build/vet/test PASS ranking+search; ios swiftc -parse PASS)
@@ -22,6 +42,30 @@
 **Consequences:** старые bare-numeric/`/track/{public_id}` без slug продолжают работать (nginx 301 + client canonicalize), но canonical теперь slug-форма; боты переиндексируются. Search index требует reindex для появления `public_id` в docs (backfill при старте indexer).
 
 **Чтобы не повторилось:** любой новый трек-эндпоинт обязан отдавать `public_id`; share/копия ссылки — только через builder, никогда `track.id`; whitelist-normalizer нового сервиса пропускать `public_id`; red flag — `/track/{numeric}` или `/song/` в diff и URL-сборка без `slugifyForRoute`.
+
+---
+
+## 2026-08-16 — Earflow Auth v1.1: security review fixes (QR-relay, project binding, peek-not-GETDEL, idempotent pairing)
+
+**Status:** accepted (auth-core go build+test PASS; iOS build+13 unit tests PASS; manual e2e PEND-SEC-APPLOGIN-001)
+**Area:** auth | security | backend | iOS
+**Related:** `docs/AUTH_APP_LOGIN.md`, DECISIONS 2026-08-16 "Earflow Auth pivot", PEND-SEC-APPLOGIN-001/002/003
+
+**Context:** Внешний security-ревью v1 (17 findings). Блокеры: (1) ACL Secure Enclave без `.privateKeyUsage` — ключ может создаться, но подпись не сработает; (2-3) Keychain device-key мог быть затёрт + пересоздан при дубликате/фейле чтения; (4) corrupt vault молча заменялся пустым; (5) ключ проекта A мог подтвердить вход в проект B (backend не сверял project; iOS имел fallback по серверу); (6) QR-relay: скан чужого QR + Face ID = сессия у атакующего, т.к. подтверждение летело сразу после скана; (7) параметр `server=` в QR доверялся как адрес запроса; (8) изоляция auth-core; (10) потеря ответа pair/complete осирочала приватный ключ на устройстве; (11) GETDEL результата ДО создания gateway-сессии терял подтверждение при падении gateway.
+
+**Decision:**
+1. **iOS**: ACL = `[.privateKeyUsage, .biometryCurrentSet]`; KeychainKeyStore создаёт ключ ТОЛЬКО при `errSecItemNotFound`, дубликат никогда не удаляется; `SecRandomCopyBytes` проверяется; `VaultState.corrupt` блобит запись; `removeIdentity` — сначала vault, потом ключ; сервер только из `ServerRegistry.allowed` allowlist (production `https://api.earflow.ru` + локальные dev-хосты), `server=` из QR нормализуется и сверяется.
+2. **QR-relay defence**: скан approve-QR → `GET /api/auth/app-login/details?challenge=` (новый роут, class public + `throttleAuthIP`) → экран «кто/откуда/когда» (project, UA, IP, возраст) с кнопками «Подтвердить вход»/«Отклонить». Face ID и подпись только после явного тапа. UA/IP утекают владельцу challengeId намеренно — это и есть обнаружение relay. DENY тоже подписывается и фиксируется.
+3. **Project binding**: `AppLoginConfirm` сверяет `key.ProjectID == challenge.ProjectID` → 403 `APP_PROJECT_MISMATCH` + audit; iOS-матчинг identity строго по project+server, без fallback. Тест `TestAppLoginProjectMismatchRejected`.
+4. **Peek-not-GETDEL (status)**: `AppLoginStatus` читает результат без удаления — падение gateway между чтением и cookie-write больше не уничтожает approve; повторный poll gateway создаёт новую валидную сессию (каждая redeem — fresh sid + токены из результата). Крипто-одноразовость живёт в consume challenge внутри confirm.
+5. **Idempotent pair/complete**: результат сохраняется в `auth:app_pair_result:{pairId}` (SetNX, 300s); retry требует совпадения SPKI (constant-time) с сохранённым и подпись проверяется по СОХРАНЁННОМУ ключу → 403 `PUBLIC_KEY_MISMATCH` на чужой ключ. Hijack-replay невозможен.
+6. **P-256 only**: `ParseECDSAPublicKeySPKI` отвергает любую кривую кроме P-256.
+7. **Pairing отдаёт `accountDisplay`** (email, иначе username владельца ключа) для идентификации нескольких аккаунтов на устройстве.
+8. **iOS flat error envelope** `{error, code}` парсится корректно (раньше object-декодирование глотало тексты ошибок).
+
+**Consequences:** статус-эпейнт перестал быть one-shot на уровне результата (одноразовость = challenge); poll после approve может создать дубль-сессию в другом табе — принято, это поведение «войти с другого таба», а не уязвимость (токены mint'ятся только по валидной подписи). `AppPairStatus` unchanged.
+
+**Чтобы не повторилось:** не возвращать GETDEL в status без mark-consumed; не ослаблять project-binding для «удобства мультипроекта»; allowlist серверов расширяется только кодом, никогда конфигом из QR; новый security-фикс протокола — запись сюда + апдейт `docs/AUTH_APP_LOGIN.md`.
 
 ---
 

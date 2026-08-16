@@ -20,6 +20,10 @@ func telegramUnlinkHandler(d Deps) http.HandlerFunc {
 			return
 		}
 
+		if !d.sensitiveActionRateLimited(w, r, principal, "telegram-unlink") {
+			return
+		}
+
 		user, err := d.Postgres.GetUserByID(r.Context(), principal.UserID)
 		if err != nil {
 			if err == store.ErrUserNotFound {

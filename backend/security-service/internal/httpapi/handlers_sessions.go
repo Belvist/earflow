@@ -45,6 +45,20 @@ func revokeSessionHandler(d Deps) http.HandlerFunc {
 			return
 		}
 
+		rl, err := d.Redis.IncrRateLimit(
+			r.Context(),
+			store.SessionActionsKey(principal.UserID),
+			d.Config.Security.PasswordMaxAttempts,
+			d.Config.Security.PasswordAttemptWindow,
+		)
+		if err != nil {
+			d.Logger.Warn("sessions-revoke-one: rate-limit failed", "err", err)
+		}
+		if rl.Blocked {
+			writeRetry(w, rl.RetryAfterSecs, "Too many session revoke attempts")
+			return
+		}
+
 		var req revokeSessionRequest
 		if err := readJSON(r, 4096, &req); err != nil {
 			writeError(w, http.StatusBadRequest, "INVALID_JSON", "Invalid JSON")
@@ -104,6 +118,10 @@ func revokeOtherSessionsHandler(d Deps) http.HandlerFunc {
 			return
 		}
 
+		if !d.sensitiveActionRateLimited(w, r, principal, "sessions-revoke-others") {
+			return
+		}
+
 		if !d.requireStepUpForSensitiveSessionAction(w, r, principal, true) {
 			return
 		}
@@ -118,6 +136,10 @@ func revokeAllSessionsHandler(d Deps) http.HandlerFunc {
 		principal, ok := authz.FromContext(r.Context())
 		if !ok {
 			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Authentication required")
+			return
+		}
+
+		if !d.sensitiveActionRateLimited(w, r, principal, "sessions-revoke-all") {
 			return
 		}
 
