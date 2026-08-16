@@ -198,16 +198,22 @@ func (d Deps) isFreshLoginSession(r *http.Request, sid string) bool {
 }
 
 func (d Deps) requireStepUpForSensitiveSessionAction(w http.ResponseWriter, r *http.Request, principal authz.Principal, massRevoke bool) bool {
-	if massRevoke && d.isFreshLoginSession(r, principal.SID) && !stepUpOK(d, r, principal) {
-		writeError(w, http.StatusForbidden, "FRESH_LOGIN_REQUIRED", "Fresh session requires step-up before revoking other sessions")
-		return false
-	}
 	mfaRequired, abort := d.userMFAStepUpRequired(r, principal.UserID)
 	if abort {
 		writeError(w, http.StatusNotFound, "USER_NOT_FOUND", "User not found")
 		return false
 	}
-	if mfaRequired && !stepUpOK(d, r, principal) {
+	// Without MFA the step-up endpoint cannot be satisfied (it requires 2FA),
+	// so the gate would permanently block mass revoke. Second-factor re-auth
+	// only makes sense when MFA is configured.
+	if !mfaRequired {
+		return true
+	}
+	if massRevoke && d.isFreshLoginSession(r, principal.SID) && !stepUpOK(d, r, principal) {
+		writeError(w, http.StatusForbidden, "FRESH_LOGIN_REQUIRED", "Fresh session requires step-up before revoking other sessions")
+		return false
+	}
+	if !stepUpOK(d, r, principal) {
 		writeError(w, http.StatusForbidden, "MFA_STEP_UP_REQUIRED", "Step-up required")
 		return false
 	}
@@ -229,7 +235,7 @@ func (d Deps) loadPGSessionOrNil(r *http.Request, sid string) *authpg.ActiveSess
 // userMFAStepUpRequired loads MFA flag for session revoke. On transient Postgres errors
 // returns (false, false) so revoke can proceed; on missing user returns (_, true).
 func (d Deps) userMFAStepUpRequired(r *http.Request, userID int64) (mfaEnabled bool, abort bool) {
-	user, err := d.Postgres.GetUserByID(r.Context(), userID)
+	user, err := d.usersFor().GetUserByID(r.Context(), userID)
 	if err != nil {
 		if err == store.ErrUserNotFound {
 			return false, true

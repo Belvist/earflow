@@ -198,18 +198,26 @@ func MaskIP(ip string) string {
 	if s == "" {
 		return ""
 	}
-	if strings.Contains(s, ":") {
-		parts := splitNonEmpty(s, ":")
-		if len(parts) <= 2 {
-			return s
+	// Strip a trailing CIDR prefix (/32, /128, ...).
+	if i := strings.IndexByte(s, '/'); i >= 0 {
+		s = s[:i]
+	}
+	// IPv4-mapped IPv6 like ::ffff:1.2.3.4 → treat as the embedded IPv4.
+	if strings.HasPrefix(s, "::ffff:") {
+		s = s[len("::ffff:"):]
+	}
+	if !strings.Contains(s, ":") {
+		parts := strings.Split(s, ".")
+		if len(parts) == 4 {
+			return parts[0] + "." + parts[1] + "." + parts[2] + ".···"
 		}
-		return parts[0] + ":" + parts[1] + ":····"
+		return s
 	}
-	parts := strings.Split(s, ".")
-	if len(parts) == 4 {
-		return parts[0] + "." + parts[1] + "." + parts[2] + ".···"
+	parts := splitNonEmpty(s, ":")
+	if len(parts) <= 2 {
+		return s
 	}
-	return s
+	return parts[0] + ":" + parts[1] + ":····"
 }
 
 func splitNonEmpty(s, sep string) []string {

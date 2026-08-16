@@ -4,6 +4,26 @@
 
 ---
 
+## 2026-08-16 — Раздел «Безопасность»: адекватный UX + фикс мёртвого step-up без 2FA
+
+**Status:** accepted (Go build/vet/test PASS, 4 новых step-up теста + MaskIP тест; frontend 45 suites/279 PASS + build)
+**Area:** backend | security | frontend
+**Related:** DECISIONS 2026-08-16 "Security review: профиль → раздел Безопасность", PEND-SEC-004
+
+**Context:** На живом сайте раздел «Безопасность» был перегружен: до 9 карточек устройств с одинаковыми именами, сырые IPv4-mapped IPv6 (`::ffff:…/128`), дубли одинаковых сессий, счётчик «(27)» в кнопке, противоречивый Telegram-блок («Отвязать» + «Установите пароль»). Главное: **массовый выход не работал** — `FRESH_LOGIN_REQUIRED` требовал step-up, но step-up без включённой 2FA недостижим (`MFA_REQUIRED`) → вечный тупик для пользователей без 2FA.
+
+**Decision:**
+1. **Step-up gate:** `requireStepUpForSensitiveSessionAction` теперь читает MFA-флаг первым и **полностью пропускает gate, если 2FA не включена** (mass revoke работает без 2FA). Gate имеет смысл только как second-factor re-auth; без MFA его невозможно удовлетворить. С сохранением MFA поведение не изменилось (FRESH_LOGIN_REQUIRED / MFA_STEP_UP_REQUIRED).
+2. **MaskIP:** нормализует IPv4-mapped IPv6 (`::ffff:1.2.3.4` → `1.2.3.···`) и срезает CIDR (`/32`, `/128`).
+3. **Frontend UX:** строки сессий без IP; дедуп идентичных сессий (bound + unbound близнец) в `sessionDeviceGroups`; убрано «(27)» из кнопки массового выхода; понятный disabled-контрол в Telegram без пароля («Установите пароль, чтобы отвязать» + предупреждение); упрощены инфо-карточка и hint вкладки.
+4. `userMFAStepUpRequired` переведён на `usersFor()` (stubbable в тестах, консистентно с `handlers_tg2fa.go`).
+
+**Consequences:** массовый выход/«выйти везде» снова работает для всех; UI списка сессий читаемый. Защита FRESH_LOGIN_REQUIRED сохраняется только для аккаунтов с включённой 2FA (где она реализуема).
+
+**Чтобы не повторилось:** новый эндпоинт с FRESH_LOGIN_REQUIRED/MFA_STEP_UP_REQUIRED обязан иметь достижимый путь step-up (или не требовать его при выключенной 2FA); не выводить сырые IP/маскированные IPv6 без обработки; UI-линия сессии не должна показывать IP.
+
+---
+
 ## 2026-08-16 — Security review: профиль → раздел «Безопасность» (rate limits + MFA UX в listener)
 
 **Status:** accepted (Go build/vet/test PASS + регресс-тесты rate-limit; frontend 45 suites/278 PASS + build)

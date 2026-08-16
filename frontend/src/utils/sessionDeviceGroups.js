@@ -24,10 +24,40 @@ function sessionActivityAt(session) {
   return Math.max(parseTime(session?.lastSeenAt), parseTime(session?.createdAt));
 }
 
+// Identical logins can appear twice (one sid bound to a PoP device, one
+// unbound duplicate) — drop exact lookalikes, keeping the current session.
+function sessionDedupeKey(session) {
+  return [
+    String(session?.device || ''),
+    String(session?.deviceType || ''),
+    String(session?.createdAt || ''),
+    String(session?.lastSeenAt || ''),
+    String(session?.ip || ''),
+  ].join('|');
+}
+
+function dedupeSessions(list) {
+  const seen = new Set();
+  const out = [];
+  for (const s of list) {
+    if (s && s.current === true) {
+      out.push(s);
+      continue;
+    }
+    const key = sessionDedupeKey(s);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+  }
+  return out;
+}
+
 export function groupSessionsByDevice(sessions) {
-  const list = Array.isArray(sessions)
-    ? sessions.filter((s) => s && typeof s.sid === 'string' && s.sid)
-    : [];
+  const list = dedupeSessions(
+    Array.isArray(sessions)
+      ? sessions.filter((s) => s && typeof s.sid === 'string' && s.sid)
+      : [],
+  );
   const groups = new Map();
 
   const ensureGroup = (key) => {

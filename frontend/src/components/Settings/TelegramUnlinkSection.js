@@ -87,10 +87,14 @@ export default function TelegramUnlinkSection({ embedded = false }) {
       {hasTelegram ? (
         <Actions>
           <Button type="button" $embedded={embedded} onClick={unlink} disabled={busy || !hasPassword} $danger>
-            {busy ? 'Отвязываем…' : 'Отвязать Telegram'}
+            {busy
+              ? 'Отвязываем…'
+              : hasPassword
+                ? 'Отвязать Telegram'
+                : 'Установите пароль, чтобы отвязать'}
           </Button>
           {!hasPassword ? (
-            <Warn>Установите пароль перед отвязкой.</Warn>
+            <Warn>Без пароля вы потеряете доступ к аккаунту.</Warn>
           ) : null}
         </Actions>
       ) : null}

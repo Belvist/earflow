@@ -97,7 +97,7 @@ const SETTINGS_TABS = DEVICE_SYNC_ENABLED
     {
       id: "sessions",
       label: "Безопасность",
-      hint: "Где вы вошли в аккаунт — не путать с синхронизацией воспроизведения",
+      hint: "Входы в аккаунт, двухфакторная защита, пароль и Telegram",
       icon: FaShieldAlt,
     },
     {

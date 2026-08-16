@@ -55,7 +55,6 @@ function formatSessionLine(session) {
   const parts = [];
   if (session?.lastSeenLabel) parts.push(`активность ${session.lastSeenLabel}`);
   if (session?.createdAtLabel) parts.push(`вход ${session.createdAtLabel}`);
-  if (session?.ip) parts.push(session.ip);
   return parts.join(' · ');
 }
 
@@ -291,8 +290,8 @@ export default function SecuritySettingsSection() {
           </RefreshBtn>
         </SectionHead>
         <InfoCard>
-          Здесь только входы в аккаунт. Передача музыки между устройствами — в разделе
-          «Синхронизация».
+          Здесь видны устройства и браузеры, где вы входили в аккаунт. Для каждого
+          можно завершить сессию.
         </InfoCard>
 
         {loading && sessions.length === 0 ? (
@@ -335,7 +334,7 @@ export default function SecuritySettingsSection() {
             <DangerBtn type="button" onClick={handleRevokeOthers} disabled={busy}>
               {busyKey === 'others'
                 ? 'Завершаем…'
-                : `Выйти на всех устройствах, кроме этого (${otherSessionsTotal})`}
+                : 'Выйти на всех устройствах, кроме этого'}
             </DangerBtn>
             {sessions.length > 0 ? (
               <DangerBtnOutline type="button" onClick={handleRevokeAll} disabled={busy}>

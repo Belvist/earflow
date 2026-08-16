@@ -65,6 +65,18 @@ describe('groupSessionsByDevice', () => {
     expect(groupSessionsByDevice(null)).toEqual([]);
     expect(groupSessionsByDevice([{ noSid: true }, null])).toEqual([]);
   });
+
+  test('drops exact duplicate logins (bound + unbound twin), keeps current', () => {
+    const dup = { sid: 'd1', lastSeenAt: '2026-08-16T01:52:00Z', createdAt: '2026-08-16T00:25:00Z', ip: '1.2.3.4', ...chromeWin };
+    const groups = groupSessionsByDevice([
+      { sid: 's1', current: true, authDeviceId: 'dev-a', lastSeenAt: '2026-08-16T00:20:00Z', createdAt: '2026-08-16T00:25:00Z', ip: '1.2.3.4', ...chromeWin },
+      { ...dup, authDeviceId: 'dev-a' },
+      { ...dup, sid: 'd2' },
+    ]);
+
+    const totalSids = groups.flatMap((g) => g.sessions).map((s) => s.sid);
+    expect(totalSids).toEqual(['s1', 'd1']);
+  });
 });
 
 describe('splitDeviceGroups / staleSidsForGroup', () => {
