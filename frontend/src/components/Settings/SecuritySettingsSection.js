@@ -20,7 +20,6 @@ import MfaSettingsSection from './MfaSettingsSection';
 import TelegramUnlinkSection from './TelegramUnlinkSection';
 import {
   groupSessionsByDevice,
-  splitDeviceGroups,
   staleSidsForGroup,
 } from '../../utils/sessionDeviceGroups';
 
@@ -104,25 +103,10 @@ export default function SecuritySettingsSection() {
   }, [loadSessions]);
 
   const groups = useMemo(() => groupSessionsByDevice(sessions), [sessions]);
-  const { currentGroup, otherGroups } = useMemo(() => splitDeviceGroups(groups), [groups]);
   const otherSessionsTotal = useMemo(
     () => sessions.filter((s) => s.current !== true).length,
     [sessions],
   );
-
-  useEffect(() => {
-    if (groups.length === 0) return;
-    setExpandedKeys((prev) => {
-      const next = new Set(prev);
-      if (currentGroup?.key) next.add(currentGroup.key);
-      groups.forEach((group) => {
-        if (group.sessions.length > 1 || group.duplicateCount > 0) {
-          next.add(group.key);
-        }
-      });
-      return next;
-    });
-  }, [groups, currentGroup?.key]);
 
   const busy = busyKey !== '';
 
@@ -195,9 +179,7 @@ export default function SecuritySettingsSection() {
     const groupBusy = busyKey === `group:${group.key}`;
     const primarySession = group.primary || group.sessions[0];
     const collapsible = group.sessions.length > 1 || group.duplicateCount > 0;
-    const subtitle = group.current
-      ? `Это устройство · ${formatSessionLine(primarySession)}`
-      : formatSessionLine(primarySession);
+    const subtitle = formatSessionLine(primarySession);
 
     const headContent = (
       <>
@@ -205,7 +187,11 @@ export default function SecuritySettingsSection() {
           <Icon size={18} />
         </RowIcon>
         <RowMain>
-          <RowName>{group.label}</RowName>
+          <RowNameLine>
+            <RowName>{group.label}</RowName>
+            {group.current ? <CurrentBadge>Это устройство</CurrentBadge> : null}
+            {collapsible ? <CountChip>{group.sessions.length} вх.</CountChip> : null}
+          </RowNameLine>
           <RowSub>{subtitle || '—'}</RowSub>
         </RowMain>
         {collapsible ? (
@@ -241,6 +227,7 @@ export default function SecuritySettingsSection() {
           type="button"
           $current={group.current}
           $clickable
+          aria-expanded={expanded}
           onClick={() => toggleExpanded(group.key)}
         >
           {headContent}
@@ -265,9 +252,7 @@ export default function SecuritySettingsSection() {
                 <FaBroom size={12} aria-hidden />
                 {groupBusy
                   ? 'Завершаем…'
-                  : group.current
-                    ? `Завершить старые входы (${group.duplicateCount})`
-                    : 'Завершить все сессии устройства'}
+                  : `Завершить входы на этом устройстве (${staleSidsForGroup(group).length})`}
               </GroupAction>
             ) : null}
           </ExpandedBlock>
@@ -302,31 +287,13 @@ export default function SecuritySettingsSection() {
           <MutedState>Активных сессий не найдено.</MutedState>
         ) : null}
 
-        {currentGroup ? (
-          <HeroCard>
-            {(() => {
-              const Icon = resolveDeviceIcon(currentGroup.deviceType);
-              const primary = currentGroup.primary || currentGroup.sessions[0];
-              return (
-                <>
-                  <HeroIcon aria-hidden>
-                    <Icon size={22} />
-                  </HeroIcon>
-                  <HeroCopy>
-                    <HeroName>{currentGroup.label}</HeroName>
-                    <HeroSub>Текущий вход · {formatSessionLine(primary)}</HeroSub>
-                  </HeroCopy>
-                  <CurrentBadge>сейчас</CurrentBadge>
-                </>
-              );
-            })()}
-          </HeroCard>
-        ) : null}
-
-        {otherGroups.length > 0 ? (
+        {groups.length > 0 ? (
           <>
-            <SectionLabel>Другие входы · {otherGroups.length}</SectionLabel>
-            <GroupCard>{otherGroups.map(renderGroupRow)}</GroupCard>
+            <SectionLabel>
+              {groups.length === 1 ? '1 устройство' : `Устройства · ${groups.length}`}
+              {otherSessionsTotal > 0 ? ` · сессий: ${sessions.length}` : ''}
+            </SectionLabel>
+            <GroupCard>{groups.map(renderGroupRow)}</GroupCard>
           </>
         ) : null}
 
@@ -466,55 +433,23 @@ const RefreshBtn = styled.button`
   }
 `;
 
-const HeroCard = styled.div`
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 14px;
-  align-items: center;
-  padding: 16px;
-  border-radius: 12px;
-  background: ${SURFACE};
-  border: 1px solid rgba(255, 255, 255, 0.14);
-`;
-
-const HeroIcon = styled.div`
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-`;
-
-const HeroCopy = styled.div`
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-`;
-
-const HeroName = styled.div`
-  font-size: 15px;
-  font-weight: 700;
-  color: #fff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-`;
-
-const HeroSub = styled.div`
-  font-size: 12px;
-  line-height: 1.4;
-  color: rgba(255, 255, 255, 0.5);
-`;
-
 const CurrentBadge = styled.span`
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-  padding: 4px 10px;
+  padding: 3px 8px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
+  background: rgba(29, 185, 84, 0.18);
+  color: #5fff8d;
+  flex-shrink: 0;
+`;
+
+const CountChip = styled.span`
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.6);
   flex-shrink: 0;
 `;
 
@@ -564,6 +499,13 @@ const RowMain = styled.div`
   display: flex;
   flex-direction: column;
   gap: 3px;
+`;
+
+const RowNameLine = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 `;
 
 const RowName = styled.div`

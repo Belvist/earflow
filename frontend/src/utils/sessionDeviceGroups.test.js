@@ -22,21 +22,22 @@ describe('groupSessionsByDevice', () => {
     expect(groups[0].sessions.map((s) => s.sid)).toEqual(['s1', 's2', 's3']);
   });
 
-  test('keeps distinct devices separate and does not merge ambiguous UA matches', () => {
+  test('merges same-label device entries into one card (clean UI)', () => {
     const groups = groupSessionsByDevice([
       { sid: 'a1', current: true, authDeviceId: 'dev-a', lastSeenAt: '2026-06-10T18:00:00Z', ...chromeWin },
       { sid: 'b1', authDeviceId: 'dev-b', lastSeenAt: '2026-06-10T17:00:00Z', ...chromeWin },
-      // Unbound session matching two bound devices — must NOT silently merge.
+      // Unbound session with the same browser/OS label joins the same card.
       { sid: 'u1', lastSeenAt: '2026-06-07T17:00:00Z', ...chromeWin },
       { sid: 'm1', authDeviceId: 'dev-c', lastSeenAt: '2026-06-10T16:00:00Z', ...safariIphone },
     ]);
 
-    expect(groups).toHaveLength(4);
-    const keys = groups.map((g) => g.key);
-    expect(keys).toContain('dev:dev-a');
-    expect(keys).toContain('dev:dev-b');
-    expect(keys).toContain('dev:dev-c');
-    expect(keys).toContain('ua:Chrome · Windows|desktop');
+    expect(groups).toHaveLength(2);
+    const win = groups.find((g) => g.label === 'Chrome · Windows');
+    expect(win.sessions.map((s) => s.sid)).toEqual(['a1', 'b1', 'u1']);
+    expect(win.current).toBe(true);
+    expect(win.duplicateCount).toBe(2);
+    const iphone = groups.find((g) => g.label === 'Safari · iPhone');
+    expect(iphone.sessions.map((s) => s.sid)).toEqual(['m1']);
   });
 
   test('groups unbound-only sessions by UA label', () => {
@@ -55,10 +56,14 @@ describe('groupSessionsByDevice', () => {
     const groups = groupSessionsByDevice([
       { sid: 'old', authDeviceId: 'dev-old', lastSeenAt: '2026-06-01T10:00:00Z', ...safariIphone },
       { sid: 'fresh', authDeviceId: 'dev-fresh', lastSeenAt: '2026-06-10T10:00:00Z', ...chromeWin },
-      { sid: 'cur', current: true, authDeviceId: 'dev-cur', lastSeenAt: '2026-06-05T10:00:00Z', ...chromeWin },
+      { sid: 'cur', current: true, authDeviceId: 'dev-cur', lastSeenAt: '2026-06-05T10:00:00Z', device: 'Firefox · Windows', deviceType: 'desktop' },
     ]);
 
-    expect(groups.map((g) => g.key)).toEqual(['dev:dev-cur', 'dev:dev-fresh', 'dev:dev-old']);
+    expect(groups.map((g) => g.label)).toEqual([
+      'Firefox · Windows',
+      'Chrome · Windows',
+      'Safari · iPhone',
+    ]);
   });
 
   test('tolerates empty and malformed input', () => {

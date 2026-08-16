@@ -93,9 +93,20 @@ export function groupSessionsByDevice(sessions) {
     }
   }
 
-  const result = [];
+  const merged = new Map();
   for (const group of groups.values()) {
-    const ordered = [...group.sessions].sort((a, b) => {
+    const key = `${normalizeLabel(group.sessions[0])}`;
+    if (merged.has(key)) {
+      merged.get(key).push(group);
+    } else {
+      merged.set(key, [group]);
+    }
+  }
+
+  const result = [];
+  for (const chunk of merged.values()) {
+    const sessions = chunk.flatMap((group) => group.sessions);
+    const ordered = sessions.sort((a, b) => {
       if ((a.current === true) !== (b.current === true)) {
         return a.current === true ? -1 : 1;
       }
@@ -103,8 +114,8 @@ export function groupSessionsByDevice(sessions) {
     });
     const primary = ordered[0];
     result.push({
-      key: group.key,
-      deviceBound: group.key.startsWith('dev:'),
+      key: chunk.length === 1 ? chunk[0].key : `label:${normalizeLabel(primary)}`,
+      deviceBound: chunk.some((group) => group.key.startsWith('dev:')),
       label: String(primary?.device || '').trim() || 'Неизвестное устройство',
       deviceType: String(primary?.deviceType || '').trim() || 'desktop',
       current: ordered.some((s) => s.current === true),
