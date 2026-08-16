@@ -316,16 +316,25 @@ func (m *SessionManager) SessionAuthMiddleware() func(http.Handler) http.Handler
 				next.ServeHTTP(w, r)
 				return
 			}
+
+			// Anonymous / bootstrap routes must NOT be 401'ed by a stale
+			// (locally revoked) sid cookie: csrf, login, register,
+			// reset-password, refresh, logout and native/exchange never grant
+			// access via an existing sid — they either mint a fresh session or
+			// are self-guarded handlers. Blocking them on a dead cookie locks
+			// the browser out of logging back in (every request 401s, so the
+			// frontend can't bootstrap a csrf token to even attempt login).
+			// The bypass is checked BEFORE the revoke mark for exactly this.
+			if bypassesSessionAuthMiddleware(r.URL.Path) {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			if m.isSessionLocallyRevoked(primarySID) || m.isSessionLocallyRevoked(altSID) {
 				if strings.HasPrefix(r.URL.Path, "/api") {
 					writeJSON(w, http.StatusUnauthorized, apiError{Error: "Authentication required", Code: authCodeSessionUnverified})
 					return
 				}
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			if bypassesSessionAuthMiddleware(r.URL.Path) {
 				next.ServeHTTP(w, r)
 				return
 			}
