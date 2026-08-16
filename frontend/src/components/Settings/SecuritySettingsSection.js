@@ -55,6 +55,7 @@ function formatSessionLine(session) {
   const parts = [];
   if (session?.lastSeenLabel) parts.push(`активность ${session.lastSeenLabel}`);
   if (session?.createdAtLabel) parts.push(`вход ${session.createdAtLabel}`);
+  if (session?.ip) parts.push(session.ip);
   return parts.join(' · ');
 }
 
@@ -331,16 +332,22 @@ export default function SecuritySettingsSection() {
 
         {otherSessionsTotal > 0 ? (
           <DangerCard>
-            <DangerBtn type="button" onClick={handleRevokeOthers} disabled={busy}>
-              {busyKey === 'others'
-                ? 'Завершаем…'
-                : 'Выйти на всех устройствах, кроме этого'}
-            </DangerBtn>
-            {sessions.length > 0 ? (
-              <DangerBtnOutline type="button" onClick={handleRevokeAll} disabled={busy}>
-                {busyKey === 'all' ? 'Завершаем…' : 'Выйти везде, включая это устройство'}
-              </DangerBtnOutline>
-            ) : null}
+            <DangerHead>
+              <DangerTitle>Опасная зона</DangerTitle>
+              <DangerSub>Действия завершат выбранные сеансы сразу.</DangerSub>
+            </DangerHead>
+            <DangerActions>
+              <DangerBtn type="button" onClick={handleRevokeOthers} disabled={busy}>
+                {busyKey === 'others'
+                  ? 'Завершаем…'
+                  : 'Выйти на всех устройствах, кроме этого'}
+              </DangerBtn>
+              {sessions.length > 0 ? (
+                <DangerBtnOutline type="button" onClick={handleRevokeAll} disabled={busy}>
+                  {busyKey === 'all' ? 'Завершаем…' : 'Выйти везде, включая это устройство'}
+                </DangerBtnOutline>
+              ) : null}
+            </DangerActions>
           </DangerCard>
         ) : null}
       </Section>
@@ -572,6 +579,7 @@ const RowSub = styled.div`
   font-size: 12px;
   color: rgba(255, 255, 255, 0.48);
   line-height: 1.35;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 `;
@@ -670,26 +678,66 @@ const GroupAction = styled.button`
 const DangerCard = styled.div`
   display: flex;
   flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(255, 69, 58, 0.05);
+  border: 1px solid rgba(255, 69, 58, 0.22);
+`;
+
+const DangerHead = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+`;
+
+const DangerTitle = styled.div`
+  font-size: 13px;
+  font-weight: 600;
+  color: #ff8a84;
+`;
+
+const DangerSub = styled.div`
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+`;
+
+const DangerActions = styled.div`
+  display: flex;
+  flex-direction: column;
   gap: 8px;
-  padding-top: 4px;
+
+  @media (min-width: 640px) {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
 `;
 
 const DangerBtn = styled.button`
   appearance: none;
   border: 0;
   width: 100%;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: rgba(255, 69, 58, 0.12);
+  padding: 11px 14px;
+  border-radius: 10px;
+  background: rgba(255, 69, 58, 0.14);
   color: #ff8a84;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   font-family: inherit;
 
+  &:hover:not(:disabled) {
+    background: rgba(255, 69, 58, 0.22);
+  }
+
   &:disabled {
     opacity: 0.55;
     cursor: not-allowed;
+  }
+
+  @media (min-width: 640px) {
+    width: auto;
+    flex: 1 1 auto;
   }
 `;
 
@@ -697,8 +745,8 @@ const DangerBtnOutline = styled.button`
   appearance: none;
   border: 1px solid rgba(255, 69, 58, 0.35);
   width: 100%;
-  padding: 11px 14px;
-  border-radius: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
   background: transparent;
   color: #ff8a84;
   font-size: 13px;
@@ -706,9 +754,18 @@ const DangerBtnOutline = styled.button`
   cursor: pointer;
   font-family: inherit;
 
+  &:hover:not(:disabled) {
+    background: rgba(255, 69, 58, 0.1);
+  }
+
   &:disabled {
     opacity: 0.55;
     cursor: not-allowed;
+  }
+
+  @media (min-width: 640px) {
+    width: auto;
+    flex: 1 1 auto;
   }
 `;
 

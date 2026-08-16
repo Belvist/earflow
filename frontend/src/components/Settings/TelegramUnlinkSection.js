@@ -77,24 +77,30 @@ export default function TelegramUnlinkSection({ embedded = false }) {
   return (
     <Wrap $embedded={embedded}>
       {embedded ? null : <Title>Telegram</Title>}
-      <Hint>
-        {hasTelegram
-          ? 'Аккаунт привязан к Telegram. Отвязка требует пароль и 2FA step-up (если включена).'
-          : 'Telegram не привязан.'}
-      </Hint>
+      <StatusRow>
+        <StatusDot $on={hasTelegram} aria-hidden />
+        <Hint>
+          {hasTelegram
+            ? 'Аккаунт привязан к Telegram. Отвязка требует пароль и 2FA step-up (если включена).'
+            : 'Telegram не привязан.'}
+        </Hint>
+      </StatusRow>
       {error ? <ErrorText>{error}</ErrorText> : null}
       {notice ? <Notice>{notice}</Notice> : null}
       {hasTelegram ? (
         <Actions>
-          <Button type="button" $embedded={embedded} onClick={unlink} disabled={busy || !hasPassword} $danger>
+          <Button type="button" onClick={unlink} disabled={busy || !hasPassword} $danger>
             {busy
               ? 'Отвязываем…'
               : hasPassword
                 ? 'Отвязать Telegram'
-                : 'Установите пароль, чтобы отвязать'}
+                : 'Сначала установите пароль'}
           </Button>
           {!hasPassword ? (
-            <Warn>Без пароля вы потеряете доступ к аккаунту.</Warn>
+            <Warn>
+              Без пароля вы потеряете доступ к аккаунту после отвязки — установите его
+              в блоке выше.
+            </Warn>
           ) : null}
         </Actions>
       ) : null}
@@ -125,18 +131,38 @@ const Hint = styled.p`
   line-height: 1.35;
 `;
 
+const StatusRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`;
+
+const StatusDot = styled.span`
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: ${(p) => (p.$on ? '#1db954' : 'rgba(255, 255, 255, 0.25)')};
+`;
+
 const Muted = styled.div`
   font-size: 0.85rem;
   opacity: 0.7;
 `;
 
 const ErrorText = styled.div`
-  color: #f5b7b1;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 69, 58, 0.12);
+  color: #ff8a84;
   font-size: 0.85rem;
 `;
 
 const Notice = styled.div`
-  color: rgba(255, 255, 255, 0.75);
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(29, 185, 84, 0.12);
+  color: #5fff8d;
   font-size: 0.85rem;
 `;
 
@@ -149,20 +175,23 @@ const Actions = styled.div`
 
 const Button = styled.button`
   padding: 10px 16px;
-  border-radius: 999px;
-  border: none;
+  border-radius: 10px;
+  border: ${(p) => (p.$danger ? '1px solid rgba(255, 69, 58, 0.35)' : 'none')};
   font-weight: 600;
+  font-family: inherit;
+  font-size: 0.85rem;
   cursor: pointer;
-  background: ${(p) =>
-    p.$danger
-      ? '#c0392b'
-      : p.$embedded
-        ? '#fff'
-        : '#1db954'};
-  color: ${(p) => (p.$danger ? '#fff' : '#000')};
+  background: ${(p) => (p.$danger ? 'rgba(255, 69, 58, 0.14)' : '#1db954')};
+  color: ${(p) => (p.$danger ? '#ff8a84' : '#000')};
+  transition: background 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: ${(p) => (p.$danger ? 'rgba(255, 69, 58, 0.22)' : '#1ed760')};
+  }
+
   &:disabled {
     opacity: 0.55;
-    cursor: default;
+    cursor: not-allowed;
   }
 `;
 

@@ -158,7 +158,7 @@ export default function PasswordChangeSection({ embedded = false }) {
       {notice ? <Notice>{notice}</Notice> : null}
 
       <Actions>
-        <Button type="button" $embedded={embedded} onClick={submit} disabled={busy}>
+        <Button type="button" onClick={submit} disabled={busy}>
           {busy ? 'Сохраняем…' : 'Сменить пароль'}
         </Button>
       </Actions>
@@ -204,24 +204,41 @@ const Label = styled.span`
 
 const Input = styled.input`
   padding: 10px 12px;
-  border-radius: 8px;
+  border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(0, 0, 0, 0.2);
-  color: inherit;
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.95rem;
+
+  &:focus {
+    outline: none;
+    border-color: rgba(29, 185, 84, 0.6);
+  }
+
+  &:disabled {
+    opacity: 0.55;
+  }
 `;
 
 const Strength = styled.span`
   font-size: 0.78rem;
-  color: ${(p) => (p.$ok ? 'rgba(255, 255, 255, 0.75)' : '#f5b7b1')};
+  color: ${(p) => (p.$ok ? 'rgba(255, 255, 255, 0.75)' : '#ff8a84')};
 `;
 
 const ErrorText = styled.div`
-  color: #f5b7b1;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 69, 58, 0.12);
+  color: #ff8a84;
   font-size: 0.85rem;
 `;
 
 const Notice = styled.div`
-  color: rgba(255, 255, 255, 0.75);
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(29, 185, 84, 0.12);
+  color: #5fff8d;
   font-size: 0.85rem;
 `;
 
@@ -232,14 +249,22 @@ const Actions = styled.div`
 
 const Button = styled.button`
   padding: 10px 16px;
-  border-radius: 999px;
+  border-radius: 10px;
   border: none;
-  background: ${(p) => (p.$embedded ? '#fff' : '#1db954')};
+  background: #1db954;
   color: #000;
   font-weight: 600;
+  font-family: inherit;
+  font-size: 0.85rem;
   cursor: pointer;
+  transition: background 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: #1ed760;
+  }
+
   &:disabled {
     opacity: 0.6;
-    cursor: default;
+    cursor: not-allowed;
   }
 `;

@@ -241,12 +241,15 @@ export default function MfaSettingsSection() {
       {!mfaEnabled ? (
         <>
           {!setupData ? (
-            <>
-              <MutedState>2FA не включена. Рекомендуем включить для защиты аккаунта.</MutedState>
+            <SuggestCard>
+              <SuggestText>
+                Рекомендуем включить: код из приложения закрывает вход даже при утечке
+                пароля. Настройка занимает минуту.
+              </SuggestText>
               <BtnPrimary type="button" onClick={startSetup} disabled={busy !== ''}>
                 {busy === 'setup' ? 'Готовим…' : 'Включить 2FA'}
               </BtnPrimary>
-            </>
+            </SuggestCard>
           ) : (
             <SetupPanel>
               <StepLabel>Шаг 1. Отсканируйте QR-код</StepLabel>
@@ -361,50 +364,53 @@ export default function MfaSettingsSection() {
             </CodeBlock>
           ) : null}
 
-          <PairActions>
-            {!recoveryCodes ? (
-              <BtnGhost type="button" onClick={handleRegenerate} disabled={busy !== ''}>
-                {busy === 'regen' ? 'Генерируем…' : 'Перегенерировать recovery-коды'}
-              </BtnGhost>
-            ) : null}
-            <BtnDanger type="button" onClick={handleDisable} disabled={busy !== ''}>
-              {busy === 'disable' ? 'Выключаем…' : 'Выключить 2FA'}
-            </BtnDanger>
-          </PairActions>
+          {!recoveryCodes ? (
+            <BtnGhost type="button" onClick={handleRegenerate} disabled={busy !== ''}>
+              {busy === 'regen' ? 'Генерируем…' : 'Перегенерировать recovery-коды'}
+            </BtnGhost>
+          ) : null}
 
-          {useRecoveryDisable ? (
-            <Field>
-              <Label>Recovery code</Label>
-              <Input
-                value={recoveryDisable}
-                onChange={(e) => setRecoveryDisable(e.target.value)}
-                placeholder="abcd-efgh-ijkl"
+          <DisableCard>
+            <DisableTitle>Выключить 2FA</DisableTitle>
+            {useRecoveryDisable ? (
+              <Field>
+                <Label>Recovery code</Label>
+                <Input
+                  value={recoveryDisable}
+                  onChange={(e) => setRecoveryDisable(e.target.value)}
+                  placeholder="abcd-efgh-ijkl"
+                  disabled={busy !== ''}
+                />
+              </Field>
+            ) : (
+              <Field>
+                <Label>Код TOTP</Label>
+                <Input
+                  value={tokenDisable}
+                  onChange={(e) => setTokenDisable(onlyDigits(e.target.value))}
+                  inputMode="numeric"
+                  placeholder="123456"
+                  disabled={busy !== ''}
+                />
+              </Field>
+            )}
+            <DisableActions>
+              <BtnDanger type="button" onClick={handleDisable} disabled={busy !== ''}>
+                {busy === 'disable' ? 'Выключаем…' : 'Выключить 2FA'}
+              </BtnDanger>
+              <GhostToggle
+                type="button"
+                onClick={() => {
+                  setUseRecoveryDisable((v) => !v);
+                  setTokenDisable('');
+                  setRecoveryDisable('');
+                }}
                 disabled={busy !== ''}
-              />
-            </Field>
-          ) : (
-            <Field>
-              <Label>Код TOTP для отключения</Label>
-              <Input
-                value={tokenDisable}
-                onChange={(e) => setTokenDisable(onlyDigits(e.target.value))}
-                inputMode="numeric"
-                placeholder="123456"
-                disabled={busy !== ''}
-              />
-            </Field>
-          )}
-          <GhostToggle
-            type="button"
-            onClick={() => {
-              setUseRecoveryDisable((v) => !v);
-              setTokenDisable('');
-              setRecoveryDisable('');
-            }}
-            disabled={busy !== ''}
-          >
-            {useRecoveryDisable ? 'Ввести код TOTP' : 'Использовать recovery code'}
-          </GhostToggle>
+              >
+                {useRecoveryDisable ? 'Ввести код TOTP' : 'Использовать recovery code'}
+              </GhostToggle>
+            </DisableActions>
+          </DisableCard>
         </>
       )}
     </Section>
@@ -458,6 +464,62 @@ const MutedState = styled.div`
   padding: 10px 0;
   font-size: 13px;
   color: rgba(255, 255, 255, 0.45);
+`;
+
+const SuggestCard = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(29, 185, 84, 0.07);
+  border: 1px solid rgba(29, 185, 84, 0.25);
+
+  & > button {
+    flex-shrink: 0;
+  }
+
+  @media (min-width: 561px) {
+    & > button {
+      align-self: center;
+    }
+  }
+
+  @media (max-width: 560px) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+`;
+
+const SuggestText = styled.p`
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.72);
+`;
+
+const DisableCard = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(255, 69, 58, 0.05);
+  border: 1px solid rgba(255, 69, 58, 0.22);
+`;
+
+const DisableTitle = styled.div`
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+`;
+
+const DisableActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
 `;
 
 const ErrorStrip = styled.div`
