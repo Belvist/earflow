@@ -95,7 +95,7 @@ export default function MfaSettingsSection() {
       setStatus(data);
     } catch (e) {
       setStatus(null);
-      setError(e?.message || 'Не удалось загрузить статус 2FA');
+      setError('Не удалось загрузить статус 2FA. Попробуйте ещё раз.');
     } finally {
       setLoading(false);
     }
@@ -222,13 +222,18 @@ export default function MfaSettingsSection() {
     <Section>
       <StepUpModal open={stepUp.open} onClose={stepUp.close} onSuccess={stepUp.onSuccess} />
       {stepUp.error ? <ErrorStrip>{stepUp.error}</ErrorStrip> : null}
-      {error ? <ErrorStrip>{error}</ErrorStrip> : null}
+      {error ? (
+        <ErrorStrip>
+          <span>{error}</span>
+          <RetryBtn type="button" onClick={loadStatus}>Повторить</RetryBtn>
+        </ErrorStrip>
+      ) : null}
 
       <SectionHead>
         <SectionTitle>Двухфакторная аутентификация</SectionTitle>
         <StatusBadge $on={mfaEnabled}>
           <FaShieldAlt size={11} aria-hidden />
-          {mfaEnabled ? 'Включена' : 'Выключена'}
+          {status ? (mfaEnabled ? 'Включена' : 'Выключена') : 'Нет данных'}
         </StatusBadge>
       </SectionHead>
 
@@ -523,11 +528,34 @@ const DisableActions = styled.div`
 `;
 
 const ErrorStrip = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
   padding: 12px 14px;
   border-radius: 10px;
   background: rgba(255, 69, 58, 0.12);
   color: #ff8a84;
   font-size: 13px;
+`;
+
+const RetryBtn = styled.button`
+  appearance: none;
+  border: 1px solid rgba(255, 69, 58, 0.35);
+  background: transparent;
+  color: #ff8a84;
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  flex-shrink: 0;
+
+  &:hover {
+    background: rgba(255, 69, 58, 0.15);
+  }
 `;
 
 const SetupPanel = styled.div`

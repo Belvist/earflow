@@ -9,7 +9,6 @@ import {
   FaKey,
   FaTelegramPlane,
   FaBroom,
-  FaChevronDown,
 } from 'react-icons/fa';
 import apiClient from '../../api/client';
 import StepUpModal from './StepUpModal';
@@ -20,6 +19,7 @@ import MfaSettingsSection from './MfaSettingsSection';
 import TelegramUnlinkSection from './TelegramUnlinkSection';
 import {
   groupSessionsByDevice,
+  splitDeviceGroups,
   staleSidsForGroup,
 } from '../../utils/sessionDeviceGroups';
 
@@ -58,31 +58,12 @@ function formatSessionLine(session) {
   return parts.join(' · ');
 }
 
-function SessionDetailRow({ session, pending, disabled, onRevoke }) {
-  return (
-    <DetailRow $current={session.current === true}>
-      <DetailText>{formatSessionLine(session) || 'Сессия'}</DetailText>
-      {session.current !== true ? (
-        <RevokeBtn
-          type="button"
-          aria-label="Завершить сессию"
-          disabled={pending || disabled}
-          onClick={() => onRevoke(session.sid)}
-        >
-          <FaTimes size={12} />
-        </RevokeBtn>
-      ) : null}
-    </DetailRow>
-  );
-}
-
 export default function SecuritySettingsSection() {
   const { stepUp } = useStepUpRunner();
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busyKey, setBusyKey] = useState('');
   const [error, setError] = useState('');
-  const [expandedKeys, setExpandedKeys] = useState(() => new Set());
 
   const loadSessions = useCallback(async () => {
     setError('');
@@ -103,21 +84,13 @@ export default function SecuritySettingsSection() {
   }, [loadSessions]);
 
   const groups = useMemo(() => groupSessionsByDevice(sessions), [sessions]);
+  const { currentGroup, otherGroups } = useMemo(() => splitDeviceGroups(groups), [groups]);
   const otherSessionsTotal = useMemo(
     () => sessions.filter((s) => s.current !== true).length,
     [sessions],
   );
 
   const busy = busyKey !== '';
-
-  const toggleExpanded = (key) => {
-    setExpandedKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
 
   const revokeSids = useCallback(async (sids) => {
     for (const sid of sids) {
@@ -143,9 +116,6 @@ export default function SecuritySettingsSection() {
       setBusyKey('');
     }
   };
-
-  const handleRevokeSession = (sid) =>
-    runRevoke(`sid:${sid}`, () => revokeSids([sid]), 'Не удалось завершить сессию');
 
   const handleRevokeGroupStale = (group) =>
     runRevoke(
@@ -173,91 +143,67 @@ export default function SecuritySettingsSection() {
     }
   };
 
-  const renderGroupRow = (group) => {
+  const renderCurrentGroup = (group) => {
     const Icon = resolveDeviceIcon(group.deviceType);
-    const expanded = expandedKeys.has(group.key);
+    const currentSession = group.sessions.find((s) => s.current === true) || group.primary;
+    const staleCount = staleSidsForGroup(group).length;
     const groupBusy = busyKey === `group:${group.key}`;
-    const primarySession = group.primary || group.sessions[0];
-    const collapsible = group.sessions.length > 1 || group.duplicateCount > 0;
-    const subtitle = formatSessionLine(primarySession);
+    return (
+      <HeroCard key={group.key}>
+        <RowIcon aria-hidden>
+          <Icon size={20} />
+        </RowIcon>
+        <RowMain>
+          <RowNameLine>
+            <RowName>{group.label}</RowName>
+            <CurrentBadge>Это устройство</CurrentBadge>
+          </RowNameLine>
+          <RowSub>{`активность ${currentSession?.lastSeenLabel || 'только что'} · вход ${currentSession?.createdAtLabel || '—'}${currentSession?.ip ? ` · ${currentSession.ip}` : ''}`}</RowSub>
+          {staleCount > 0 ? (
+            <HeroAction
+              type="button"
+              disabled={busy}
+              onClick={() => handleRevokeGroupStale(group)}
+            >
+              <FaBroom size={11} aria-hidden />
+              {groupBusy
+                ? 'Завершаем…'
+                : `Убрать старые входы на этом устройстве (${staleCount})`}
+            </HeroAction>
+          ) : null}
+        </RowMain>
+      </HeroCard>
+    );
+  };
 
-    const headContent = (
-      <>
+  const renderOtherGroup = (group) => {
+    const Icon = resolveDeviceIcon(group.deviceType);
+    const primarySession = group.primary || group.sessions[0];
+    const groupBusy = busyKey === `group:${group.key}`;
+    return (
+      <SessionRow key={group.key}>
         <RowIcon aria-hidden>
           <Icon size={18} />
         </RowIcon>
         <RowMain>
           <RowNameLine>
             <RowName>{group.label}</RowName>
-            {group.current ? <CurrentBadge>Это устройство</CurrentBadge> : null}
-            {collapsible ? <CountChip>{group.sessions.length} вх.</CountChip> : null}
-          </RowNameLine>
-          <RowSub>{subtitle || '—'}</RowSub>
-        </RowMain>
-        {collapsible ? (
-          <ChevronWrap $open={expanded} aria-hidden>
-            <FaChevronDown size={12} />
-          </ChevronWrap>
-        ) : null}
-        {!collapsible && !group.current && primarySession?.current !== true ? (
-          <RevokeBtn
-            type="button"
-            aria-label="Завершить сессию"
-            disabled={busy || busyKey === `sid:${primarySession?.sid}`}
-            onClick={() => handleRevokeSession(primarySession.sid)}
-          >
-            <FaTimes size={12} />
-          </RevokeBtn>
-        ) : null}
-      </>
-    );
-
-    if (!collapsible) {
-      return (
-        <SessionRow key={group.key} $current={group.current}>
-          {headContent}
-        </SessionRow>
-      );
-    }
-
-    return (
-      <div key={group.key}>
-        <SessionRow
-          as="button"
-          type="button"
-          $current={group.current}
-          $clickable
-          aria-expanded={expanded}
-          onClick={() => toggleExpanded(group.key)}
-        >
-          {headContent}
-        </SessionRow>
-        {expanded ? (
-          <ExpandedBlock>
-            {group.sessions.map((session) => (
-              <SessionDetailRow
-                key={session.sid}
-                session={session}
-                pending={busyKey === `sid:${session.sid}`}
-                disabled={busy}
-                onRevoke={handleRevokeSession}
-              />
-            ))}
-            {staleSidsForGroup(group).length > 0 ? (
-              <GroupAction
-                type="button"
-                disabled={busy}
-                onClick={() => handleRevokeGroupStale(group)}
-              >
-                <FaBroom size={12} aria-hidden />
-                {groupBusy
-                  ? 'Завершаем…'
-                  : `Завершить входы на этом устройстве (${staleSidsForGroup(group).length})`}
-              </GroupAction>
+            {group.sessions.length > 1 ? (
+              <CountChip>входов: {group.sessions.length}</CountChip>
             ) : null}
-          </ExpandedBlock>
-        ) : null}
-      </div>
+          </RowNameLine>
+          <RowSub>{formatSessionLine(primarySession) || '—'}</RowSub>
+        </RowMain>
+        <RevokeBtn
+          type="button"
+          aria-label={`Завершить входы: ${group.label}`}
+          title="Завершить входы"
+          disabled={busy || groupBusy}
+          onClick={() => handleRevokeGroupStale(group)}
+        >
+          <FaTimes size={12} />
+        </RevokeBtn>
+      </SessionRow>
     );
   };
 
@@ -287,13 +233,12 @@ export default function SecuritySettingsSection() {
           <MutedState>Активных сессий не найдено.</MutedState>
         ) : null}
 
-        {groups.length > 0 ? (
+        {currentGroup ? renderCurrentGroup(currentGroup) : null}
+
+        {otherGroups.length > 0 ? (
           <>
-            <SectionLabel>
-              {groups.length === 1 ? '1 устройство' : `Устройства · ${groups.length}`}
-              {otherSessionsTotal > 0 ? ` · сессий: ${sessions.length}` : ''}
-            </SectionLabel>
-            <GroupCard>{groups.map(renderGroupRow)}</GroupCard>
+            <SectionLabel>Другие устройства · {otherGroups.length}</SectionLabel>
+            <GroupCard>{otherGroups.map(renderOtherGroup)}</GroupCard>
           </>
         ) : null}
 
@@ -443,6 +388,45 @@ const CurrentBadge = styled.span`
   flex-shrink: 0;
 `;
 
+const HeroCard = styled.div`
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: start;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: ${SURFACE};
+  border: 1px solid rgba(29, 185, 84, 0.3);
+`;
+
+const HeroAction = styled.button`
+  appearance: none;
+  border: 0;
+  margin-top: 8px;
+  align-self: flex-start;
+  padding: 7px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  font-family: inherit;
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 69, 58, 0.15);
+    color: #ff8a84;
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+`;
+
 const CountChip = styled.span`
   font-size: 10px;
   font-weight: 600;
@@ -461,7 +445,7 @@ const GroupCard = styled.div`
 
 const SessionRow = styled.div`
   display: grid;
-  grid-template-columns: auto 1fr auto auto;
+  grid-template-columns: auto 1fr auto;
   gap: 12px;
   align-items: center;
   padding: 12px 14px;
@@ -471,8 +455,7 @@ const SessionRow = styled.div`
   font-family: inherit;
   color: inherit;
   border: 0;
-  background: ${(p) => (p.$current ? 'rgba(255, 255, 255, 0.04)' : 'transparent')};
-  cursor: ${(p) => (p.$clickable ? 'pointer' : 'default')};
+  background: transparent;
 
   & + &,
   div + & {
@@ -480,7 +463,7 @@ const SessionRow = styled.div`
   }
 
   &:hover {
-    background: ${(p) => (p.$clickable ? 'rgba(255, 255, 255, 0.05)' : p.$current ? 'rgba(255, 255, 255, 0.04)' : 'transparent')};
+    background: rgba(255, 255, 255, 0.03);
   }
 `;
 
@@ -526,49 +509,6 @@ const RowSub = styled.div`
   text-overflow: ellipsis;
 `;
 
-const ChevronWrap = styled.span`
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.6);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: transform 0.18s ease;
-  transform: rotate(${(p) => (p.$open ? '180deg' : '0deg')});
-`;
-
-const ExpandedBlock = styled.div`
-  padding: 0 14px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-`;
-
-const DetailRow = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.2);
-
-  @media (max-width: 520px) {
-    flex-direction: column;
-    align-items: stretch;
-  }
-`;
-
-const DetailText = styled.div`
-  font-size: 12px;
-  line-height: 1.45;
-  color: rgba(255, 255, 255, 0.62);
-`;
-
 const RevokeBtn = styled.button`
   appearance: none;
   border: 0;
@@ -590,29 +530,6 @@ const RevokeBtn = styled.button`
 
   &:disabled {
     opacity: 0.45;
-    cursor: not-allowed;
-  }
-`;
-
-const GroupAction = styled.button`
-  appearance: none;
-  border: 0;
-  width: 100%;
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: rgba(255, 69, 58, 0.1);
-  color: #ff8a84;
-  font-size: 12px;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  cursor: pointer;
-  font-family: inherit;
-
-  &:disabled {
-    opacity: 0.55;
     cursor: not-allowed;
   }
 `;
