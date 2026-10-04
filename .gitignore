@@ -52,6 +52,7 @@ out/
 # ────────────────────────────────────────────────────────────────
 frontend/e2e/report/
 frontend/e2e/report-live/
+frontend/e2e/artifacts/
 frontend/e2e/.auth/
 frontend/e2e/.cache/
 frontend/test-results/
@@ -157,6 +158,11 @@ artifacts/*
 .cursor/
 .kiro/
 .windsurf/
+.agents/
+.codex/
+.opencode/
+cursor-portable-bundle/
+universal_project_agent_pack/
 docs/*
 !docs/AUTH_ROLLOUT_GATES.md
 !docs/PENDING.md
@@ -187,7 +193,11 @@ backups/*
 
 # HAR / debug dumps (may contain tokens/cookies)
 *.har
+*.zip
 Explore-logs-*.json
+
+# Local nginx config backups
+nginx/*.bak*
 
 # Certbot account keys and archived material (must not be in repo)
 certbot/conf/accounts/**/private_key.json
